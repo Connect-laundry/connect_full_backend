@@ -33,3 +33,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         return attrs
+
+    def create(self, validated_data):
+        # Remove password_confirm as it's not a model field
+        validated_data.pop('password_confirm')
+        
+        # User create_user to handle password hashing
+        return User.objects.create_user(**validated_data)
