@@ -10,9 +10,15 @@ from .views.laundry import LaundryViewSet
 from .views.favorite import FavoriteListView
 # pyre-ignore[missing-module]
 from .views.review import ReviewCreateView
+# pyre-ignore[missing-module]
+from .views.dashboard import LaundryDashboardViewSet
+from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
 router = DefaultRouter()
-router.register(r'', LaundryViewSet, basename='laundry')
+router.register(r'dashboard', LaundryDashboardViewSet, basename='dashboard')
+router.register(r'laundries', LaundryViewSet, basename='laundry')
+router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
+router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
 
 urlpatterns = [
     path('favorites/', FavoriteListView.as_view(), name='favorite_list'),

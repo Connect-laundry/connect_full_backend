@@ -1,20 +1,13 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
-from .models import FAQ, Feedback
+# pyre-ignore[missing-module]
+from .models import Notification
 
-class FAQSerializer(serializers.ModelSerializer):
+class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = FAQ
-        fields = ['id', 'question', 'answer', 'order']
-
-class FeedbackSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Feedback
-        fields = ['id', 'user', 'subject', 'message', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
-
-    def create(self, validated_data):
-        user = self.context['request'].user
-        if user.is_authenticated:
-            validated_data['user'] = user
-        return super().create(validated_data)
+        model = Notification
+        fields = [
+            'id', 'title', 'message', 'type', 
+            'is_read', 'created_at', 'read_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'read_at']
