@@ -7,7 +7,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 # pyre-ignore[missing-module]
 from django.core.validators import MinValueValidator, MaxValueValidator
-
+# pyre-ignore[missing-module]
 from ..utils.validators import validate_file_upload
 
 class Laundry(models.Model):
@@ -15,6 +15,12 @@ class Laundry(models.Model):
         LOW = '$', _('Low')
         MEDIUM = '$$', _('Medium')
         HIGH = '$$$', _('High')
+
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "PENDING", _("Pending")
+        APPROVED = "APPROVED", _("Approved")
+        REJECTED = "REJECTED", _("Rejected")
+        SUSPENDED = "SUSPENDED", _("Suspended")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(_('name'), max_length=255, db_index=True)
@@ -32,8 +38,26 @@ class Laundry(models.Model):
     phone_number = models.CharField(_('phone number'), max_length=20)
     price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
     estimated_delivery_hours = models.IntegerField(_('estimated delivery hours'), default=24)
+    delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
+    
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
-    is_active = models.BooleanField(_('is active'), default=True, db_index=True)
+    is_active = models.BooleanField(_('is active'), default=False, db_index=True)
+    
+    status = models.CharField(
+        _('approval status'),
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True
+    )
+    
+    # Approval Timestamps
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+
+    # Deactivation (Soft-Delete)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deactivation_reason = models.TextField(null=True, blank=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

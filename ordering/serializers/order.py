@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+# pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
@@ -19,6 +20,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 class OrderDetailSerializer(serializers.ModelSerializer):
+    # pyre-ignore[missing-module]
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
     serviceName = serializers.CharField(source='service_type.name', read_only=True)
@@ -33,6 +35,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         ]
 
 class OrderCreateSerializer(serializers.ModelSerializer):
+    # pyre-ignore[missing-module]
     items = OrderItemSerializer(many=True)
 
     class Meta:
@@ -41,6 +44,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'laundry', 'service_type', 'pickup_date', 
             'address', 'special_instructions', 'items'
         ]
+
+    def validate(self, data):
+        laundry = data.get('laundry')
+        if laundry and (laundry.status != 'APPROVED' or not laundry.is_active):
+            raise serializers.ValidationError("This laundry is not approved or is currently inactive.")
+        return data
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')

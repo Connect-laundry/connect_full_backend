@@ -30,10 +30,13 @@ class Order(models.Model):
     """Main order record tracking the lifecycle of a laundry request."""
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending')
+        CONFIRMED = 'CONFIRMED', _('Confirmed')
+        REJECTED = 'REJECTED', _('Rejected')
         PICKED_UP = 'PICKED_UP', _('Picked Up')
-        WASHING = 'WASHING', _('Washing')
-        READY = 'READY', _('Ready for Delivery')
+        IN_PROCESS = 'IN_PROCESS', _('In Process')
+        OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', _('Out for Delivery')
         DELIVERED = 'DELIVERED', _('Delivered')
+        COMPLETED = 'COMPLETED', _('Completed')
         CANCELLED = 'CANCELLED', _('Cancelled')
 
     class PaymentStatus(models.TextChoices):
@@ -52,12 +55,33 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
     
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    coupon = models.ForeignKey(
+        'ordering.Coupon', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='orders'
+    )
     
     pickup_date = models.DateTimeField()
     delivery_date = models.DateTimeField(null=True, blank=True)
     
     address = models.TextField()
     special_instructions = models.TextField(null=True, blank=True)
+    
+    # Transition Timestamps
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    picked_up_at = models.DateTimeField(null=True, blank=True)
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    out_for_delivery_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+
+    # Reasons
+    cancellation_reason = models.TextField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -111,3 +135,31 @@ class BookingSlot(models.Model):
 
     def __str__(self):
         return f"{self.laundry.name}: {self.start_time.strftime('%Y-%m-%d %H:%M')}"
+
+class OrderStatusHistory(models.Model):
+    """Audit log for order status transitions."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='status_history')
+    
+    previous_status = models.CharField(max_length=20, null=True, blank=True)
+    new_status = models.CharField(max_length=20)
+    
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='order_status_changes'
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('Order Status History')
+        verbose_name_plural = _('Order Status Histories')
+        ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['order', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.order.order_no}: {self.previous_status} -> {self.new_status}"

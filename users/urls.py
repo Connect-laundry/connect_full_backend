@@ -15,6 +15,7 @@ from .views.resend_otp import ResendOTPView
 from .views.profile import ProfileView, AddressViewSet, LogoutView
 # pyre-ignore[missing-module]
 from .views.password_reset import PasswordResetRequestView, PasswordResetConfirmView
+from .views.deactivate import UserDeactivateView
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 
@@ -31,5 +32,6 @@ urlpatterns = [
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('auth/profile/', ProfileView.as_view(), name='auth_profile'),
+    path('users/<uuid:pk>/deactivate/', UserDeactivateView.as_view(), name='user_deactivate'),
     path('', include(router.urls)),
 ]

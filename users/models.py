@@ -68,6 +68,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     
+    # Deactivation (Soft-Delete)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deactivation_reason = models.TextField(null=True, blank=True)
+    
     avatar = models.ImageField(_('avatar'), upload_to='avatars/', null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

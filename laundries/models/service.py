@@ -21,6 +21,7 @@ class Service(models.Model):
     description = models.TextField(_('description'), blank=True)
     base_price = models.DecimalField(_('base price'), max_digits=10, decimal_places=2)
     is_active = models.BooleanField(_('is active'), default=True)
+    is_approved = models.BooleanField(_('is approved'), default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
