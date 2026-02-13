@@ -1,11 +1,14 @@
-from django.contrib import admin
+# pyre-ignore[missing-module]
+from django.contrib import admin 
+# pyre-ignore[missing-module]
 from .models.base import Order, OrderItem
-from .models.service import Service, ServiceCategory
+# pyre-ignore[missing-module]
+from laundries.models import Category, Service
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ('service', 'quantity', 'price')
+    readonly_fields = ('item', 'quantity', 'price')
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
@@ -24,13 +27,13 @@ class OrderAdmin(admin.ModelAdmin):
         }),
     )
 
-@admin.register(ServiceCategory)
-class ServiceCategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description')
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ('name',)
     search_fields = ('name',)
 
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'price', 'laundry')
+    list_display = ('name', 'category', 'base_price', 'laundry')
     list_filter = ('category', 'laundry')
     search_fields = ('name', 'description')
