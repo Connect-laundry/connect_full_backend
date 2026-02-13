@@ -68,6 +68,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     
+    avatar = models.ImageField(_('avatar'), upload_to='avatars/', null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -86,3 +88,34 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+class Address(models.Model):
+    """User-defined delivery addresses."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
+    
+    label = models.CharField(_('label'), max_length=50, help_text="Home, Work, etc.")
+    address_line1 = models.CharField(_('address line 1'), max_length=255)
+    city = models.CharField(_('city'), max_length=100, default='Accra')
+    
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    
+    is_default = models.BooleanField(default=False)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('address')
+        verbose_name_plural = _('addresses')
+        ordering = ['-is_default', '-created_at']
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            # Set all other addresses for this user to non-default
+            Address.objects.filter(user=self.user).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.label}: {self.address_line1}"
