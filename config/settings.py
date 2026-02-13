@@ -34,6 +34,7 @@ ALLOWED_HOSTS = []
 #
 AUTH_USER_MODEL = 'users.User'
 
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     'ordering',
     'logistics',
     'payments',
+    'laundries',
 
     'django_celery_results',
 ]
@@ -193,3 +195,11 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+
+# DEBUG = False
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+
+# ALLOWED_HOSTS = ['*']
