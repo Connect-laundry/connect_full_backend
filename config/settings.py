@@ -106,11 +106,20 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
 
 # CORS configuration
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in dev mode
 CORS_ALLOWED_ORIGINS = [
-    os.getenv('FRONTEND_URL', 'http://localhost:3000'),
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+    if origin.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF Trusted Origins (required for Django 4.0+)
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000').split(',')
+    if origin.strip()
+]
 
 ROOT_URLCONF = 'config.urls'
 
