@@ -2,8 +2,11 @@
 from rest_framework import serializers
 # pyre-ignore[missing-module]
 from django.db.models import Avg, Count
+from django.core.cache import cache
+from django.utils import timezone
 from ..models.laundry import Laundry
 from ..models.favorite import Favorite
+from ..models.opening_hours import OpeningHours
 
 class LaundryListSerializer(serializers.ModelSerializer):
     location = serializers.CharField(source='address')
@@ -27,7 +30,25 @@ class LaundryListSerializer(serializers.ModelSerializer):
         return getattr(obj, 'distance', None)
 
     def get_isOpen(self, obj):
-        return True # Placeholder for now
+        cache_key = f"laundry_is_open_{obj.id}"
+        is_open = cache.get(cache_key)
+        
+        if is_open is not None:
+            return is_open
+            
+        now = timezone.localtime()
+        current_day = now.isoweekday() # 1-7
+        current_time = now.time()
+        
+        # Check OpeningHours
+        oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
+        is_open_now = False
+        if oh:
+            if oh.opening_time <= current_time <= oh.closing_time:
+                is_open_now = True
+        
+        cache.set(cache_key, is_open_now, 300) # 5 minutes
+        return is_open_now
 
     def get_isFavorite(self, obj):
         user = self.context.get('request').user
@@ -36,4 +57,35 @@ class LaundryListSerializer(serializers.ModelSerializer):
         return False
 
     def get_estimatedDelivery(self, obj):
-        return f"{obj.estimated_delivery_hours}h"
+        from ..services.delivery_estimator import DeliveryEstimator
+        
+        # 1. Get user location from context if available
+        request = self.context.get('request')
+        user_lat = request.query_params.get('lat') if request else None
+        user_lng = request.query_params.get('lng') if request else None
+
+        # 2. Get active order count (either annotated or via cached lookup)
+        # Check if already annotated (efficient)
+        active_order_count = getattr(obj, 'active_order_count', None)
+        
+        if active_order_count is None:
+            # Fallback for retrieve or cases where not annotated
+            cache_key = f"laundry_active_orders_{obj.id}"
+            active_order_count = cache.get(cache_key)
+            
+            if active_order_count is None:
+                from ordering.models import Order
+                active_order_count = Order.objects.filter(
+                    laundry=obj, 
+                    status__in=['PENDING', 'PICKED_UP', 'WASHING']
+                ).count()
+                cache.set(cache_key, active_order_count, 120) # 2 minutes
+
+        # 3. Calculate dynamic estimation
+        estimator = DeliveryEstimator()
+        return estimator.get_estimated_delivery_time(
+            obj, 
+            user_lat=user_lat, 
+            user_lng=user_lng, 
+            active_order_count=active_order_count
+        )

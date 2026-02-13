@@ -5,25 +5,47 @@ from rest_framework.decorators import action
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
-from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField
+from django.db import models
+# pyre-ignore[missing-module]
+from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q
 # pyre-ignore[missing-module]
 from django.db.models.functions import Sqrt, Sin, Cos, ASin, Radians
 # pyre-ignore[missing-module]
 from django_filters.rest_framework import DjangoFilterBackend
 # pyre-ignore[missing-module]
 from rest_framework.filters import SearchFilter
-
+# pyre-ignore[missing-module]
+from rest_framework.renderers import JSONRenderer
+# pyre-ignore[missing-module]
 from ..models.laundry import Laundry
+# pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+# pyre-ignore[missing-module]
+from ..models.opening_hours import OpeningHours
+# pyre-ignore[missing-module]
+from ..models.review import Review
+# pyre-ignore[missing-module]
 from ..serializers.laundry_list import LaundryListSerializer
+# pyre-ignore[missing-module]
 from ..serializers.laundry_detail import LaundryDetailSerializer
+# pyre-ignore[missing-module]
+from ..serializers.review import ReviewSerializer
+# pyre-ignore[missing-module]
 from ..pagination import StandardResultsSetPagination
+# pyre-ignore[missing-module]
 from ..filters import LaundryFilter
+# pyre-ignore[missing-module]
+from config.throttling import ReviewThrottle
+
 
 class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Laundry.objects.filter(is_active=True).annotate(
+    queryset = Laundry.objects.filter(is_active=True).select_related('owner').annotate(
         rating=Avg('reviews__rating'),
-        reviewsCount=Count('reviews')
+        reviewsCount=Count('reviews'),
+        active_order_count=Count(
+            'orders',
+            filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'WASHING'])
+        )
     )
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -31,13 +53,16 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'description', 'address']
     permission_classes = [permissions.AllowAny]
 
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return LaundryListSerializer
-        return LaundryDetailSerializer
-
     def get_queryset(self):
         queryset = super().get_queryset()
+        
+        # Prefetch reviews and services for detail view to avoid N+1
+        if self.action == 'retrieve':
+            queryset = queryset.prefetch_related(
+                'services__category',
+                'reviews__user',
+                'opening_hours'
+            )
         
         # Nearby Search Logic
         nearby = self.request.query_params.get('nearby') == 'true'
@@ -62,6 +87,11 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 pass
                 
         return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return LaundryListSerializer
+        return LaundryDetailSerializer
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def favorite(self, request, pk=None):
