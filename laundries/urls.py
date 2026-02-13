@@ -12,6 +12,7 @@ from .views.favorite import FavoriteListView
 from .views.review import ReviewCreateView
 # pyre-ignore[missing-module]
 from .views.dashboard import LaundryDashboardViewSet
+# pyre-ignore[missing-module]
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
 router = DefaultRouter()
