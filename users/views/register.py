@@ -9,12 +9,15 @@ from rest_framework.permissions import AllowAny
 # pyre-ignore[missing-module]
 from ..serializers.register import RegisterSerializer
 # pyre-ignore[missing-module]
+from config.throttling import AuthThrottle
+# pyre-ignore[missing-module]
 from ..services.otp_service import OTPService
 # pyre-ignore[missing-module]
 from ..tasks import send_otp_email, send_otp_sms
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
     
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)

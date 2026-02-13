@@ -12,6 +12,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+# pyre-ignore[import]
+import sentry_sdk
+# pyre-ignore[import]
+from sentry_sdk.integrations.django import DjangoIntegration
+# pyre-ignore[import]
+from sentry_sdk.integrations.celery import CeleryIntegration
 # pyre-ignore[missing-module]
 from dotenv import load_dotenv
 
@@ -59,13 +65,46 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'config.middleware.security.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.middleware.request_id.RequestIDMiddleware',
+    'config.middleware.lockout.LoginLockoutMiddleware',
 ]
+
+# Security Settings
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+if not DEBUG:
+    # SSL/HTTPS
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    
+    # HSTS
+    SECURE_HSTS_SECONDS = 31536000 # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # Misc
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+
+# Data limits
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
+
+# CORS configuration
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    os.getenv('FRONTEND_URL', 'http://localhost:3000'),
+]
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'config.urls'
 
@@ -148,6 +187,33 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_RENDERER_CLASSES': (
+        'laundries.renderers.StandardResponseRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
+    'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'config.throttling.BurstUserThrottle',
+        'config.throttling.SustainedUserThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'burst_user': os.getenv('THROTTLE_BURST_USER', '60/minute'),
+        'sustained_user': os.getenv('THROTTLE_SUSTAINED_USER', '1000/day'),
+        'auth': os.getenv('THROTTLE_AUTH', '5/minute'),
+        'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
+        'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
+        'anon': os.getenv('THROTTLE_ANON', '100/day'),
+    },
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6373/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
 }
 
 from datetime import timedelta
@@ -202,4 +268,53 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# ALLOWED_HOSTS = ['*']
+# --- Observability ---
+
+SENTRY_DSN = os.getenv('SENTRY_DSN')
+if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+        ],
+        traces_sample_rate=1.0,
+        send_default_pii=True
+    )
+
+LOGGING_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'INFO')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': 'config.logging_formatters.CustomJsonFormatter',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        },
+    },
+    'loggers': {
+        '': { # Root logger
+            'handlers': ['console'],
+            'level': LOGGING_LEVEL,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'DEBUG', # Used for slow query detection via DB instrumentation
+            'propagate': False,
+        },
+    },
+}
+
+# Database Slow Query Tracking (Free tool: Native logging)
+# Requires SQL_DEBUG_THRESHOLD env var (e.g. 0.2 for 200ms)
+SQL_DEBUG_THRESHOLD = float(os.getenv('SQL_DEBUG_THRESHOLD', '0.2'))
+
+# Celery Reliability
+CELERY_MAX_RETRIES = int(os.getenv('CELERY_MAX_RETRIES', 5))
+CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))

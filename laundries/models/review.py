@@ -31,6 +31,9 @@ class Review(models.Model):
         verbose_name = _('Review')
         verbose_name_plural = _('Reviews')
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['laundry', 'rating']),
+        ]
 
     def __str__(self):
         return f"Review by {self.user.email} for {self.laundry.name}"

@@ -14,6 +14,8 @@ from .views.resend_otp import ResendOTPView
 # pyre-ignore[missing-module]
 from .views.profile import ProfileView, AddressViewSet, LogoutView
 # pyre-ignore[missing-module]
+from .views.password_reset import PasswordResetRequestView, PasswordResetConfirmView
+# pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -24,6 +26,8 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='auth_login'),
     path('auth/verify-otp/', VerifyOTPView.as_view(), name='verify_otp'),
     path('auth/resend-otp/', ResendOTPView.as_view(), name='resend_otp'),
+    path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+    path('auth/password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('auth/profile/', ProfileView.as_view(), name='auth_profile'),

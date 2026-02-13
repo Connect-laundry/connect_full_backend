@@ -18,8 +18,11 @@ Including another URLconf
 from django.contrib import admin
 # pyre-ignore[missing-module]
 from django.urls import path, include
+# pyre-ignore[missing-module]
+from config.views.health import health_check
 
 urlpatterns = [
+    path('health/', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('users.urls')),
     path('api/v1/support/', include('marketplace.urls')),
@@ -27,4 +30,5 @@ urlpatterns = [
     path('api/v1/booking/', include('ordering.urls')),
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
+    path('api/v1/payments/', include('payments.urls')),
 ]

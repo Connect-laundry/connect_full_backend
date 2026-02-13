@@ -8,6 +8,8 @@ from django.utils.translation import gettext_lazy as _
 # pyre-ignore[missing-module]
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+from ..utils.validators import validate_file_upload
+
 class Laundry(models.Model):
     class PriceRange(models.TextChoices):
         LOW = '$', _('Low')
@@ -17,7 +19,13 @@ class Laundry(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(_('name'), max_length=255, db_index=True)
     description = models.TextField(_('description'), blank=True)
-    image = models.ImageField(_('image'), upload_to='laundries/', blank=True, null=True)
+    image = models.ImageField(
+        _('image'), 
+        upload_to='laundries/', 
+        blank=True, 
+        null=True,
+        validators=[validate_file_upload]
+    )
     address = models.TextField(_('address'))
     latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)
     longitude = models.DecimalField(_('longitude'), max_digits=9, decimal_places=6, db_index=True)
@@ -41,6 +49,9 @@ class Laundry(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['latitude', 'longitude']),
+            models.Index(fields=['is_featured', 'is_active']),
+            models.Index(fields=['price_range']),
+            models.Index(fields=['name']),
         ]
 
     def __str__(self):
