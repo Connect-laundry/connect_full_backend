@@ -110,6 +110,7 @@ class LaundryDashboardViewSet(viewsets.GenericViewSet):
         stats['rating_average'] = laundry.reviews.aggregate(Avg('rating'))['rating__avg'] or 0.0
         
         # Calculate real average processing time using DB aggregation
+        # pyre-ignore[missing-module]
         from django.db.models import ExpressionWrapper, DurationField
         avg_processing = Order.objects.filter(
             laundry=laundry, 
