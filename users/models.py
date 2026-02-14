@@ -59,6 +59,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
     clerk_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     
+    # Referrals
+    referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True, db_index=True)
+    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
+        
     role = models.CharField(
         max_length=20,
         choices=Role.choices,

@@ -47,6 +47,7 @@ class Laundry(models.Model):
     price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
     estimated_delivery_hours = models.IntegerField(_('estimated delivery hours'), default=24)
     delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
+    min_order = models.DecimalField(_('minimum order value'), max_digits=10, decimal_places=2, default=0.00)
     
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
     is_active = models.BooleanField(_('is active'), default=False, db_index=True)
