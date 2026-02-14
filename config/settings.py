@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     'laundries',
 
     # 'django_celery_results',
-],
+]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
