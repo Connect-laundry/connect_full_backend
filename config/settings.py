@@ -12,8 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
-# pyre-ignore[import]
-import dj_database_url
+
 # pyre-ignore[import]
 import sentry_sdk
 # pyre-ignore[import]
@@ -54,8 +53,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    'drf_spectacular',
     'corsheaders',
 
+    'django.contrib.gis',
     'users',
     'marketplace',
     'ordering',
@@ -63,12 +64,13 @@ INSTALLED_APPS = [
     'payments',
     'laundries',
 
-    'django_celery_results',
-]
+    # 'django_celery_results',
+],
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'config.middleware.idempotency.IdempotencyMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -141,26 +143,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-# Database — Render provides DATABASE_URL, local dev uses individual vars
-DATABASE_URL = os.getenv('DATABASE_URL')
-
-if DATABASE_URL:
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': os.getenv('DB_NAME', 'connect_db'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME'),
-            'USER': os.getenv('DB_USER'),
-            'PASSWORD': os.getenv('DB_PASSWORD'),
-            'HOST': os.getenv('DB_HOST'),
-            'PORT': os.getenv('DB_PORT'),
-        }
-    }
+}
 
 
 # Password validation
@@ -219,6 +211,7 @@ REST_FRAMEWORK = {
         'laundries.renderers.StandardResponseRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
         'config.throttling.BurstUserThrottle',
@@ -232,6 +225,15 @@ REST_FRAMEWORK = {
         'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
         'anon': os.getenv('THROTTLE_ANON', '100/day'),
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Connect Laundry API',
+    'DESCRIPTION': 'API documentation for Connect Laundry marketplace.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_PATCH': True,
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # Clerk Configuration
@@ -263,8 +265,8 @@ SIMPLE_JWT = {
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = 'memory://'
-CELERY_RESULT_BACKEND = 'django-db'
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'django-db')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -335,3 +337,8 @@ SQL_DEBUG_THRESHOLD = float(os.getenv('SQL_DEBUG_THRESHOLD', '0.2'))
 # Celery Reliability
 CELERY_MAX_RETRIES = int(os.getenv('CELERY_MAX_RETRIES', 5))
 CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))
+
+# Paystack Configuration
+PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
+PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
+PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')

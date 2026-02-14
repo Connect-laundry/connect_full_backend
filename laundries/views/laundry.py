@@ -7,22 +7,22 @@ from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.db import models
 # pyre-ignore[missing-module]
-from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q
+from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q, Prefetch
 # pyre-ignore[missing-module]
-from django.db.models.functions import Sqrt, Sin, Cos, ASin, Radians
+from django.contrib.gis.db.models.functions import Distance
 # pyre-ignore[missing-module]
+from django.contrib.gis.geos import Point
+# pyre-ignore[missing-module]
+from django.contrib.gis.measure import D
 from django.utils import timezone
-# pyre-ignore[missing-module]
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
 import logging
 
-logger = logging.getLogger(__name__)
-# pyre-ignore[missing-module]
-from rest_framework.filters import SearchFilter
-# pyre-ignore[missing-module]
-from rest_framework.renderers import JSONRenderer
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
+# pyre-ignore[missing-module]
+from ..models.service import Service
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
@@ -34,16 +34,16 @@ from ..serializers.laundry_list import LaundryListSerializer
 # pyre-ignore[missing-module]
 from ..serializers.laundry_detail import LaundryDetailSerializer
 # pyre-ignore[missing-module]
-from ..serializers.review import ReviewSerializer
-# pyre-ignore[missing-module]
 from ..pagination import StandardResultsSetPagination
 # pyre-ignore[missing-module]
 from ..filters import LaundryFilter
-# pyre-ignore[missing-module]
-from config.throttling import ReviewThrottle
 
+logger = logging.getLogger(__name__)
 
 class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for exploring laundries. Optimized with PostGIS for proximity search.
+    """
     queryset = Laundry.objects.filter(
         status=Laundry.ApprovalStatus.APPROVED,
         is_active=True
@@ -67,32 +67,33 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         # Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve':
             queryset = queryset.prefetch_related(
-                'services__category',
+                Prefetch(
+                    'services',
+                    queryset=Service.objects.filter(is_active=True, is_approved=True).select_related('category')
+                ),
                 'reviews__user',
                 'opening_hours'
             )
         
-        # Nearby Search Logic
+        # Optimized Spatial Nearby Search Logic
         nearby = self.request.query_params.get('nearby') == 'true'
         lat = self.request.query_params.get('lat')
         lng = self.request.query_params.get('lng')
+        radius_km = float(self.request.query_params.get('radius', 10)) # Default 10km
 
         if nearby and lat and lng:
             try:
-                lat = float(lat)
-                lng = float(lng)
+                user_location = Point(float(lng), float(lat), srid=4326)
                 
-                # Haversine formula in Django ORM
-                dlat = Radians(F('latitude') - lat)
-                dlng = Radians(F('longitude') - lng)
+                # 1. Spatial filter using PostGIS index (ST_DWithin)
+                queryset = queryset.filter(location__dwithin=(user_location, D(km=radius_km)))
                 
-                a = Sin(dlat / 2)**2 + Cos(Radians(lat)) * Cos(Radians(F('latitude'))) * Sin(dlng / 2)**2
-                c = 2 * ASin(Sqrt(a))
-                distance_km = ExpressionWrapper(c * 6371, output_field=FloatField())
+                # 2. Annotate exact distance for display (ST_Distance)
+                queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
                 
-                queryset = queryset.annotate(distance=distance_km).filter(distance__lte=10).order_by('distance')
-            except (ValueError, TypeError):
-                pass
+                logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid coordinates for nearby search: {e}")
                 
         return queryset
 

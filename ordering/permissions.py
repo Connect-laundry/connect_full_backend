@@ -30,7 +30,7 @@ class CanManageLifecycle(permissions.BasePermission):
             return view.action == 'cancel'
             
         # Laundry Owner can manage most stages
-        if user.role == 'LAUNDRY_OWNER' and obj.laundry.owner == user:
+        if user.role == 'OWNER' and obj.laundry.owner == user:
             return True
             
         # Rider can mark picked up and delivered

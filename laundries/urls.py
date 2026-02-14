@@ -1,27 +1,26 @@
-# pyre-ignore[missing-module]
 from django.urls import path, include
-# pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
-# pyre-ignore[missing-module]
-from rest_framework import permissions
-# pyre-ignore[missing-module]
 from .views.laundry import LaundryViewSet
-# pyre-ignore[missing-module]
 from .views.favorite import FavoriteListView
-# pyre-ignore[missing-module]
 from .views.review import ReviewCreateView
-# pyre-ignore[missing-module]
-from .views.dashboard import LaundryDashboardViewSet
-# pyre-ignore[missing-module]
+from .views.dashboard import (
+    DashboardStatsView,
+    DashboardEarningsView,
+    DashboardOrderViewSet,
+    ServiceStatusUpdateView
+)
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
 router = DefaultRouter()
-router.register(r'dashboard', LaundryDashboardViewSet, basename='dashboard')
+router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
 router.register(r'laundries', LaundryViewSet, basename='laundry')
 router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
 router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
 
 urlpatterns = [
+    path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
+    path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),
     path('favorites/', FavoriteListView.as_view(), name='favorite_list'),
     path('<uuid:laundry_id>/reviews/', ReviewCreateView.as_view(), name='review_create'),
     path('', include(router.urls)),

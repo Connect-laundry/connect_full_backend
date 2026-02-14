@@ -11,14 +11,14 @@ class PaystackService:
     Handles payment initialization and verification.
     """
     def __init__(self):
-        self.secret_key = os.getenv('PAYSTACK_SECRET_KEY')
+        self.secret_key = settings.PAYSTACK_SECRET_KEY
         self.base_url = 'https://api.paystack.co'
         self.headers = {
             'Authorization': f'Bearer {self.secret_key}',
             'Content-Type': 'application/json',
         }
 
-    def initialize_transaction(self, email, amount, reference):
+    def initialize_transaction(self, email, amount, reference, metadata=None):
         """
         Initialize a payment transaction.
         Amount should be in kobo (NGN * 100).
@@ -28,15 +28,24 @@ class PaystackService:
             'email': email,
             'amount': int(float(amount) * 100),
             'reference': reference,
-            'callback_url': os.getenv('PAYSTACK_CALLBACK_URL'),
+            'callback_url': settings.PAYSTACK_CALLBACK_URL,
+            'metadata': metadata or {}
         }
         
         try:
-            response = requests.post(endpoint, json=payload, headers=self.headers, timeout=10)
-            return response.json()
-        except Exception as e:
-            logger.error(f"Paystack initialization error: {e}")
-            return None
+            response = requests.post(
+                endpoint, 
+                json=payload, 
+                headers=self.headers, 
+                timeout=15
+            )
+            data = response.json()
+            if not response.ok:
+                logger.error(f"Paystack initialization failed: {data.get('message', 'Unknown error')}")
+            return data
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Paystack request error: {e}")
+            return {'status': False, 'message': str(e)}
 
     def verify_transaction(self, reference):
         """
@@ -45,8 +54,15 @@ class PaystackService:
         endpoint = f"{self.base_url}/transaction/verify/{reference}"
         
         try:
-            response = requests.get(endpoint, headers=self.headers, timeout=10)
-            return response.json()
-        except Exception as e:
+            response = requests.get(
+                endpoint, 
+                headers=self.headers, 
+                timeout=15
+            )
+            data = response.json()
+            if not response.ok:
+                logger.error(f"Paystack verification failed: {data.get('message', 'Unknown error')}")
+            return data
+        except requests.exceptions.RequestException as e:
             logger.error(f"Paystack verification error: {e}")
-            return None
+            return {'status': False, 'message': str(e)}

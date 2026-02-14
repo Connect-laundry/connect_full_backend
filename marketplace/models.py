@@ -69,13 +69,13 @@ class Notification(models.Model):
         PROMO = 'PROMO', _('Promotion')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    recipient = models.ForeignKey(
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.CASCADE, 
         related_name='notifications'
     )
     title = models.CharField(max_length=255)
-    message = models.TextField()
+    body = models.TextField()
     type = models.CharField(max_length=20, choices=Type.choices, default=Type.SYSTEM)
     
     is_read = models.BooleanField(default=False)
@@ -96,11 +96,11 @@ class Notification(models.Model):
         verbose_name_plural = _('Notifications')
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['recipient', 'is_read', 'created_at']),
+            models.Index(fields=['user', 'is_read', 'created_at']),
         ]
 
     def __str__(self):
-        return f"{self.title} - {self.recipient.email}"
+        return f"{self.title} - {self.user.email}"
 
     def mark_as_read(self):
         self.is_read = True
