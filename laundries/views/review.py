@@ -2,7 +2,9 @@
 from rest_framework import generics, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+# pyre-ignore[missing-module]
 from ..serializers.review import ReviewSerializer
+# pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 
 class ReviewCreateView(generics.CreateAPIView):

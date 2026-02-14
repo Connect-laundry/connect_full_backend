@@ -4,30 +4,43 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.decorators import action
-from ordering.models import LaunderableItem, BookingSlot, Order
+from ordering.models import LaunderableItem, BookingSlot, Order, Coupon
 from ordering.serializers import (
     LaunderableItemSerializer, 
     BookingSlotSerializer, 
     OrderDetailSerializer, 
-    OrderCreateSerializer
+    OrderCreateSerializer,
+    CouponSerializer,
+    CouponValidationSerializer
 )
 from ..services.payment_service import PaymentService
+from decimal import Decimal
 
 class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
-    """Viewset for global catalog of items and services."""
-    queryset = LaunderableItem.objects.all()
+    """
+    Viewset for global catalog of items and services.
+    Strictly filters for active items from approved/active laundries.
+    """
+    queryset = LaunderableItem.objects.filter(
+        is_active=True,
+        laundry__status='APPROVED',
+        laundry__is_active=True
+    ).select_related('laundry')
     serializer_class = LaunderableItemSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        return super().get_queryset()
+
     @action(detail=False, methods=['get'])
     def items(self, request):
-        items = LaunderableItem.objects.filter(is_active=True)
-        serializer = self.get_serializer(items, many=True)
-        return Response(serializer.data)
+        # Already filtered by queryset, but keeping this for explicit backward compatibility if used
+        return self.list(request)
 
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""
     permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'burst_user'
 
     @action(detail=False, methods=['get'])
     def schedule(self, request):
@@ -48,13 +61,13 @@ class BookingViewSet(viewsets.GenericViewSet):
         item_ids = [i.get('item') for i in items_inputs if i.get('item')]
         items_objs = {str(item.id): item for item in LaunderableItem.objects.filter(id__in=item_ids)}
         
-        total = 0
+        total = Decimal('0.00')
         for entry in items_inputs:
             item_id = str(entry.get('item'))
             if item_id in items_objs:
-                total += float(items_objs[item_id].base_price) * int(entry.get('quantity', 1))
+                total += Decimal(str(items_objs[item_id].base_price)) * Decimal(str(entry.get('quantity', 1)))
         
-        return Response({"estimated_total": total})
+        return Response({"estimated_total": str(total)})
 
     @action(detail=False, methods=['post'])
     def create(self, request):
@@ -74,6 +87,7 @@ class BookingViewSet(viewsets.GenericViewSet):
 class OrderViewSet(viewsets.ModelViewSet):
     """Viewset for managing and tracking orders."""
     permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'burst_user'
 
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).prefetch_related('items')
@@ -81,13 +95,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ['list', 'retrieve']:
             return OrderDetailSerializer
+        return OrderCreateSerializer
+
     @action(detail=True, methods=['get'], url_path='price-breakdown')
     def price_breakdown(self, request, pk=None):
         """
-        Backend-owned financial truth for an order.
-        Calculates stored totals and applies business logic using Decimal.
+        Calculates stored totals and applies business logic using FinanceService.
         """
-        from decimal import Decimal
+        from ..services.finance_service import FinanceService
         from django.core.cache import cache
 
         cache_key = f"order_breakdown_{pk}"
@@ -103,38 +118,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         # Security: Only owner or laundry owner
         if order.user != request.user and order.laundry.owner != request.user and not request.user.is_staff:
-             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+             return Response({"status": "error", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
-        items_total = Decimal(str(order.total_amount)) # Simplification: assume total_amount already includes items
-        
-        # Real logic would sum items
-        # items_total = order.items.aggregate(total=Sum(F('quantity') * F('service__base_price')))['total'] or Decimal('0.00')
-
-        delivery_fee = order.laundry.delivery_fee
-        discount = Decimal('0.00') # Pull from used coupon if exists
-        
-        tax_rate = Decimal('0.05') # 5% tax
-        tax = items_total * tax_rate
-        
-        platform_fee = Decimal('0.00')
-        
-        total = items_total + delivery_fee + tax - discount
-        
-        breakdown = {
-            "items_total": str(items_total),
-            "delivery_fee": str(delivery_fee),
-            "discount": str(discount),
-            "tax": str(tax),
-            "platform_fee": str(platform_fee),
-            "total": str(total),
-            "currency": "NGN"
-        }
-
-        # If mismatch with stored total, log it (Financial Integrity Check)
-        if total != Decimal(str(order.total_amount)):
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Financial Mismatch on Order {order.id}: Calculated {total} vs Stored {order.total_amount}")
+        # Use centralized finance service
+        breakdown = FinanceService.calculate_price_breakdown(order, coupon=order.coupon)
 
         cache.set(cache_key, breakdown, 300)
 
@@ -143,3 +130,62 @@ class OrderViewSet(viewsets.ModelViewSet):
             "message": "Price breakdown fetched",
             "data": breakdown
         })
+
+class CouponViewSet(viewsets.GenericViewSet):
+    """Viewset for validating and listing available coupons."""
+    serializer_class = CouponSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Coupon.objects.filter(is_active=True)
+
+    @action(detail=False, methods=['post'], url_path='validate')
+    def validate(self, request):
+        serializer = CouponValidationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        code = serializer.validated_data['code']
+        laundry_id = serializer.validated_data['laundry_id']
+        items_total = serializer.validated_data['items_total']
+        
+        try:
+            coupon = Coupon.objects.get(code=code, is_active=True)
+            is_valid, error = coupon.is_valid(
+                user=request.user, 
+                laundry_id=laundry_id, 
+                order_value=items_total
+            )
+            
+            if not is_valid:
+                return Response({
+                    "status": "error",
+                    "message": error,
+                    "valid": False
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            discount = Decimal('0.00')
+            if coupon.discount_type == 'FIXED':
+                discount = Decimal(str(coupon.discount_value))
+            else:
+                discount = (Decimal(str(items_total)) * (Decimal(str(coupon.discount_value)) / 100))
+            
+            discount = min(discount, Decimal(str(items_total)))
+            
+            return Response({
+                "status": "success",
+                "message": "Coupon is valid",
+                "valid": True,
+                "data": {
+                    "code": coupon.code,
+                    "discount_amount": str(discount.quantize(Decimal('0.01'))),
+                    "discount_type": coupon.discount_type,
+                    "discount_value": str(coupon.discount_value)
+                }
+            })
+            
+        except Coupon.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "Invalid coupon code.",
+                "valid": False
+            }, status=status.HTTP_404_NOT_FOUND)

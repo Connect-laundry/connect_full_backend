@@ -1,5 +1,8 @@
+# pyre-ignore[missing-module]
 from django.utils.deprecation import MiddlewareMixin
+# pyre-ignore[missing-module]
 from django.http import JsonResponse
+# pyre-ignore[missing-module]
 from rest_framework import status
 
 class DeactivationMiddleware(MiddlewareMixin):

@@ -3,11 +3,9 @@ from django.urls import path, include
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 # pyre-ignore[missing-module]
-from .views import CatalogViewSet, BookingViewSet, OrderViewSet
+from .views import CatalogViewSet, BookingViewSet, OrderViewSet, CouponViewSet
 # pyre-ignore[missing-module]
 from .views.lifecycle import OrderLifecycleViewSet
-# pyre-ignore[missing-module]
-from .views.promo import CouponViewSet
 
 router = DefaultRouter()
 router.register(r'orders', OrderViewSet, basename='order')

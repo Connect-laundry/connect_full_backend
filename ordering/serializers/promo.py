@@ -1,3 +1,4 @@
+# pyre-ignore[missing-module]
 from rest_framework import serializers
 
 class CouponValidateSerializer(serializers.Serializer):
