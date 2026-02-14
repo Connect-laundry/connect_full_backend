@@ -4,7 +4,7 @@ from django.contrib.gis.db import models
 # pyre-ignore[missing-module]
 from django.contrib.gis.db.models import Index
 # pyre-ignore[missing-module]
-from django.contrib.gis.indexes import GistIndex
+from django.contrib.postgres.indexes import GistIndex
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
