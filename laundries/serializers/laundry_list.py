@@ -2,10 +2,15 @@
 from rest_framework import serializers
 # pyre-ignore[missing-module]
 from django.db.models import Avg, Count
+# pyre-ignore[missing-module]
 from django.core.cache import cache
+# pyre-ignore[missing-module]
 from django.utils import timezone
+# pyre-ignore[missing-module]
 from ..models.laundry import Laundry
+# pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+# pyre-ignore[missing-module]
 from ..models.opening_hours import OpeningHours
 
 class LaundryListSerializer(serializers.ModelSerializer):
@@ -57,6 +62,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
         return False
 
     def get_estimatedDelivery(self, obj):
+        # pyre-ignore[missing-module]
         from ..services.delivery_estimator import DeliveryEstimator
         
         # 1. Get user location from context if available
@@ -74,6 +80,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
             active_order_count = cache.get(cache_key)
             
             if active_order_count is None:
+                # pyre-ignore[missing-module]
                 from ordering.models import Order
                 active_order_count = Order.objects.filter(
                     laundry=obj, 

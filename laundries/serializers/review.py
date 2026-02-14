@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+# pyre-ignore[missing-module]
 from ..models.review import Review
 
 class ReviewSerializer(serializers.ModelSerializer):

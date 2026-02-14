@@ -2,9 +2,13 @@
 from rest_framework import serializers
 # pyre-ignore[missing-module]
 from django.db.models import Avg, Count
+# pyre-ignore[missing-module]
 from ..models.laundry import Laundry
+# pyre-ignore[missing-module]
 from ..models.service import Service
+# pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+# pyre-ignore[missing-module]
 from .review import ReviewSerializer
 
 class ServiceSerializer(serializers.ModelSerializer):
@@ -31,10 +35,12 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     def get_services(self, obj):
         # We'll group them by category in the view or return flat list
         services = obj.services.filter(is_active=True).select_related('category')
+        # pyre-ignore[missing-module]
         return ServiceSerializer(services, many=True).data
 
     def get_reviews(self, obj):
         reviews = obj.reviews.all()[:5]
+        # pyre-ignore[missing-module]
         return ReviewSerializer(reviews, many=True).data
 
     def get_isFavorite(self, obj):

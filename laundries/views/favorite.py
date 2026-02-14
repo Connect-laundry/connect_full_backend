@@ -4,8 +4,11 @@ from rest_framework import generics, permissions
 from django.db.models import Avg, Count
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+# pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+# pyre-ignore[missing-module]
 from ..serializers.laundry_list import LaundryListSerializer
+# pyre-ignore[missing-module]
 from ..pagination import StandardResultsSetPagination
 
 class FavoriteListView(generics.ListAPIView):
@@ -22,6 +25,7 @@ class FavoriteListView(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         # We need to return Laundry objects, not Favorite IDs
         laundry_ids = self.get_queryset()
+        # pyre-ignore[missing-module]
         from ..models.laundry import Laundry
         laundries = Laundry.objects.filter(id__in=laundry_ids).annotate(
             rating=Avg('reviews__rating'),

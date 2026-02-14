@@ -1,7 +1,12 @@
+# pyre-ignore[missing-module]
 from rest_framework import views, permissions, status
+# pyre-ignore[missing-module]
 from rest_framework.response import Response
+# pyre-ignore[missing-module]
 from django.shortcuts import get_object_or_404
+# pyre-ignore[missing-module]
 from django.utils import timezone
+# pyre-ignore[missing-module]
 from ..models import User
 
 class UserDeactivateView(views.APIView):

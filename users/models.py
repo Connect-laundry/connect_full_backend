@@ -57,6 +57,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(_('phone number'), max_length=20, unique=True, db_index=True)
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
+    clerk_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     
     role = models.CharField(
         max_length=20,
