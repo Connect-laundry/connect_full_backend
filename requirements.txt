@@ -40,3 +40,4 @@ pytest==8.3.4
 pytest-django==4.9.0
 django-cloudinary-storage==0.3.0
 cloudinary==1.36.0
+drf-spectacular==0.28.0
