@@ -21,13 +21,15 @@ class LaundryListSerializer(serializers.ModelSerializer):
     isOpen = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
     isFavorite = serializers.SerializerMethodField()
-    estimatedDelivery = serializers.SerializerMethodField()
+    minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
+    deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Laundry
         fields = (
             'id', 'name', 'image', 'location', 'distance', 'rating', 
-            'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery'
+            'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
+            'minOrder', 'deliveryFee'
         )
 
     def get_distance(self, obj):

@@ -4,6 +4,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.decorators import action
+# pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, Coupon
 from ordering.serializers import (
     LaunderableItemSerializer, 
@@ -12,7 +13,9 @@ from ordering.serializers import (
     OrderCreateSerializer,
     CouponSerializer,
     CouponValidationSerializer
+# pyre-ignore[missing-module]
 )
+# pyre-ignore[missing-module]
 from ..services.payment_service import PaymentService
 from decimal import Decimal
 
@@ -70,6 +73,11 @@ class BookingViewSet(viewsets.GenericViewSet):
         return Response({"estimated_total": str(total)})
 
     @action(detail=False, methods=['post'])
+    def calculate(self, request):
+        """Alias for estimate to match frontend requirement"""
+        return self.estimate(request)
+
+    @action(detail=False, methods=['post'])
     def create(self, request):
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -102,7 +110,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         Calculates stored totals and applies business logic using FinanceService.
         """
+# pyre-ignore[missing-module]
         from ..services.finance_service import FinanceService
+# pyre-ignore[missing-module]
         from django.core.cache import cache
 
         cache_key = f"order_breakdown_{pk}"

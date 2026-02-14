@@ -8,6 +8,8 @@ from .views.profile import ProfileView, AddressViewSet, LogoutView
 from .views.deactivate import UserDeactivateView
 # pyre-ignore[missing-module]
 from .views.clerk_auth import VerifyClerkTokenView, ClerkMeView, ClerkLogoutView
+from .views.referral import ReferralApplyView, ReferralStatsView
+from .views.media import MediaUploadView
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 
@@ -22,5 +24,13 @@ urlpatterns = [
     path('auth/clerk/verify/', VerifyClerkTokenView.as_view(), name='clerk_token_verify'),
     path('auth/clerk/me/', ClerkMeView.as_view(), name='clerk_me'),
     path('auth/clerk/logout/', ClerkLogoutView.as_view(), name='clerk_logout'),
+    
+    # Referrals
+    path('referral/apply/', ReferralApplyView.as_view(), name='referral_apply'),
+    path('referral/stats/', ReferralStatsView.as_view(), name='referral_stats'),
+    
+    # Media
+    path('media/upload/', MediaUploadView.as_view(), name='media_upload'),
+    
     path('', include(router.urls)),
 ]
