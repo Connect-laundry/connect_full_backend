@@ -20,6 +20,8 @@ from django.contrib import admin
 from django.urls import path, include
 # pyre-ignore[missing-module]
 from config.views.health import health_check
+# pyre-ignore[missing-module]
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
     path('health/', health_check, name='health_check'),
@@ -31,4 +33,9 @@ urlpatterns = [
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
+    
+    # OpenAPI Documentation
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]

@@ -1,6 +1,10 @@
 import uuid
 # pyre-ignore[missing-module]
-from django.db import models
+from django.contrib.gis.db import models
+# pyre-ignore[missing-module]
+from django.contrib.gis.db.models import Index
+# pyre-ignore[missing-module]
+from django.contrib.gis.indexes import GistIndex
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
@@ -33,8 +37,12 @@ class Laundry(models.Model):
         validators=[validate_file_upload]
     )
     address = models.TextField(_('address'))
+    
+    # Geospatial Optimization
     latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)
     longitude = models.DecimalField(_('longitude'), max_digits=9, decimal_places=6, db_index=True)
+    location = models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
+
     phone_number = models.CharField(_('phone number'), max_length=20)
     price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
     estimated_delivery_hours = models.IntegerField(_('estimated delivery hours'), default=24)
@@ -72,7 +80,7 @@ class Laundry(models.Model):
         verbose_name_plural = _('Laundries')
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['latitude', 'longitude']),
+            GistIndex(fields=['location']),
             models.Index(fields=['is_featured', 'is_active']),
             models.Index(fields=['price_range']),
             models.Index(fields=['name']),
@@ -80,3 +88,11 @@ class Laundry(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # Sync PointField with latitude/longitude for backward compatibility
+        if self.latitude and self.longitude:
+            # pyre-ignore[missing-module]
+            from django.contrib.gis.geos import Point
+            self.location = Point(float(self.longitude), float(self.latitude))
+        super().save(*args, **kwargs)

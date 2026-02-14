@@ -12,7 +12,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Notification.objects.filter(recipient=self.request.user)
+        queryset = Notification.objects.filter(user=self.request.user)
         is_read = self.request.query_params.get('is_read')
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
@@ -20,7 +20,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+        unread_count = Notification.objects.filter(user=request.user, is_read=False).count()
         
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -52,10 +52,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             "data": serializer.data
         })
 
-    @decorators.action(detail=False, methods=['patch'], url_path='mark-all-read')
+    @decorators.action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
         """Mark all unread notifications as read for current user."""
-        Notification.objects.filter(recipient=request.user, is_read=False).update(
+        Notification.objects.filter(user=request.user, is_read=False).update(
             is_read=True, 
             read_at=timezone.now()
         )

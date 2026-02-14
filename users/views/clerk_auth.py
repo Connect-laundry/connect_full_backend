@@ -12,6 +12,7 @@ class VerifyClerkTokenView(APIView):
     """
     authentication_classes = [ClerkAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'auth'
 
     def post(self, request):
         user = request.user
