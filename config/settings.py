@@ -79,7 +79,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'config.middleware.request_id.RequestIDMiddleware',
-    'config.middleware.lockout.LoginLockoutMiddleware',
 ]
 
 # Security Settings
@@ -210,6 +209,7 @@ AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'users.auth.clerk.ClerkAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -234,13 +234,17 @@ REST_FRAMEWORK = {
     },
 }
 
+# Clerk Configuration
+CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL')
+CLERK_AUDIENCE = os.getenv('CLERK_AUDIENCE')
+CLERK_ISSUER = os.getenv('CLERK_ISSUER')
+CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
+
+
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6373/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'clerk-jwks-cache',
     }
 }
 
@@ -259,28 +263,13 @@ SIMPLE_JWT = {
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = 'memory://'
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
-# Redis Cache (used for OTP)
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
-    }
-}
-
-# OTP Settings
-OTP_EXPIRY_SECONDS = os.getenv('OTP_EXPIRY_SECONDS', 300)
-OTP_MAX_RETRIES = os.getenv('OTP_MAX_RETRIES', 3)
-OTP_RESEND_COOLDOWN = os.getenv('OTP_RESEND_COOLDOWN', 60)
 
 # Email Settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

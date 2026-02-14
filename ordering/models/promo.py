@@ -82,6 +82,7 @@ class Coupon(models.Model):
     def validate_for_user(self, user):
         """Checks if user is eligible for the coupon."""
         if self.first_time_users_only:
+            # pyre-ignore[missing-module]
             from .base import Order
             has_orders = Order.objects.filter(user=user, status='COMPLETED').exists()
             if has_orders:

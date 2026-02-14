@@ -1,4 +1,6 @@
+# pyre-ignore[missing-module]
 from django.urls import path
+# pyre-ignore[missing-module]
 from .views import PaymentInitializeView, PaymentVerifyView
 
 urlpatterns = [

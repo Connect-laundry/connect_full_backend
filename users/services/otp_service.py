@@ -1,6 +1,8 @@
 import random
 import hashlib
+# pyre-ignore[missing-module]
 from django.core.cache import cache
+# pyre-ignore[missing-module]
 from django.conf import settings
 
 class OTPService:
