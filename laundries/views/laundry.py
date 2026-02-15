@@ -8,16 +8,28 @@ from rest_framework.response import Response
 from django.db import models
 # pyre-ignore[missing-module]
 from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q, Prefetch
-# pyre-ignore[missing-module]
-from django.contrib.gis.db.models.functions import Distance
-# pyre-ignore[missing-module]
-from django.contrib.gis.geos import Point
-# pyre-ignore[missing-module]
-from django.contrib.gis.measure import D
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 import logging
+import os
+
+# Check if PostGIS is enabled
+USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+
+# Conditionally import GIS modules
+if USE_POSTGIS:
+    # pyre-ignore[missing-module]
+    from django.contrib.gis.db.models.functions import Distance
+    # pyre-ignore[missing-module]
+    from django.contrib.gis.geos import Point
+    # pyre-ignore[missing-module]
+    from django.contrib.gis.measure import D
+else:
+    # Mock GIS classes for non-PostGIS mode
+    Distance = None
+    Point = None
+    D = None
 
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
@@ -75,7 +87,11 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 'opening_hours'
             )
         
-        # Optimized Spatial Nearby Search Logic
+        # Optimized Spatial Nearby Search Logic (only if PostGIS is enabled)
+        if not USE_POSTGIS:
+            # Skip spatial queries if PostGIS is not enabled
+            return queryset
+            
         nearby = self.request.query_params.get('nearby') == 'true'
         lat = self.request.query_params.get('lat')
         lng = self.request.query_params.get('lng')

@@ -46,6 +46,9 @@ AUTH_USER_MODEL = 'users.User'
 
 # Application definition
 
+# Check if PostGIS should be enabled (for production)
+USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -58,28 +61,32 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'corsheaders',
+]
 
-    'django.contrib.gis',
+# Add GIS support only if USE_POSTGIS is enabled
+if USE_POSTGIS:
+    INSTALLED_APPS.append('django.contrib.gis')
+
+INSTALLED_APPS += [
     'users',
     'marketplace',
     'ordering',
     'logistics',
     'payments',
     'laundries',
-
     # 'django_celery_results',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'config.middleware.idempotency.IdempotencyMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'config.middleware.idempotency.IdempotencyMiddleware',
     'config.middleware.deactivation.DeactivationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -148,14 +155,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Determine database scheme based on USE_POSTGIS
+db_scheme = 'postgis' if USE_POSTGIS else 'postgres'
+default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'connect_db')}"
+
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL', f"postgis://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'connect_db')}"),
+        default=os.getenv('DATABASE_URL', default_db_url),
         conn_max_age=600,
         ssl_require=not DEBUG
     )
 }
-DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+
+# Set the appropriate database engine
+if USE_POSTGIS:
+    DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+else:
+    DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
 
 # Password validation
