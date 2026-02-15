@@ -1,10 +1,13 @@
 # pyre-ignore[missing-module]
+# pyre-ignore[missing-module]
 from rest_framework import generics, permissions, viewsets, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.views import APIView
+# pyre-ignore[missing-module]
 from ..models import Address
+# pyre-ignore[missing-module]
 from ..serializers.profile import ProfileSerializer, AddressSerializer
 
 class ProfileView(generics.RetrieveUpdateAPIView):
