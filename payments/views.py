@@ -3,7 +3,8 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from rest_framework import status, permissions, views
+from rest_framework import status, permissions
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
