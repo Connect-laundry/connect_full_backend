@@ -1,6 +1,10 @@
+# pyre-ignore[missing-module]
 import uuid
+# pyre-ignore[missing-module]
 from django.db import models
+# pyre-ignore[missing-module]
 from django.conf import settings
+# pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
 class Feedback(models.Model):

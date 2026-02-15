@@ -4,6 +4,7 @@ from rest_framework import views, permissions, status, serializers
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.db import transaction
+# pyre-ignore[missing-module]
 from ..models import User
 
 class ReferralApplySerializer(serializers.Serializer):
@@ -13,6 +14,7 @@ class ReferralApplyView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
+        # pyre-ignore
         serializer = ReferralApplySerializer(data=request.data)
         if serializer.is_valid():
             code = serializer.validated_data['referral_code']
