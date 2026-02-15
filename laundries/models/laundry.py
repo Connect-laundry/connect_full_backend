@@ -1,10 +1,5 @@
 import uuid
-# pyre-ignore[missing-module]
-from django.contrib.gis.db import models
-# pyre-ignore[missing-module]
-from django.contrib.gis.db.models import Index
-# pyre-ignore[missing-module]
-from django.contrib.postgres.indexes import GistIndex
+import os
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
@@ -13,6 +8,24 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 # pyre-ignore[missing-module]
 from ..utils.validators import validate_file_upload
+
+# Conditionally import GIS or regular Django models based on USE_POSTGIS
+USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+
+if USE_POSTGIS:
+    # pyre-ignore[missing-module]
+    from django.contrib.gis.db import models
+    # pyre-ignore[missing-module]
+    from django.contrib.gis.db.models import Index
+    # pyre-ignore[missing-module]
+    from django.contrib.postgres.indexes import GistIndex
+else:
+    # pyre-ignore[missing-module]
+    from django.db import models
+    # pyre-ignore[missing-module]
+    from django.db.models import Index
+    # For non-GIS mode, GistIndex won't be used, but we need a placeholder
+    GistIndex = None
 
 class Laundry(models.Model):
     class PriceRange(models.TextChoices):
@@ -41,7 +54,6 @@ class Laundry(models.Model):
     # Geospatial Optimization
     latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)
     longitude = models.DecimalField(_('longitude'), max_digits=9, decimal_places=6, db_index=True)
-    location = models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
 
     phone_number = models.CharField(_('phone number'), max_length=20)
     price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
@@ -80,8 +92,8 @@ class Laundry(models.Model):
         verbose_name = _('Laundry')
         verbose_name_plural = _('Laundries')
         ordering = ['-created_at']
+        # Build indexes list conditionally
         indexes = [
-            GistIndex(fields=['location']),
             models.Index(fields=['is_featured', 'is_active']),
             models.Index(fields=['price_range']),
             models.Index(fields=['name']),
@@ -91,9 +103,19 @@ class Laundry(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        # Sync PointField with latitude/longitude for backward compatibility
-        if self.latitude and self.longitude:
+        # Sync PointField with latitude/longitude for backward compatibility (only if PostGIS is enabled)
+        if USE_POSTGIS and self.latitude and self.longitude and hasattr(self, 'location'):
             # pyre-ignore[missing-module]
             from django.contrib.gis.geos import Point
             self.location = Point(float(self.longitude), float(self.latitude))
         super().save(*args, **kwargs)
+
+# Dynamically add PointField if USE_POSTGIS is enabled
+if USE_POSTGIS:
+    Laundry.add_to_class(
+        'location',
+        models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
+    )
+    # Add GistIndex to Meta.indexes
+    if GistIndex is not None:
+        Laundry._meta.indexes.insert(0, GistIndex(fields=['location']))
