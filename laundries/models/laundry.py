@@ -116,6 +116,6 @@ if USE_POSTGIS:
         'location',
         models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
     )
-    # Add GistIndex to Meta.indexes
+    # Add GistIndex to Meta.indexes with explicit name
     if GistIndex is not None:
-        Laundry._meta.indexes.insert(0, GistIndex(fields=['location']))
+        Laundry._meta.indexes.insert(0, GistIndex(fields=['location'], name='laundries_location_gist_idx'))
