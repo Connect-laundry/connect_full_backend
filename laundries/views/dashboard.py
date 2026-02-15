@@ -6,7 +6,7 @@ from datetime import timedelta
 from ordering.models import Order
 from laundries.models.laundry import Laundry
 from laundries.models.service import Service
-from .dashboard_serializers import (
+from ..serializers.dashboard import (
     DashboardOrderSerializer,
     DashboardStatsSerializer,
     DashboardEarningsSerializer,
