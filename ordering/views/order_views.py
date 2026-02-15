@@ -24,11 +24,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
     Viewset for global catalog of items and services.
     Strictly filters for active items from approved/active laundries.
     """
-    queryset = LaunderableItem.objects.filter(
-        is_active=True,
-        laundry__status='APPROVED',
-        laundry__is_active=True
-    ).select_related('laundry')
+    queryset = LaunderableItem.objects.filter(is_active=True)
     serializer_class = LaunderableItemSerializer
     permission_classes = [permissions.IsAuthenticated]
 
