@@ -8,7 +8,9 @@ from .views.profile import ProfileView, AddressViewSet, LogoutView
 from .views.deactivate import UserDeactivateView
 # pyre-ignore[missing-module]
 from .views.clerk_auth import VerifyClerkTokenView, ClerkMeView, ClerkLogoutView
+# pyre-ignore[missing-module]
 from .views.referral import ReferralApplyView, ReferralStatsView
+# pyre-ignore[missing-module]
 from .views.media import MediaUploadView
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
