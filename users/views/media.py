@@ -21,7 +21,7 @@ class MediaUploadView(views.APIView):
     throttle_scope = 'burst_user'
 
     def post(self, request):
-        #pyre-ignore[missing-module]
+        # pyre-ignore[6]: Pyre doesn't understand DRF serializer initialization
         serializer = MediaUploadSerializer(data=request.data)
         if serializer.is_valid():
             uploaded_file = serializer.validated_data['file']
