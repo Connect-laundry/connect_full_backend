@@ -24,9 +24,14 @@ class LoginView(APIView):
                     password=serializer.validated_data['password']
                 )
                 return Response({
-                    "user_id": user.id,
-                    "email": user.email,
-                    **tokens
+                    "accessToken": tokens['access'],
+                    "refreshToken": tokens['refresh'],
+                    "user": {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "fullName": user.get_full_name(),
+                        "role": user.role
+                    }
                 }, status=status.HTTP_200_OK)
             except Exception as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

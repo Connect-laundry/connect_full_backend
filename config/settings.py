@@ -74,7 +74,7 @@ INSTALLED_APPS += [
     'logistics',
     'payments',
     'laundries',
-    # 'django_celery_results',
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
@@ -227,7 +227,6 @@ if not DEBUG:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'users.auth.clerk.ClerkAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -262,11 +261,6 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
 }
 
-# Clerk Configuration
-CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL')
-CLERK_AUDIENCE = os.getenv('CLERK_AUDIENCE')
-CLERK_ISSUER = os.getenv('CLERK_ISSUER')
-CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
 
 
 CACHES = {
@@ -297,6 +291,7 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = DEBUG
 
 
 # Email Settings
@@ -313,7 +308,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# --- Observability ---
+# --- Observability ---    
 
 SENTRY_DSN = os.getenv('SENTRY_DSN')
 if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTRY_DSN:
@@ -346,7 +341,7 @@ LOGGING = {
     'loggers': {
         '': { # Root logger
             'handlers': ['console'],
-            'level': LOGGING_LEVEL,
+            'level': LOGGING_LEVEL,            
         },
         'django.db.backends': {
             'handlers': ['console'],
@@ -368,3 +363,4 @@ CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
+

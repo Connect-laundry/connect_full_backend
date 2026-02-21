@@ -27,7 +27,7 @@ class MediaUploadView(views.APIView):
             uploaded_file = serializer.validated_data['file']
             folder = serializer.validated_data['folder']
             
-            # Generate unique filename
+            # Generate unique filename 
             ext = os.path.splitext(uploaded_file.name)[1]
             filename = f"{uuid.uuid4().hex}{ext}"
             file_path = f"{folder}/{filename}"
