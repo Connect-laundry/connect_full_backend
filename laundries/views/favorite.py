@@ -25,7 +25,7 @@ class FavoriteListView(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         # We need to return Laundry objects, not Favorite IDs
         laundry_ids = self.get_queryset()
-        # pyre-ignore[missing-module]
+        # pyre-ignore[missing-module] 
         from ..models.laundry import Laundry
         laundries = Laundry.objects.filter(id__in=laundry_ids).annotate(
             rating=Avg('reviews__rating'),

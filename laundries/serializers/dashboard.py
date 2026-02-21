@@ -1,5 +1,8 @@
+# pyre-ignore[missing-module]
 from rest_framework import serializers
+# pyre-ignore[missing-module]
 from ordering.models import Order
+# pyre-ignore[missing-module]
 from laundries.models.service import Service
 
 class DashboardOrderSerializer(serializers.ModelSerializer):

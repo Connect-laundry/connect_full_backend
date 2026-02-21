@@ -1,9 +1,16 @@
+# pyre-ignore[missing-module]
 from rest_framework import viewsets, permissions, status
+# pyre-ignore[missing-module]
 from rest_framework.response import Response
+# pyre-ignore[missing-module]
 from rest_framework.decorators import action
+# pyre-ignore[missing-module]
 from django.db import transaction
+# pyre-ignore[missing-module]
 from django.utils import timezone
+# pyre-ignore[missing-module]
 from ordering.models.promo import Coupon
+# pyre-ignore[missing-module]
 from ordering.serializers.promo import CouponValidateSerializer, CouponResponseSerializer
 
 class CouponViewSet(viewsets.GenericViewSet):

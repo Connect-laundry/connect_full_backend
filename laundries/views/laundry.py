@@ -8,8 +8,11 @@ from rest_framework.response import Response
 from django.db import models
 # pyre-ignore[missing-module]
 from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q, Prefetch
+# pyre-ignore[missing-module]
 from django.utils import timezone
+# pyre-ignore[missing-module]
 from django_filters.rest_framework import DjangoFilterBackend
+# pyre-ignore[missing-module]
 from rest_framework.filters import SearchFilter
 import logging
 import os
@@ -99,12 +102,15 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
         if nearby and lat and lng:
             try:
+                # pyre-ignore[reportAttributeAccessIssue]
                 user_location = Point(float(lng), float(lat), srid=4326)
                 
                 # 1. Spatial filter using PostGIS index (ST_DWithin)
+                # pyre-ignore[reportAttributeAccessIssue]
                 queryset = queryset.filter(location__dwithin=(user_location, D(km=radius_km)))
                 
                 # 2. Annotate exact distance for display (ST_Distance)
+                # pyre-ignore[reportAttributeAccessIssue]
                 queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
                 
                 logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")

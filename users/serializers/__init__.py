@@ -1,12 +1,13 @@
+# pyre-ignore[missing-module]
 from .login import LoginSerializer
+# pyre-ignore[missing-module]
 from .register import RegisterSerializer
-from .verify_otp import VerifyOTPSerializer
+# pyre-ignore[missing-module]
 from .profile import ProfileSerializer, AddressSerializer
 
 __all__ = [
     'LoginSerializer',
     'RegisterSerializer',
-    'VerifyOTPSerializer',
     'ProfileSerializer',
     'AddressSerializer',
 ]

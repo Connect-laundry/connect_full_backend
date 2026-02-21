@@ -57,7 +57,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(_('phone number'), max_length=20, unique=True, db_index=True)
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
-    clerk_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     
     # Referrals
     referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True, db_index=True)
@@ -69,7 +68,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=Role.CUSTOMER
     )
     
-    is_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     

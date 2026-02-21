@@ -1,13 +1,15 @@
 # pyre-ignore[missing-module]
 from django.urls import path, include
 # pyre-ignore[missing-module]
-from rest_framework_simplejwt.views import TokenRefreshView
+from .views.token_refresh import CustomTokenRefreshView
 # pyre-ignore[missing-module]
 from .views.profile import ProfileView, AddressViewSet, LogoutView
 # pyre-ignore[missing-module]
-from .views.deactivate import UserDeactivateView
+from .views.login import LoginView
 # pyre-ignore[missing-module]
-from .views.clerk_auth import VerifyClerkTokenView, ClerkMeView, ClerkLogoutView
+from .views.register import RegisterView
+# pyre-ignore[missing-module]
+from .views.deactivate import UserDeactivateView
 # pyre-ignore[missing-module]
 from .views.referral import ReferralApplyView, ReferralStatsView
 # pyre-ignore[missing-module]
@@ -19,13 +21,15 @@ router = DefaultRouter()
 router.register(r'addresses', AddressViewSet, basename='address')
 
 urlpatterns = [
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # Auth
+    path('auth/register/', RegisterView.as_view(), name='auth_register'),
+    path('auth/login/', LoginView.as_view(), name='auth_login'),
+    path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
-    path('auth/profile/', ProfileView.as_view(), name='auth_profile'),
+    path('auth/me/', ProfileView.as_view(), name='auth_me'),
+    
+    # User Actions
     path('users/<uuid:pk>/deactivate/', UserDeactivateView.as_view(), name='user_deactivate'),
-    path('auth/clerk/verify/', VerifyClerkTokenView.as_view(), name='clerk_token_verify'),
-    path('auth/clerk/me/', ClerkMeView.as_view(), name='clerk_me'),
-    path('auth/clerk/logout/', ClerkLogoutView.as_view(), name='clerk_logout'),
     
     # Referrals
     path('referral/apply/', ReferralApplyView.as_view(), name='referral_apply'),
