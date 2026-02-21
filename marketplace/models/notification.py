@@ -22,7 +22,7 @@ class Notification(models.Model):
         related_name='notifications'
     )
     title = models.CharField(max_length=255)
-    body = models.TextField()
+    body = models.TextField(default='')
     type = models.CharField(max_length=20, choices=Type.choices, default=Type.SYSTEM)
     
     is_read = models.BooleanField(default=False)

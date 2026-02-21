@@ -18,6 +18,13 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def get(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(user)
+        return Response({
+            "user": serializer.data
+        })
+
 class AddressViewSet(viewsets.ModelViewSet):
     """CRUD for user addresses."""
     serializer_class = AddressSerializer
