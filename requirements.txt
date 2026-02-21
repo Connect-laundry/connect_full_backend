@@ -27,7 +27,8 @@ kombu==5.6.2
 packaging==26.0
 pillow==11.1.0
 prompt_toolkit==3.0.52
-psycopg-binary==3.3.3
+psycopg[binary]==3.3.3
+psycopg2-binary==2.9.10
 pyasn1==0.6.2
 pycparser==3.0
 python-dateutil==2.9.0.post0
