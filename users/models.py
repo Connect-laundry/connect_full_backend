@@ -1,4 +1,6 @@
 import uuid
+import hashlib
+from datetime import timedelta
 # pyre-ignore[missing-module]
 from django.db import models
 # pyre-ignore[missing-module]
@@ -127,3 +129,46 @@ class Address(models.Model):
 
     def __str__(self):
         return f"{self.label}: {self.address_line1}"
+
+
+class PasswordResetToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('password reset token')
+        verbose_name_plural = _('password reset tokens')
+        ordering = ['-created_at']
+
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    @classmethod
+    def create_for_user(cls, user):
+        """Invalidate old tokens and create a new one."""
+        cls.objects.filter(user=user, used_at__isnull=True).update(expires_at=timezone.now())
+        
+        raw_token = str(uuid.uuid4())
+        token_hash = cls._hash_token(raw_token)
+        
+        # Default expiry 1 hour (can be overridden by settings if needed)
+        from django.conf import settings
+        expiry_hours = getattr(settings, 'PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1)
+        
+        cls.objects.create(
+            user=user,
+            token_hash=token_hash,
+            expires_at=timezone.now() + timedelta(hours=expiry_hours)
+        )
+        return raw_token
+
+    def is_valid(self):
+        return self.used_at is None and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f"Token for {self.user.email} (Valid: {self.is_valid()})"
