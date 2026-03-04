@@ -15,6 +15,8 @@ from .views.referral import ReferralApplyView, ReferralStatsView
 # pyre-ignore[missing-module]
 from .views.media import MediaUploadView
 # pyre-ignore[missing-module]
+from .views.password_reset import ForgotPasswordView, ResetPasswordView
+# pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -27,6 +29,8 @@ urlpatterns = [
     path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('auth/me/', ProfileView.as_view(), name='auth_me'),
+    path('auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),
+    path('auth/reset-password/', ResetPasswordView.as_view(), name='auth_reset_password'),
     
     # User Actions
     path('users/<uuid:pk>/deactivate/', UserDeactivateView.as_view(), name='user_deactivate'),
