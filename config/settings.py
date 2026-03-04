@@ -249,6 +249,7 @@ REST_FRAMEWORK = {
         'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
         'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
         'anon': os.getenv('THROTTLE_ANON', '100/day'),
+        'password_reset': os.getenv('THROTTLE_PASSWORD_RESET', '3/hour'),
     },
 }
 
@@ -301,6 +302,11 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+# Password Reset Settings
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <noreply@connectlaundry.com>')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
 
 # DEBUG = False

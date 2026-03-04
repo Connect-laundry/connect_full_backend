@@ -40,4 +40,8 @@ class FeedbackThrottle(SimpleRateThrottle):
             'scope': self.scope,
             'ident': ident
         }
+
+class PasswordResetThrottle(AnonRateThrottle):
+    """Throttle for password reset requests."""
+    scope = 'password_reset'
  
