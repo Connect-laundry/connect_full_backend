@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.db import connection, connections
 from django.conf import settings
+from django.core.management import call_command
 import os
+import io
 
 class DiagnosisView(APIView):
     permission_classes = [AllowAny]
@@ -27,11 +29,8 @@ class DiagnosisView(APIView):
 
         def check_model_deep(model_class):
             try:
-                # Try to fetch one full record to check all columns
-                obj = model_class.objects.first()
-                if obj:
-                    # Force evaluation of all fields by converting to string
-                    str(obj)
+                # Use exists() for a light query
+                model_class.objects.all()[:1].exists()
                 return "OK"
             except Exception as e:
                 return f"Error: {str(e)}"
@@ -54,6 +53,7 @@ class DiagnosisView(APIView):
 
         return Response({
             "status": "success",
+            "message": "Use POST to trigger migrations remotely.",
             "data": {
                 "db_connection": db_conn,
                 "postgis": postgis_available,
@@ -70,3 +70,23 @@ class DiagnosisView(APIView):
                 "allowed_hosts": settings.ALLOWED_HOSTS,
             }
         })
+
+    def post(self, request):
+        """
+        Trigger python manage.py migrate remotely.
+        """
+        out = io.StringIO()
+        try:
+            call_command('migrate', interactive=False, stdout=out)
+            result = out.getvalue()
+            return Response({
+                "status": "success",
+                "message": "Migration completed.",
+                "output": result
+            })
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"Migration failed: {str(e)}",
+                "output": out.getvalue()
+            }, status=500)

@@ -105,23 +105,23 @@ class Laundry(models.Model):
 
     def save(self, *args, **kwargs):
         # Sync PointField with latitude/longitude for backward compatibility (only if PostGIS is enabled)
-        if USE_POSTGIS and self.latitude and self.longitude and hasattr(self, 'location'):
-            # pyre-ignore[missing-module]
-            from django.contrib.gis.geos import Point
-            self.location = Point(float(self.longitude), float(self.latitude))
+        if USE_POSTGIS and self.latitude and self.longitude:
+            try:
+                # pyre-ignore[missing-module]
+                from django.contrib.gis.geos import Point
+                self.location = Point(float(self.longitude), float(self.latitude))
+            except Exception:
+                pass
         super().save(*args, **kwargs)
 
-# Dynamically add PointField if USE_POSTGIS is enabled
-if USE_POSTGIS:
-    try:
-        Laundry.add_to_class(
-            'location',
-            models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
-        )
-        # Add GistIndex to Meta.indexes with explicit name
-        if GistIndex is not None:
-             Laundry._meta.indexes.insert(0, GistIndex(fields=['location'], name='laundries_location_gist_idx'))
-    except Exception as e:
-        # If GDAL is missing or other issues occur, don't crash the whole app
-        import logging
-        logging.error(f"Failed to add PostGIS location field: {e}")
+    # We keep it as a normal field but handle the case where GDAL is missing
+    # in the migrations or local environment.
+    location = None
+    if USE_POSTGIS:
+        try:
+             # pyre-ignore[missing-module]
+             from django.contrib.gis.db import models as gis_models
+             location = gis_models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
+        except Exception:
+             import logging
+             logging.error("GIS models not available for Laundry.location")
