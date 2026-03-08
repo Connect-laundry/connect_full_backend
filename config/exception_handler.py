@@ -14,6 +14,17 @@ def custom_exception_handler(exc, context):
     """
     response = exception_handler(exc, context)
 
+    if response is None:
+        # Handle non-DRF exceptions (like OperationalError, TypeError, etc.)
+        # so they return a JSON response instead of a Django HTML 500 page.
+        data = {
+            "status": "error",
+            "message": f"Server Error: {str(exc)}" if settings.DEBUG else "An internal server error occurred.",
+            "data": {}
+        }
+        return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # ... existing processing ...
     if response is not None:
         # If it's a throttle exception, customize the message
         if isinstance(exc, Throttled):
