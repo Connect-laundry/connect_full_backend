@@ -24,7 +24,21 @@ class DiagnosisView(APIView):
                 postgis_available = cursor.fetchone()[0]
         except Exception:
             postgis_available = "Not enabled or not PostGIS DB"
-            
+
+        def check_model(model_class):
+            try:
+                # Use exists() for a light query
+                model_class.objects.all()[:1].exists()
+                return "OK"
+            except Exception as e:
+                return f"Error: {str(e)}"
+
+        from laundries.models.laundry import Laundry
+        from laundries.models.service import Service
+        from laundries.models.review import Review
+        from laundries.models.favorite import Favorite
+        from ordering.models.base import Order
+        
         return Response({
             "status": "success",
             "data": {
@@ -32,6 +46,13 @@ class DiagnosisView(APIView):
                 "postgis": postgis_available,
                 "use_postgis_setting": os.getenv('USE_POSTGIS', 'False'),
                 "debug_mode": settings.DEBUG,
+                "model_health": {
+                    "Laundry": check_model(Laundry),
+                    "Service": check_model(Service),
+                    "Review": check_model(Review),
+                    "Favorite": check_model(Favorite),
+                    "Order": check_model(Order),
+                },
                 "allowed_hosts": settings.ALLOWED_HOSTS,
             }
         })
