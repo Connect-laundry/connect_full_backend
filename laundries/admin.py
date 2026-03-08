@@ -29,7 +29,19 @@ class ReviewAdmin(admin.ModelAdmin):
     list_filter = ('rating', 'created_at')
     search_fields = ('comment', 'laundry__name', 'user__email')
 
+    def get_queryset(self, request):
+        try:
+            return super().get_queryset(request)
+        except Exception:
+            return Review.objects.none()
+
 @admin.register(Favorite)
 class FavoriteAdmin(admin.ModelAdmin):
     list_display = ('user', 'laundry', 'created_at')
     search_fields = ('user__email', 'laundry__name')
+
+    def get_queryset(self, request):
+        try:
+            return super().get_queryset(request)
+        except Exception:
+            return Favorite.objects.none()
