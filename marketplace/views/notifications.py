@@ -45,6 +45,15 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             }
         })
 
+    @decorators.action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        """Get the number of unread notifications."""
+        unread_count = Notification.objects.filter(user=request.user, is_read=False).count()
+        return Response({
+            "status": "success",
+            "unread_count": unread_count
+        })
+
     @decorators.action(detail=True, methods=['patch'], url_path='mark-read')
     def mark_read(self, request, pk=None):
         """Mark a single notification as read."""

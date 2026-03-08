@@ -1,0 +1,3575 @@
+openapi: 3.0.3
+info:
+  title: Connect Laundry API
+  version: 1.0.0
+  description: API documentation for Connect Laundry marketplace.
+paths:
+  /api/v1/addresses/:
+    get:
+      operationId: api_v1_addresses_list
+      description: CRUD for user addresses.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+          description: ''
+    post:
+      operationId: api_v1_addresses_create
+      description: CRUD for user addresses.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+  /api/v1/addresses/{id}/:
+    get:
+      operationId: api_v1_addresses_retrieve
+      description: CRUD for user addresses.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    put:
+      operationId: api_v1_addresses_update
+      description: CRUD for user addresses.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    patch:
+      operationId: api_v1_addresses_partial_update
+      description: CRUD for user addresses.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    delete:
+      operationId: api_v1_addresses_destroy
+      description: CRUD for user addresses.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/addresses/supported-cities/:
+    get:
+      operationId: api_v1_addresses_supported_cities_retrieve
+      description: Returns a list of unique cities where laundries are available.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/forgot-password/:
+    post:
+      operationId: api_v1_auth_forgot_password_create
+      description: Endpoint to request a password reset email.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: api_v1_auth_login_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: api_v1_auth_logout_create
+      description: |-
+        Simulated logout.
+        In JWT setup, typicallyhandled on client side by deleting the token.
+        This endpoint can be used to blacklist tokens if using SimpleJWT's blacklist app.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: api_v1_auth_me_retrieve
+      description: GET and PATCH for the currently authenticated user's profile.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+    put:
+      operationId: api_v1_auth_me_update
+      description: GET and PATCH for the currently authenticated user's profile.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+    patch:
+      operationId: api_v1_auth_me_partial_update
+      description: GET and PATCH for the currently authenticated user's profile.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: api_v1_auth_register_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/reset-password/:
+    post:
+      operationId: api_v1_auth_reset_password_create
+      description: Endpoint to reset the password using the token.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: api_v1_auth_token_refresh_create
+      description: |-
+        Custom Refresh View to return 'accessToken' instead of 'access'
+        to match our project's standardized auth response format.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/booking/coupons/validate/:
+    post:
+      operationId: api_v1_booking_coupons_validate_create
+      description: Viewset for validating and listing available coupons.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coupon'
+          description: ''
+  /api/v1/booking/create/:
+    post:
+      operationId: api_v1_booking_create_create
+      description: Endpoints for booking, scheduling, and creation.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: No response body
+  /api/v1/booking/items/:
+    get:
+      operationId: api_v1_booking_items_retrieve
+      description: |-
+        Viewset for global catalog of items and services.
+        Strictly filters for active items from approved/active laundries.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunderableItem'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/accept/:
+    patch:
+      operationId: api_v1_booking_lifecycle_accept_partial_update
+      description: PENDING -> CONFIRMED (Laundry Only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/cancel/:
+    patch:
+      operationId: api_v1_booking_lifecycle_cancel_partial_update
+      description: PENDING/CONFIRMED -> CANCELLED (Customer/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/complete/:
+    patch:
+      operationId: api_v1_booking_lifecycle_complete_partial_update
+      description: DELIVERED -> COMPLETED (Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/mark-delivered/:
+    patch:
+      operationId: api_v1_booking_lifecycle_mark_delivered_partial_update
+      description: OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/mark-out-for-delivery/:
+    patch:
+      operationId: api_v1_booking_lifecycle_mark_out_for_delivery_partial_update
+      description: IN_PROCESS -> OUT_FOR_DELIVERY (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/mark-picked-up/:
+    patch:
+      operationId: api_v1_booking_lifecycle_mark_picked_up_partial_update
+      description: CONFIRMED -> PICKED_UP (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/mark-washed/:
+    patch:
+      operationId: api_v1_booking_lifecycle_mark_washed_partial_update
+      description: PICKED_UP -> IN_PROCESS (Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/reject/:
+    patch:
+      operationId: api_v1_booking_lifecycle_reject_partial_update
+      description: PENDING -> REJECTED (Laundry Only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/timeline/:
+    get:
+      operationId: api_v1_booking_lifecycle_timeline_retrieve
+      description: Fetch full audit trail for the order.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/orders/:
+    get:
+      operationId: api_v1_booking_orders_list
+      description: Viewset for managing and tracking orders.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    post:
+      operationId: api_v1_booking_orders_create
+      description: Viewset for managing and tracking orders.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/booking/orders/{id}/:
+    get:
+      operationId: api_v1_booking_orders_retrieve
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    put:
+      operationId: api_v1_booking_orders_update
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+    patch:
+      operationId: api_v1_booking_orders_partial_update
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+    delete:
+      operationId: api_v1_booking_orders_destroy
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/booking/orders/{id}/price-breakdown/:
+    get:
+      operationId: api_v1_booking_orders_price_breakdown_retrieve
+      description: Calculates stored totals and applies business logic using FinanceService.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/booking/orders/active/:
+    get:
+      operationId: api_v1_booking_orders_active_retrieve
+      description: Returns a list of active (in-progress) orders for the current user.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/booking/schedule/:
+    get:
+      operationId: api_v1_booking_schedule_retrieve
+      description: Endpoints for booking, scheduling, and creation.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/booking/services/:
+    get:
+      operationId: api_v1_booking_services_list
+      description: |-
+        Viewset for global catalog of items and services.
+        Strictly filters for active items from approved/active laundries.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LaunderableItem'
+          description: ''
+  /api/v1/laundries/{laundry_id}/reviews/:
+    post:
+      operationId: api_v1_laundries_reviews_create
+      parameters:
+      - in: path
+        name: laundry_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+          description: ''
+  /api/v1/laundries/admin/laundries/{id}/approve/:
+    patch:
+      operationId: api_v1_laundries_admin_laundries_approve_partial_update
+      description: Approve a laundry business and make it active.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLaundryApproval'
+          description: ''
+  /api/v1/laundries/admin/laundries/{id}/reject/:
+    patch:
+      operationId: api_v1_laundries_admin_laundries_reject_partial_update
+      description: Reject a laundry business.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLaundryApproval'
+          description: ''
+  /api/v1/laundries/admin/services/{id}/approve/:
+    patch:
+      operationId: api_v1_laundries_admin_services_approve_partial_update
+      description: Approve a specific service.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Service.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/laundries/categories/:
+    get:
+      operationId: api_v1_laundries_categories_list
+      description: API endpoint for viewing laundry categories.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/laundries/categories/{id}/:
+    get:
+      operationId: api_v1_laundries_categories_retrieve
+      description: API endpoint for viewing laundry categories.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Category.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/laundries/dashboard/earnings/:
+    get:
+      operationId: api_v1_laundries_dashboard_earnings_retrieve
+      description: Revenue breakdown by period (today, week, month).
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/laundries/dashboard/orders/:
+    get:
+      operationId: api_v1_laundries_dashboard_orders_list
+      description: Paginated list of orders for the laundry owner.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardOrder'
+          description: ''
+  /api/v1/laundries/dashboard/orders/{id}/:
+    get:
+      operationId: api_v1_laundries_dashboard_orders_retrieve
+      description: Paginated list of orders for the laundry owner.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOrder'
+          description: ''
+  /api/v1/laundries/dashboard/services/{id}/:
+    put:
+      operationId: api_v1_laundries_dashboard_services_update
+      description: Quickly toggle service availability from the dashboard.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceStatusUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ServiceStatusUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ServiceStatusUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatusUpdate'
+          description: ''
+    patch:
+      operationId: api_v1_laundries_dashboard_services_partial_update
+      description: Quickly toggle service availability from the dashboard.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedServiceStatusUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedServiceStatusUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedServiceStatusUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatusUpdate'
+          description: ''
+  /api/v1/laundries/dashboard/stats/:
+    get:
+      operationId: api_v1_laundries_dashboard_stats_retrieve
+      description: Aggregated order counts by status.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/laundries/favorites/:
+    get:
+      operationId: api_v1_laundries_favorites_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLaundryListList'
+          description: ''
+  /api/v1/laundries/laundries/:
+    get:
+      operationId: api_v1_laundries_laundries_list
+      description: ViewSet for exploring laundries. Optimized with PostGIS for proximity
+        search.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: featured
+        schema:
+          type: boolean
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: price_range
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLaundryListList'
+          description: ''
+  /api/v1/laundries/laundries/{id}/:
+    get:
+      operationId: api_v1_laundries_laundries_retrieve
+      description: ViewSet for exploring laundries. Optimized with PostGIS for proximity
+        search.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaundryDetail'
+          description: ''
+  /api/v1/laundries/laundries/{id}/deactivate/:
+    patch:
+      operationId: api_v1_laundries_laundries_deactivate_partial_update
+      description: ViewSet for exploring laundries. Optimized with PostGIS for proximity
+        search.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLaundryDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLaundryDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLaundryDetailRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaundryDetail'
+          description: ''
+  /api/v1/laundries/laundries/{id}/favorite/:
+    post:
+      operationId: api_v1_laundries_laundries_favorite_create
+      description: ViewSet for exploring laundries. Optimized with PostGIS for proximity
+        search.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaundryDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LaundryDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LaundryDetailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaundryDetail'
+          description: ''
+  /api/v1/logistics/assignments/:
+    get:
+      operationId: api_v1_logistics_assignments_list
+      description: Management of delivery assignments (Admin/Owner only usually).
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryAssignment'
+          description: ''
+    post:
+      operationId: api_v1_logistics_assignments_create
+      description: Management of delivery assignments (Admin/Owner only usually).
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryAssignment'
+          description: ''
+  /api/v1/logistics/assignments/{id}/:
+    get:
+      operationId: api_v1_logistics_assignments_retrieve
+      description: Management of delivery assignments (Admin/Owner only usually).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this delivery assignment.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryAssignment'
+          description: ''
+    put:
+      operationId: api_v1_logistics_assignments_update
+      description: Management of delivery assignments (Admin/Owner only usually).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this delivery assignment.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeliveryAssignmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryAssignment'
+          description: ''
+    patch:
+      operationId: api_v1_logistics_assignments_partial_update
+      description: Management of delivery assignments (Admin/Owner only usually).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this delivery assignment.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryAssignmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryAssignmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryAssignmentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryAssignment'
+          description: ''
+    delete:
+      operationId: api_v1_logistics_assignments_destroy
+      description: Management of delivery assignments (Admin/Owner only usually).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this delivery assignment.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/logistics/tracking/:
+    get:
+      operationId: api_v1_logistics_tracking_list
+      description: Public/User tracking info for orders.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrackingLog'
+          description: ''
+  /api/v1/logistics/tracking/{id}/:
+    get:
+      operationId: api_v1_logistics_tracking_retrieve
+      description: Public/User tracking info for orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this tracking log.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackingLog'
+          description: ''
+  /api/v1/media/upload/:
+    post:
+      operationId: api_v1_media_upload_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/orders/coupons/validate/:
+    post:
+      operationId: api_v1_orders_coupons_validate_create
+      description: Viewset for validating and listing available coupons.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coupon'
+          description: ''
+  /api/v1/orders/create/:
+    post:
+      operationId: api_v1_orders_create_create
+      description: Endpoints for booking, scheduling, and creation.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: No response body
+  /api/v1/orders/items/:
+    get:
+      operationId: api_v1_orders_items_retrieve
+      description: |-
+        Viewset for global catalog of items and services.
+        Strictly filters for active items from approved/active laundries.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunderableItem'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/accept/:
+    patch:
+      operationId: api_v1_orders_lifecycle_accept_partial_update
+      description: PENDING -> CONFIRMED (Laundry Only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/cancel/:
+    patch:
+      operationId: api_v1_orders_lifecycle_cancel_partial_update
+      description: PENDING/CONFIRMED -> CANCELLED (Customer/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/complete/:
+    patch:
+      operationId: api_v1_orders_lifecycle_complete_partial_update
+      description: DELIVERED -> COMPLETED (Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/mark-delivered/:
+    patch:
+      operationId: api_v1_orders_lifecycle_mark_delivered_partial_update
+      description: OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/mark-out-for-delivery/:
+    patch:
+      operationId: api_v1_orders_lifecycle_mark_out_for_delivery_partial_update
+      description: IN_PROCESS -> OUT_FOR_DELIVERY (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/mark-picked-up/:
+    patch:
+      operationId: api_v1_orders_lifecycle_mark_picked_up_partial_update
+      description: CONFIRMED -> PICKED_UP (Rider/Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/mark-washed/:
+    patch:
+      operationId: api_v1_orders_lifecycle_mark_washed_partial_update
+      description: PICKED_UP -> IN_PROCESS (Laundry)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/reject/:
+    patch:
+      operationId: api_v1_orders_lifecycle_reject_partial_update
+      description: PENDING -> REJECTED (Laundry Only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/lifecycle/{id}/timeline/:
+    get:
+      operationId: api_v1_orders_lifecycle_timeline_retrieve
+      description: Fetch full audit trail for the order.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/orders/orders/:
+    get:
+      operationId: api_v1_orders_orders_list
+      description: Viewset for managing and tracking orders.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    post:
+      operationId: api_v1_orders_orders_create
+      description: Viewset for managing and tracking orders.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/orders/orders/{id}/:
+    get:
+      operationId: api_v1_orders_orders_retrieve
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    put:
+      operationId: api_v1_orders_orders_update
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+    patch:
+      operationId: api_v1_orders_orders_partial_update
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderCreateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+    delete:
+      operationId: api_v1_orders_orders_destroy
+      description: Viewset for managing and tracking orders.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/orders/orders/{id}/price-breakdown/:
+    get:
+      operationId: api_v1_orders_orders_price_breakdown_retrieve
+      description: Calculates stored totals and applies business logic using FinanceService.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/orders/orders/active/:
+    get:
+      operationId: api_v1_orders_orders_active_retrieve
+      description: Returns a list of active (in-progress) orders for the current user.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/orders/schedule/:
+    get:
+      operationId: api_v1_orders_schedule_retrieve
+      description: Endpoints for booking, scheduling, and creation.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/orders/services/:
+    get:
+      operationId: api_v1_orders_services_list
+      description: |-
+        Viewset for global catalog of items and services.
+        Strictly filters for active items from approved/active laundries.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LaunderableItem'
+          description: ''
+  /api/v1/payments/initialize/:
+    post:
+      operationId: api_v1_payments_initialize_create
+      description: |-
+        POST /api/v1/payments/initialize/
+        Initiates a new payment session with Paystack.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/payments/verify/{reference}/:
+    get:
+      operationId: api_v1_payments_verify_retrieve
+      description: |-
+        GET /api/v1/payments/verify/{reference}/
+        Verifies a payment status with Paystack.
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/referral/apply/:
+    post:
+      operationId: api_v1_referral_apply_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/referral/stats/:
+    get:
+      operationId: api_v1_referral_stats_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/support/help/faq/:
+    get:
+      operationId: api_v1_support_help_faq_retrieve
+      description: Retrieve FAQ or help documentation from the database.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/support/help/feedback/:
+    post:
+      operationId: api_v1_support_help_feedback_create
+      description: Collect user feedback and persist it to the database.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/support/home/special-offers/:
+    get:
+      operationId: api_v1_support_home_special_offers_list
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SpecialOffer'
+          description: ''
+  /api/v1/support/home/special-offers/{id}/:
+    get:
+      operationId: api_v1_support_home_special_offers_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Special Offer.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecialOffer'
+          description: ''
+  /api/v1/support/notifications/:
+    get:
+      operationId: api_v1_support_notifications_list
+      description: API endpoint for checking and managing user notifications.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/notifications/{id}/:
+    get:
+      operationId: api_v1_support_notifications_retrieve
+      description: API endpoint for checking and managing user notifications.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/notifications/{id}/mark-read/:
+    patch:
+      operationId: api_v1_support_notifications_mark_read_partial_update
+      description: Mark a single notification as read.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/notifications/mark-all-read/:
+    post:
+      operationId: api_v1_support_notifications_mark_all_read_create
+      description: Mark all unread notifications as read for current user.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/notifications/unread-count/:
+    get:
+      operationId: api_v1_support_notifications_unread_count_retrieve
+      description: Get the number of unread notifications.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/support/legal/:
+    get:
+      operationId: api_v1_support_support_legal_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/support/support/legal/{type}/:
+    get:
+      operationId: api_v1_support_support_legal_retrieve_2
+      parameters:
+      - in: path
+        name: type
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/users/{id}/deactivate/:
+    patch:
+      operationId: api_v1_users_deactivate_partial_update
+      description: API endpoint for admins to deactivate a user account (Soft-Delete).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          type: string
+          description: Home, Work, etc.
+          maxLength: 50
+        address_line1:
+          type: string
+          title: Address line 1
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 100
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - address_line1
+      - created_at
+      - id
+      - label
+    AddressRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          description: Home, Work, etc.
+          maxLength: 50
+        address_line1:
+          type: string
+          minLength: 1
+          title: Address line 1
+          maxLength: 255
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        is_default:
+          type: boolean
+      required:
+      - address_line1
+      - label
+    AdminLaundryApproval:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AdminLaundryApprovalStatusEnum'
+          title: Approval status
+        is_active:
+          type: boolean
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - approved_at
+      - id
+      - name
+      - rejected_at
+    AdminLaundryApprovalStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - SUSPENDED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `SUSPENDED` - Suspended
+    AssignmentTypeEnum:
+      enum:
+      - PICKUP
+      - DELIVERY
+      type: string
+      description: |-
+        * `PICKUP` - Pickup
+        * `DELIVERY` - Delivery
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+      required:
+      - id
+      - name
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 50
+        discount_type:
+          $ref: '#/components/schemas/DiscountTypeEnum'
+        discount_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        min_order_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+        max_usage:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Total times this coupon can be used.
+        current_usage:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        user_limit:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Times a single user can use this coupon.
+        is_active:
+          type: boolean
+      required:
+      - code
+      - discount_value
+      - id
+    CouponRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        discount_type:
+          $ref: '#/components/schemas/DiscountTypeEnum'
+        discount_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        min_order_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+        max_usage:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Total times this coupon can be used.
+        current_usage:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        user_limit:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Times a single user can use this coupon.
+        is_active:
+          type: boolean
+      required:
+      - code
+      - discount_value
+    DashboardOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        order_no:
+          type: string
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusAf2Enum'
+        status_display:
+          type: string
+          readOnly: true
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        pickup_date:
+          type: string
+          format: date-time
+        delivery_date:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - created_at
+      - customer_name
+      - id
+      - order_no
+      - pickup_date
+      - status_display
+    DeliveryAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        order:
+          type: string
+          format: uuid
+        driver:
+          type: string
+          format: uuid
+        driverEmail:
+          type: string
+          format: email
+          readOnly: true
+        assignment_type:
+          $ref: '#/components/schemas/AssignmentTypeEnum'
+        assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          maxLength: 20
+      required:
+      - assigned_at
+      - assignment_type
+      - driver
+      - driverEmail
+      - id
+      - order
+    DeliveryAssignmentRequest:
+      type: object
+      properties:
+        order:
+          type: string
+          format: uuid
+        driver:
+          type: string
+          format: uuid
+        assignment_type:
+          $ref: '#/components/schemas/AssignmentTypeEnum'
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          minLength: 1
+          maxLength: 20
+      required:
+      - assignment_type
+      - driver
+      - order
+    DiscountTypeEnum:
+      enum:
+      - PERCENTAGE
+      - FIXED
+      type: string
+      description: |-
+        * `PERCENTAGE` - Percentage
+        * `FIXED` - Fixed Amount
+    LaunderableItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        category:
+          type: string
+          format: uuid
+        base_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        image:
+          type: string
+          format: uri
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - base_price
+      - category
+      - id
+      - name
+    LaundryDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        address:
+          type: string
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        phone_number:
+          type: string
+          maxLength: 20
+        priceRange:
+          type: string
+        estimated_delivery_hours:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        is_featured:
+          type: boolean
+        services:
+          type: string
+          readOnly: true
+        reviews:
+          type: string
+          readOnly: true
+        rating:
+          type: number
+          format: double
+          readOnly: true
+        reviewsCount:
+          type: integer
+          readOnly: true
+        isFavorite:
+          type: string
+          readOnly: true
+      required:
+      - address
+      - id
+      - isFavorite
+      - latitude
+      - longitude
+      - name
+      - phone_number
+      - priceRange
+      - rating
+      - reviews
+      - reviewsCount
+      - services
+    LaundryDetailRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        address:
+          type: string
+          minLength: 1
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 20
+        priceRange:
+          type: string
+          minLength: 1
+        estimated_delivery_hours:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        is_featured:
+          type: boolean
+      required:
+      - address
+      - latitude
+      - longitude
+      - name
+      - phone_number
+      - priceRange
+    LaundryList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        image:
+          type: string
+          format: uri
+          nullable: true
+        location:
+          type: string
+        distance:
+          type: string
+          readOnly: true
+        rating:
+          type: number
+          format: double
+          readOnly: true
+        reviewsCount:
+          type: integer
+          readOnly: true
+        isOpen:
+          type: string
+          readOnly: true
+        priceRange:
+          type: string
+        isFavorite:
+          type: string
+          readOnly: true
+        estimatedDelivery:
+          type: string
+          readOnly: true
+        minOrder:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        deliveryFee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - deliveryFee
+      - distance
+      - estimatedDelivery
+      - id
+      - isFavorite
+      - isOpen
+      - location
+      - minOrder
+      - name
+      - priceRange
+      - rating
+      - reviewsCount
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        read_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        related_order:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - created_at
+      - id
+      - read_at
+      - title
+    NotificationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        is_read:
+          type: boolean
+        related_order:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - title
+    OrderCreate:
+      type: object
+      properties:
+        laundry:
+          type: string
+          format: uuid
+        service_type:
+          type: string
+          format: uuid
+          nullable: true
+        pickup_date:
+          type: string
+          format: date-time
+        address:
+          type: string
+        special_instructions:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+      required:
+      - address
+      - items
+      - laundry
+      - pickup_date
+    OrderCreateRequest:
+      type: object
+      properties:
+        laundry:
+          type: string
+          format: uuid
+        service_type:
+          type: string
+          format: uuid
+          nullable: true
+        pickup_date:
+          type: string
+          format: date-time
+        address:
+          type: string
+          minLength: 1
+        special_instructions:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+        coupon_code:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - address
+      - items
+      - laundry
+      - pickup_date
+    OrderDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        order_no:
+          type: string
+          readOnly: true
+        laundryName:
+          type: string
+          readOnly: true
+        serviceName:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusAf2Enum'
+        payment_status:
+          $ref: '#/components/schemas/PaymentStatusEnum'
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        pickup_date:
+          type: string
+          format: date-time
+        delivery_date:
+          type: string
+          format: date-time
+          nullable: true
+        address:
+          type: string
+        special_instructions:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - address
+      - created_at
+      - id
+      - items
+      - laundryName
+      - order_no
+      - pickup_date
+      - serviceName
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        item:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          maxLength: 100
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - id
+      - name
+      - price
+    OrderItemRequest:
+      type: object
+      properties:
+        item:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - name
+      - price
+    OrderTransition:
+      type: object
+      description: Generic serializer for status transitions that may require a reason.
+      properties:
+        reason:
+          type: string
+        metadata: {}
+    PaginatedLaundryListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LaundryList'
+    PatchedAddressRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          description: Home, Work, etc.
+          maxLength: 50
+        address_line1:
+          type: string
+          minLength: 1
+          title: Address line 1
+          maxLength: 255
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        is_default:
+          type: boolean
+    PatchedAdminLaundryApprovalRequest:
+      type: object
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AdminLaundryApprovalStatusEnum'
+          title: Approval status
+        is_active:
+          type: boolean
+    PatchedDeliveryAssignmentRequest:
+      type: object
+      properties:
+        order:
+          type: string
+          format: uuid
+        driver:
+          type: string
+          format: uuid
+        assignment_type:
+          $ref: '#/components/schemas/AssignmentTypeEnum'
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          minLength: 1
+          maxLength: 20
+    PatchedLaundryDetailRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        image:
+          type: string
+          format: binary
+          nullable: true
+        address:
+          type: string
+          minLength: 1
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 20
+        priceRange:
+          type: string
+          minLength: 1
+        estimated_delivery_hours:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        is_featured:
+          type: boolean
+    PatchedNotificationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        is_read:
+          type: boolean
+        related_order:
+          type: string
+          format: uuid
+          nullable: true
+    PatchedOrderCreateRequest:
+      type: object
+      properties:
+        laundry:
+          type: string
+          format: uuid
+        service_type:
+          type: string
+          format: uuid
+          nullable: true
+        pickup_date:
+          type: string
+          format: date-time
+        address:
+          type: string
+          minLength: 1
+        special_instructions:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+        coupon_code:
+          type: string
+          writeOnly: true
+          minLength: 1
+    PatchedOrderTransitionRequest:
+      type: object
+      description: Generic serializer for status transitions that may require a reason.
+      properties:
+        reason:
+          type: string
+        metadata: {}
+    PatchedProfileRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+          title: Phone number
+          maxLength: 20
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        avatar:
+          type: string
+          format: binary
+          nullable: true
+    PatchedServiceStatusUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+    PaymentStatusEnum:
+      enum:
+      - PAID
+      - UNPAID
+      - REFUNDED
+      type: string
+      description: |-
+        * `PAID` - Paid
+        * `UNPAID` - Unpaid
+        * `REFUNDED` - Refunded
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        phone:
+          type: string
+          title: Phone number
+          maxLength: 20
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        fullName:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - addresses
+      - created_at
+      - email
+      - fullName
+      - id
+      - phone
+      - role
+    ProfileRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+          title: Phone number
+          maxLength: 20
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        avatar:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - phone
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        userName:
+          type: string
+          readOnly: true
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        comment:
+          type: string
+        date:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date
+      - id
+      - rating
+      - userName
+    ReviewRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        comment:
+          type: string
+      required:
+      - rating
+    RoleEnum:
+      enum:
+      - CUSTOMER
+      - OWNER
+      - DRIVER
+      - ADMIN
+      type: string
+      description: |-
+        * `CUSTOMER` - Customer
+        * `OWNER` - Owner
+        * `DRIVER` - Driver
+        * `ADMIN` - Admin
+    ServiceStatusUpdate:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+    ServiceStatusUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+    SpecialOffer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+        order:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Order in carousel
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - image
+      - title
+    StatusAf2Enum:
+      enum:
+      - PENDING
+      - CONFIRMED
+      - REJECTED
+      - PICKED_UP
+      - IN_PROCESS
+      - OUT_FOR_DELIVERY
+      - DELIVERED
+      - COMPLETED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `CONFIRMED` - Confirmed
+        * `REJECTED` - Rejected
+        * `PICKED_UP` - Picked Up
+        * `IN_PROCESS` - In Process
+        * `OUT_FOR_DELIVERY` - Out for Delivery
+        * `DELIVERED` - Delivered
+        * `COMPLETED` - Completed
+        * `CANCELLED` - Cancelled
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    TrackingLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        order:
+          type: string
+          format: uuid
+        status:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+          nullable: true
+        location_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - order
+      - status
+      - timestamp
+    TypeEnum:
+      enum:
+      - ORDER
+      - SYSTEM
+      - PROMO
+      type: string
+      description: |-
+        * `ORDER` - Order Update
+        * `SYSTEM` - System Message
+        * `PROMO` - Promotion
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

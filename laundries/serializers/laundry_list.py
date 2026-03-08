@@ -23,6 +23,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
     isFavorite = serializers.SerializerMethodField()
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
+    estimatedDelivery = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry

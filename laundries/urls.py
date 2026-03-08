@@ -3,7 +3,7 @@ from django.urls import path, include
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 # pyre-ignore[missing-module]
-from .views.laundry import LaundryViewSet
+from .views.laundry import LaundryViewSet, CategoryViewSet
 # pyre-ignore[missing-module]
 from .views.favorite import FavoriteListView
 # pyre-ignore[missing-module]
@@ -21,6 +21,7 @@ from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 router = DefaultRouter()
 router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
 router.register(r'laundries', LaundryViewSet, basename='laundry')
+router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
 router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
 

@@ -40,6 +40,7 @@ from ..models.laundry import Laundry
 from ..models.service import Service
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+from ..models.category import Category
 # pyre-ignore[missing-module]
 from ..models.opening_hours import OpeningHours
 # pyre-ignore[missing-module]
@@ -67,7 +68,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         reviewsCount=Count('reviews'),
         active_order_count=Count(
             'orders',
-            filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'WASHING'])
+            filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
         )
     )
     pagination_class = StandardResultsSetPagination
@@ -98,7 +99,13 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         nearby = self.request.query_params.get('nearby') == 'true'
         lat = self.request.query_params.get('lat')
         lng = self.request.query_params.get('lng')
-        radius_km = float(self.request.query_params.get('radius', 10)) # Default 10km
+        radius_km = 10
+        try:
+            radius_param = self.request.query_params.get('radius')
+            if radius_param:
+                radius_km = float(radius_param)
+        except (ValueError, TypeError):
+            pass
 
         if nearby and lat and lng:
             try:
@@ -114,8 +121,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
                 
                 logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid coordinates for nearby search: {e}")
+            except (ValueError, TypeError, Exception) as e:
+                logger.error(f"Error in nearby search: {e}", exc_info=True)
                 
         return queryset
 
@@ -176,3 +183,14 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 "reason": laundry.deactivation_reason
             }
         })
+
+# pyre-ignore[missing-module]
+from ..serializers.category import CategorySerializer
+
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for viewing laundry categories.
+    """
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.AllowAny]

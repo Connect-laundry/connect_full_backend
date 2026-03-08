@@ -1,0 +1,38 @@
+﻿40 objects imported automatically (use -v 2 for details).
+
+
+--- Testing API Endpoints ---
+Categories API: 200
+[
+  {
+    "id": "06d84da4-dcc9-4cd1-a9f9-bb81d0a5753d",
+    "name": "Wash & Fold"
+  }
+]
+Unread Count API: 200
+{
+  "status": "success",
+  "unread_count": 1
+}
+Supported Cities API: 200
+{
+  "status": "success",
+  "cities": [
+    "Accra"
+  ]
+}
+Active Orders API: 200
+{
+  "status": "success",
+  "count": 1,
+  "results": [
+    {
+      "laundry": "8a220bbbd6e84253a5678a13eb86dc8b",
+      "service_type": null,
+      "pickup_date": "2026-03-08T12:00:00Z",
+      "address": "test addr",
+      "special_instructions": null,
+      "items": []
+    }
+  ]
+}

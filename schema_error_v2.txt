@@ -1,0 +1,371 @@
+﻿python : C:\projects\connect_new_
+backend\users\views\profile.py:28
+: Warning [AddressViewSet]: 
+could not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+At line:1 char:1
++ python manage.py spectacular 
+--file schema.yml 2>&1 | 
+Out-File -FileP ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : No 
+   tSpecified: (C:\projects\con  
+  ...ng to "string".:String) [   
+ ], RemoteException
+    + FullyQualifiedErrorId : Na 
+   tiveCommandError
+ 
+C:\projects\connect_new_backend\u
+sers\views\profile.py:47: Error 
+[SupportedCitiesView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\password_reset.py:9: 
+Error [ForgotPasswordView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\login.py:14: Error 
+[LoginView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\profile.py:36: Error 
+[LogoutView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\register.py:16: Error 
+[RegisterView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\password_reset.py:36: 
+Error [ResetPasswordView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\o
+rdering\views\order_views.py:39: 
+Error [BookingViewSet]: 
+exception raised while getting 
+serializer. Hint: Is 
+get_serializer_class() returning 
+None or is get_queryset() not 
+working without a request? 
+Ignoring the view for now. 
+(Exception: 'BookingViewSet' 
+should either include a 
+`serializer_class` attribute, or 
+override the 
+`get_serializer_class()` method.)
+C:\projects\connect_new_backend\o
+rdering\views\order_views.py:91: 
+Warning [OrderViewSet]: could 
+not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+C:\projects\connect_new_backend\l
+aundries\views\admin_views.py:75:
+ Error [AdminServiceViewSet]: 
+exception raised while getting 
+serializer. Hint: Is 
+get_serializer_class() returning 
+None or is get_queryset() not 
+working without a request? 
+Ignoring the view for now. 
+(Exception: 
+'AdminServiceViewSet' should 
+either include a 
+`serializer_class` attribute, or 
+override the 
+`get_serializer_class()` method.)
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:75: 
+Error [DashboardEarningsView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:38: 
+Warning [DashboardOrderViewSet]: 
+could not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:51: 
+Error [DashboardStatsView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_list
+.py:16: Warning 
+[FavoriteListView > 
+LaundryListSerializer]: unable 
+to resolve type hint for 
+function "get_distance". 
+Consider using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_list
+.py:16: Warning 
+[FavoriteListView > 
+LaundryListSerializer]: unable 
+to resolve type hint for 
+function "get_isOpen". Consider 
+using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_list
+.py:16: Warning 
+[FavoriteListView > 
+LaundryListSerializer]: unable 
+to resolve type hint for 
+function "get_isFavorite". 
+Consider using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_list
+.py:16: Warning 
+[FavoriteListView > 
+LaundryListSerializer]: unable 
+to resolve type hint for 
+function 
+"get_estimatedDelivery". 
+Consider using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_deta
+il.py:19: Warning 
+[LaundryViewSet > 
+LaundryDetailSerializer]: unable 
+to resolve type hint for 
+function "get_services". 
+Consider using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_deta
+il.py:19: Warning 
+[LaundryViewSet > 
+LaundryDetailSerializer]: unable 
+to resolve type hint for 
+function "get_reviews". Consider 
+using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\l
+aundries\serializers\laundry_deta
+il.py:19: Warning 
+[LaundryViewSet > 
+LaundryDetailSerializer]: unable 
+to resolve type hint for 
+function "get_isFavorite". 
+Consider using a type hint or 
+@extend_schema_field. Defaulting 
+to string.
+C:\projects\connect_new_backend\u
+sers\views\media.py:18: Error 
+[MediaUploadView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\p
+ayments\views.py:17: Error 
+[PaymentInitializeView]: unable 
+to guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\p
+ayments\views.py:95: Error 
+[PaymentVerifyView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\referral.py:13: Error 
+[ReferralApplyView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\referral.py:57: Error 
+[ReferralStatsView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\m
+arketplace\views\faq.py:5: Error 
+[FAQView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\m
+arketplace\views\feedback.py:5: 
+Error [FeedbackView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\m
+arketplace\views\notifications.py
+:12: Warning 
+[NotificationViewSet]: could not 
+derive type of path parameter 
+"id" because it is untyped and 
+obtaining queryset from the 
+viewset failed. Consider adding 
+a type to the path (e.g. 
+<int:id>) or annotating the 
+parameter type with 
+@extend_schema. Defaulting to 
+"string".
+C:\projects\connect_new_backend\m
+arketplace\views\legal.py:10: 
+Error [LegalDocumentView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\deactivate.py:12: 
+Error [UserDeactivateView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+Warning: enum naming encountered 
+a non-optimally resolvable 
+collision for fields named 
+"status". The same name has been 
+used for multiple choice sets in 
+multiple components. The 
+collision was resolved with 
+"StatusAf2Enum". add an entry to 
+ENUM_NAME_OVERRIDES to fix the 
+naming.
+Warning: operationId "api_v1_supp
+ort_support_legal_retrieve" has 
+collisions [('/api/v1/support/sup
+port/legal/', 'get'), ('/api/v1/s
+upport/support/legal/{type}/', 
+'get')]. resolving with numeral 
+suffixes.
+
+Schema generation summary:
+Warnings: 32 (13 unique)
+Errors:   92 (19 unique)
+

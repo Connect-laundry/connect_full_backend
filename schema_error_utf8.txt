@@ -1,0 +1,342 @@
+﻿python : C:\projects\connect_new_
+backend\users\views\profile.py:28
+: Warning [AddressViewSet]: 
+could not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+At line:1 char:1
++ python manage.py spectacular 
+--file schema.yml 2>&1 | 
+Out-File -FileP ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : No 
+   tSpecified: (C:\projects\con  
+  ...ng to "string".:String) [   
+ ], RemoteException
+    + FullyQualifiedErrorId : Na 
+   tiveCommandError
+ 
+C:\projects\connect_new_backend\u
+sers\views\profile.py:47: Error 
+[SupportedCitiesView]: unable to 
+guess serializer. This is 
+graceful fallback handling for 
+APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\password_reset.py:9: 
+Error [ForgotPasswordView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\login.py:14: Error 
+[LoginView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\profile.py:36: Error 
+[LogoutView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\register.py:16: Error 
+[RegisterView]: unable to guess 
+serializer. This is graceful 
+fallback handling for APIViews. 
+Consider using GenericAPIView as 
+view base class, if view is 
+under your control. Either way 
+you may want to add a 
+serializer_class (or method). 
+Ignoring view for now.
+C:\projects\connect_new_backend\u
+sers\views\password_reset.py:36: 
+Error [ResetPasswordView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\o
+rdering\views\order_views.py:39: 
+Error [BookingViewSet]: 
+exception raised while getting 
+serializer. Hint: Is 
+get_serializer_class() returning 
+None or is get_queryset() not 
+working without a request? 
+Ignoring the view for now. 
+(Exception: 'BookingViewSet' 
+should either include a 
+`serializer_class` attribute, or 
+override the 
+`get_serializer_class()` method.)
+C:\projects\connect_new_backend\o
+rdering\views\order_views.py:91: 
+Warning [OrderViewSet]: could 
+not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+C:\projects\connect_new_backend\l
+aundries\views\admin_views.py:75:
+ Error [AdminServiceViewSet]: 
+exception raised while getting 
+serializer. Hint: Is 
+get_serializer_class() returning 
+None or is get_queryset() not 
+working without a request? 
+Ignoring the view for now. 
+(Exception: 
+'AdminServiceViewSet' should 
+either include a 
+`serializer_class` attribute, or 
+override the 
+`get_serializer_class()` method.)
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:75: 
+Error [DashboardEarningsView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:38: 
+Warning [DashboardOrderViewSet]: 
+could not derive type of path 
+parameter "id" because it is 
+untyped and obtaining queryset 
+from the viewset failed. 
+Consider adding a type to the 
+path (e.g. <int:id>) or 
+annotating the parameter type 
+with @extend_schema. Defaulting 
+to "string".
+C:\projects\connect_new_backend\l
+aundries\views\dashboard.py:51: 
+Error [DashboardStatsView]: 
+unable to guess serializer. This 
+is graceful fallback handling 
+for APIViews. Consider using 
+GenericAPIView as view base 
+class, if view is under your 
+control. Either way you may want 
+to add a serializer_class (or 
+method). Ignoring view for now.
+Traceback (most recent call 
+last):
+  File "C:\projects\connect_new_b
+ackend\manage.py", line 22, in 
+<module>
+    main()
+    ~~~~^^
+  File "C:\projects\connect_new_b
+ackend\manage.py", line 18, in 
+main
+    execute_from_command_line(sys
+.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^
+^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\django\core\management\__init
+__.py", line 443, in 
+execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\django\core\management\__init
+__.py", line 437, in execute
+    self.fetch_command(subcommand
+).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\django\core\management\base.p
+y", line 420, in run_from_argv
+    self.execute(*args, 
+**cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\django\core\management\base.p
+y", line 464, in execute
+    output = self.handle(*args, 
+**options)
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\management\co
+mmands\spectacular.py", line 72, 
+in handle
+    schema = generator.get_schema
+(request=None, public=True)
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\generators.py
+", line 285, in get_schema
+    paths=self.parse(request, 
+public),
+          
+~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\generators.py
+", line 256, in parse
+    operation = 
+view.schema.get_operation(
+        path, path_regex, 
+path_prefix, method, 
+self.registry
+    )
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 112, in get_operation
+    operation['responses'] = 
+self._get_response_bodies()
+                             
+~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 1374, in 
+_get_response_bodies
+    return {'200': self._get_resp
+onse_for_code(response_serializer
+s, '200', direction=direction)}
+                   ~~~~~~~~~~~~~~
+~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 1430, in 
+_get_response_for_code
+    component = self.resolve_seri
+alizer(serializer, direction)
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 1614, in resolve_serializer
+    component.schema = 
+self._map_serializer(serializer, 
+direction, bypass_extensions)
+                       ~~~~~~~~~~
+~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 930, in _map_serializer
+    schema = self._map_basic_seri
+alizer(serializer, direction)
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\drf_spectacular\openapi.py", 
+line 1023, in 
+_map_basic_serializer
+    for field in 
+serializer.fields.values():
+                 
+^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\django\utils\functional.py", 
+line 47, in __get__
+    res = 
+instance.__dict__[self.name] = 
+self.func(instance)
+                                 
+        ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\rest_framework\serializers.py
+", line 374, in fields
+    for key, value in 
+self.get_fields().items():
+                      
+~~~~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\rest_framework\serializers.py
+", line 1105, in get_fields
+    field_class, field_kwargs = 
+self.build_field(
+                                
+~~~~~~~~~~~~~~~~^
+        source, info, model, 
+depth
+        
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\rest_framework\serializers.py
+", line 1251, in build_field
+    return self.build_unknown_fie
+ld(field_name, model_class)
+           ~~~~~~~~~~~~~~~~~~~~~~
+~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Ro
+aming\Python\Python314\site-packa
+ges\rest_framework\serializers.py
+", line 1369, in 
+build_unknown_field
+    raise ImproperlyConfigured(
+    ...<2 lines>...
+    )
+django.core.exceptions.Improperly
+Configured: Field name 
+`estimatedDelivery` is not valid 
+for model `Laundry` in `laundries
+.serializers.laundry_list.Laundry
+ListSerializer`.
+Sentry is attempting to send 2 
+pending events
+Waiting up to 2 seconds
+Press Ctrl-Break to quit
