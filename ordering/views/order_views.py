@@ -137,6 +137,25 @@ class OrderViewSet(viewsets.ModelViewSet):
             "data": breakdown
         })
 
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """Returns a list of active (in-progress) orders for the current user."""
+        active_statuses = [
+            Order.Status.PENDING,
+            Order.Status.CONFIRMED,
+            Order.Status.PICKED_UP,
+            Order.Status.IN_PROCESS,
+            Order.Status.OUT_FOR_DELIVERY
+        ]
+        queryset = self.get_queryset().filter(status__in=active_statuses)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": "success",
+            "count": len(serializer.data),
+            "results": serializer.data
+        })
+
 class CouponViewSet(viewsets.GenericViewSet):
     """Viewset for validating and listing available coupons."""
     serializer_class = CouponSerializer

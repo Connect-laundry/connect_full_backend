@@ -19,11 +19,14 @@ from django.contrib import admin
 # pyre-ignore[missing-module]
 from django.urls import path, include
 # pyre-ignore[missing-module]
+from django.views.generic import RedirectView
+# pyre-ignore[missing-module]
 from config.views.health import health_check
 # pyre-ignore[missing-module]
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
+    path('', RedirectView.as_view(url='/api/schema/swagger-ui/', permanent=False), name='root'),
     path('health/', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('users.urls')),

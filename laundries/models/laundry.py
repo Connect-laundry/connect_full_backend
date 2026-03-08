@@ -50,6 +50,7 @@ class Laundry(models.Model):
         validators=[validate_file_upload]
     )
     address = models.TextField(_('address'))
+    city = models.CharField(_('city'), max_length=100, default='Accra', db_index=True)
     
     # Geospatial Optimization
     latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)

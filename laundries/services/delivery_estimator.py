@@ -13,7 +13,12 @@ class DeliveryEstimator:
         on the earth (specified in decimal degrees)
         """
         # Convert decimal degrees to radians 
-        lat1, lon1, lat2, lon2 = map(math.radians, [float(lat1), float(lon1), float(lat2), float(lon2)])
+        try:
+            points = [float(lat1), float(lon1), float(lat2), float(lon2)]
+            lat1, lon1, lat2, lon2 = map(math.radians, points)
+        except (ValueError, TypeError):
+            # Fallback distance if coordinates are invalid
+            return 0.0
 
         # Haversine formula 
         dlon = lon2 - lon1 

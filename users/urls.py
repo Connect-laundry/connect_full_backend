@@ -3,7 +3,7 @@ from django.urls import path, include
 # pyre-ignore[missing-module]
 from .views.token_refresh import CustomTokenRefreshView
 # pyre-ignore[missing-module]
-from .views.profile import ProfileView, AddressViewSet, LogoutView
+from .views.profile import ProfileView, AddressViewSet, LogoutView, SupportedCitiesView
 # pyre-ignore[missing-module]
 from .views.login import LoginView
 # pyre-ignore[missing-module]
@@ -31,6 +31,7 @@ urlpatterns = [
     path('auth/me/', ProfileView.as_view(), name='auth_me'),
     path('auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),
     path('auth/reset-password/', ResetPasswordView.as_view(), name='auth_reset_password'),
+    path('addresses/supported-cities/', SupportedCitiesView.as_view(), name='supported_cities'),
     
     # User Actions
     path('users/<uuid:pk>/deactivate/', UserDeactivateView.as_view(), name='user_deactivate'),
