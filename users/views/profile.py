@@ -43,3 +43,16 @@ class LogoutView(APIView):
 
     def post(self, request):
         return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
+
+class SupportedCitiesView(APIView):
+    """Returns a list of unique cities where laundries are available."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # pyre-ignore[missing-module]
+        from laundries.models.laundry import Laundry
+        cities = Laundry.objects.filter(is_active=True, status='APPROVED').values_list('city', flat=True).distinct()
+        return Response({
+            "status": "success",
+            "cities": list(cities)
+        })
