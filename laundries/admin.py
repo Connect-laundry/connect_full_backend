@@ -16,6 +16,13 @@ class LaundryAdmin(admin.ModelAdmin):
     inlines = [OpeningHoursInline]
     readonly_fields = ('id', 'created_at', 'updated_at')
 
+    def get_queryset(self, request):
+        try:
+            return super().get_queryset(request)
+        except Exception:
+            # Fallback to extremely basic queryset if migrations are broken
+            return Laundry.objects.none()
+
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ('laundry', 'user', 'rating', 'created_at')

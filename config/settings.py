@@ -78,6 +78,7 @@ INSTALLED_APPS += [
 ]
 
 MIDDLEWARE = [
+    'laundries.middleware.JSONErrorMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',

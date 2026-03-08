@@ -4,6 +4,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 # pyre-ignore[missing-module]
 from .views.laundry import LaundryViewSet, CategoryViewSet
+from .views.diagnosis import DiagnosisView
 # pyre-ignore[missing-module]
 from .views.favorite import FavoriteListView
 # pyre-ignore[missing-module]
@@ -26,6 +27,7 @@ router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry
 router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
 
 urlpatterns = [
+    path('diagnosis/', DiagnosisView.as_view(), name='diagnosis'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),

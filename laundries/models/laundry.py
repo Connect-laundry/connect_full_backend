@@ -113,10 +113,15 @@ class Laundry(models.Model):
 
 # Dynamically add PointField if USE_POSTGIS is enabled
 if USE_POSTGIS:
-    Laundry.add_to_class(
-        'location',
-        models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
-    )
-    # Add GistIndex to Meta.indexes with explicit name
-    if GistIndex is not None:
-        Laundry._meta.indexes.insert(0, GistIndex(fields=['location'], name='laundries_location_gist_idx'))
+    try:
+        Laundry.add_to_class(
+            'location',
+            models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
+        )
+        # Add GistIndex to Meta.indexes with explicit name
+        if GistIndex is not None:
+             Laundry._meta.indexes.insert(0, GistIndex(fields=['location'], name='laundries_location_gist_idx'))
+    except Exception as e:
+        # If GDAL is missing or other issues occur, don't crash the whole app
+        import logging
+        logging.error(f"Failed to add PostGIS location field: {e}")

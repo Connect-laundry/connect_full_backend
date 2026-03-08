@@ -25,6 +25,8 @@ if USE_POSTGIS:
     # pyre-ignore[missing-module]
     from django.contrib.gis.db.models.functions import Distance
     # pyre-ignore[missing-module]
+    from django.db import connection
+    # pyre-ignore[missing-module]
     from django.contrib.gis.geos import Point
     # pyre-ignore[missing-module]
     from django.contrib.gis.measure import D
@@ -60,17 +62,23 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for exploring laundries. Optimized with PostGIS for proximity search.
     """
-    queryset = Laundry.objects.filter(
-        status=Laundry.ApprovalStatus.APPROVED,
-        is_active=True
-    ).select_related('owner').annotate(
-        rating=Avg('reviews__rating'),
-        reviewsCount=Count('reviews'),
-        active_order_count=Count(
-            'orders',
-            filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
-        )
-    )
+    def get_queryset(self):
+        try:
+            queryset = Laundry.objects.filter(
+                status=Laundry.ApprovalStatus.APPROVED,
+                is_active=True
+            ).select_related('owner').annotate(
+                rating=Avg('reviews__rating'),
+                reviewsCount=Count('reviews'),
+                active_order_count=Count(
+                    'orders',
+                    filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
+                )
+            )
+        except Exception as e:
+            logger.error(f"Error in Laundry base queryset: {e}")
+            # Fallback to a very safe queryset if status or other fields are missing
+            queryset = Laundry.objects.all().select_related('owner')
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_class = LaundryFilter
@@ -97,8 +105,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset
             
         nearby = self.request.query_params.get('nearby') == 'true'
-        lat = self.request.query_params.get('lat')
-        lng = self.request.query_params.get('lng')
+        lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
+        lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
         radius_km = 10
         try:
             radius_param = self.request.query_params.get('radius')
