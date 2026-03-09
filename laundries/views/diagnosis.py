@@ -33,9 +33,18 @@ class DiagnosisView(APIView):
                 if not model_class.objects.exists():
                     return "OK (Empty)"
                 
-                # 2. Try to fetch one full record and serialize it to check for field errors
+                # 2. Try to fetch first record
                 obj = model_class.objects.first()
-                # Dummy access to fields
+                
+                # 3. Special check for Laundry location
+                if model_class.__name__ == 'Laundry':
+                    try:
+                        loc = getattr(obj, 'location', 'MISSING_FIELD')
+                        return f"OK (Location: {type(loc)})"
+                    except Exception as e:
+                        return f"Error on Location field: {str(e)}"
+                
+                # Check serialization of a record (dummy)
                 str(obj)
                 return "OK"
             except Exception as e:
@@ -65,6 +74,7 @@ class DiagnosisView(APIView):
             try:
                 from django.contrib.gis.geos import Point
                 from django.contrib.gis.measure import D
+                from django.contrib.gis.db.models.functions import Distance
                 # Test a simple spatial query
                 pnt = Point(0, 0, srid=4326)
                 qs = Laundry.objects.filter(location__dwithin=(pnt, D(km=10))).annotate(
@@ -78,7 +88,7 @@ class DiagnosisView(APIView):
                         import json
                         from rest_framework.renderers import JSONRenderer
                         JSONRenderer().render({"d": dist})
-                        spatial_search_status = "OK"
+                        spatial_search_status = f"OK (Found {qs.count()}, Serialized: {type(dist)})"
                     except Exception as e:
                         spatial_search_status = f"Serialization Error: {str(e)}"
                 else:
@@ -89,6 +99,7 @@ class DiagnosisView(APIView):
 
         return Response({
             "status": "success",
+            "diagnosis_version": "v1.7-DeepVerification",
             "message": "Use POST to trigger migrations remotely.",
             "data": {
                 "db_connection": db_conn,
