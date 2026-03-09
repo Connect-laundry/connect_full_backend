@@ -129,6 +129,15 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
             except (ValueError, TypeError, Exception) as e:
                 logger.error(f"Error in nearby search: {e}", exc_info=True)
+
+        # 4. Recommended Sorting Logic
+        recommended = self.request.query_params.get('recommended') == 'true'
+        if recommended:
+            from django.db.models.functions import Coalesce
+            queryset = queryset.annotate(
+                safe_rating=Coalesce('rating', 0.0, output_field=FloatField()),
+                score=ExpressionWrapper(F('safe_rating') * F('reviewsCount'), output_field=FloatField())
+            ).order_by('-score', '-safe_rating')
                 
         return queryset
 
