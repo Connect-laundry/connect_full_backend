@@ -118,9 +118,9 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 # pyre-ignore[reportAttributeAccessIssue]
                 user_location = Point(float(lng), float(lat), srid=4326)
                 
-                # Spatial filter using PostGIS index (ST_DWithin)
+                # Spatial filter using PostGIS distance lookup (standard for Geography/Geometry)
                 # pyre-ignore[reportAttributeAccessIssue]
-                queryset = queryset.filter(location__dwithin=(user_location, D(km=radius_km)))
+                queryset = queryset.filter(location__distance_lte=(user_location, D(km=radius_km)))
                 
                 # Annotate exact distance for display (ST_Distance)
                 # pyre-ignore[reportAttributeAccessIssue]
