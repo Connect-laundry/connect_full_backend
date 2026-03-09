@@ -62,8 +62,15 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for exploring laundries. Optimized with PostGIS for proximity search.
     """
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_class = LaundryFilter
+    search_fields = ['name', 'description', 'address']
+    permission_classes = [permissions.AllowAny]
+
     def get_queryset(self):
         try:
+            # 1. Base queryset with essential annotations
             queryset = Laundry.objects.filter(
                 status=Laundry.ApprovalStatus.APPROVED,
                 is_active=True
@@ -79,16 +86,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             logger.error(f"Error in Laundry base queryset: {e}")
             # Fallback to a very safe queryset if status or other fields are missing
             queryset = Laundry.objects.all().select_related('owner')
-    pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_class = LaundryFilter
-    search_fields = ['name', 'description', 'address']
-    permission_classes = [permissions.AllowAny]
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        
-        # Prefetch reviews and services for detail view to avoid N+1
+        # 2. Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve':
             queryset = queryset.prefetch_related(
                 Prefetch(
@@ -99,9 +98,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 'opening_hours'
             )
         
-        # Optimized Spatial Nearby Search Logic (only if PostGIS is enabled)
+        # 3. Optimized Spatial Nearby Search Logic (only if PostGIS is enabled)
         if not USE_POSTGIS:
-            # Skip spatial queries if PostGIS is not enabled
             return queryset
             
         nearby = self.request.query_params.get('nearby') == 'true'
@@ -120,11 +118,11 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 # pyre-ignore[reportAttributeAccessIssue]
                 user_location = Point(float(lng), float(lat), srid=4326)
                 
-                # 1. Spatial filter using PostGIS index (ST_DWithin)
+                # Spatial filter using PostGIS index (ST_DWithin)
                 # pyre-ignore[reportAttributeAccessIssue]
                 queryset = queryset.filter(location__dwithin=(user_location, D(km=radius_km)))
                 
-                # 2. Annotate exact distance for display (ST_Distance)
+                # Annotate exact distance for display (ST_Distance)
                 # pyre-ignore[reportAttributeAccessIssue]
                 queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
                 
