@@ -23,14 +23,23 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     reviewsCount = serializers.IntegerField(read_only=True)
     isFavorite = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
+    imageUrl = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
         fields = (
-            'id', 'name', 'description', 'image', 'address', 'latitude', 
+            'id', 'name', 'description', 'image', 'imageUrl', 'address', 'latitude', 
             'longitude', 'phone_number', 'priceRange', 'estimated_delivery_hours',
             'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite'
         )
+
+    def get_imageUrl(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
 
     def get_services(self, obj):
         # We'll group them by category in the view or return flat list
