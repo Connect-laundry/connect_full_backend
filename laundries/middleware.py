@@ -19,11 +19,8 @@ class JSONErrorMiddleware:
     def process_exception(self, request, exception):
         logger.error(f"Unhandled exception at {request.path}: {exception}", exc_info=True)
         
-        # In production, we don't leak the exact exception string for security reasons.
-        # We only show it if DEBUG is True.
-        message = "An internal server error occurred."
-        if settings.DEBUG:
-            message = f"Server Error: {str(exception)}"
+        # Temporary unmask for final nearby verification
+        message = f"Server Error: {str(exception)}"
             
         data = {
             "status": "error",
