@@ -12,7 +12,7 @@ click-repl==0.3.0
 colorama==0.4.6
 cryptography==46.0.5
 dj-database-url==3.1.2
-Django==6.0.2
+Django==6.0.3
 django-cloudinary-storage==0.3.0
 django-cors-headers==4.4.0
 django-filter==24.3
