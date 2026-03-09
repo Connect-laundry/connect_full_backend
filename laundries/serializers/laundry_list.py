@@ -24,14 +24,23 @@ class LaundryListSerializer(serializers.ModelSerializer):
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
     estimatedDelivery = serializers.SerializerMethodField()
+    imageUrl = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
         fields = (
-            'id', 'name', 'image', 'location', 'distance', 'rating', 
+            'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating', 
             'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
             'minOrder', 'deliveryFee'
         )
+
+    def get_imageUrl(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
 
     def get_distance(self, obj):
         # distance is annotated in the queryset as a Distance object

@@ -60,15 +60,20 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 
 ## 🏠 3. HOME & LAUNDRY DISCOVERY
 
-### 3.1 Home Screen (Banners & Featured)
+### 3.1 Home Screen (Banners & Categories & Featured)
 
-- **Special Offers**: `GET /support/home/special-offers/` (Returns promo banners).
-- **Featured Laundries**: `GET /laundries/laundries/?is_featured=true`.
+- **Special Offers**: `GET /support/home/special-offers/` (Returns promotional carousels/banners).
+- **Categories**: `GET /laundries/categories/` (Returns service categories like Wash & Fold, Dry Cleaning to display as pills/chips).
+- **Featured Laundries**: `GET /laundries/laundries/?is_featured=true` (Returns laundries manually curated by admins to be featured).
+- **Recommended Laundries**: `GET /laundries/laundries/?recommended=true` (Returns laundries sorted by a computed weighted score based on their ratings and number of reviews).
+- **Favorites**: `GET /laundries/favorites/` (Returns a list of laundries the user has favorited).
+
+> **Important Image Note**: When rendering `Laundry` items on cards, **always use the `imageUrl` property** (e.g. `item.imageUrl`) to load the image, as it provides the fully-qualified absolute URL expected by mobile Image components (not the relative `image` field).
 
 ### 3.2 Discovery Screen (Search & Map)
 
 - **Discovery**: `GET /laundries/laundries/`
-- **Nearby Filter**: Use `?nearby=true&lat=X&lng=Y&radius=10`.
+- **Nearby Filter**: Use `?nearby=true&lat=X&lng=Y&radius=10` (Radius is in km, defaults to 10. Automatically triggers high-performance spatial search and sorts by strict proximity).
 - **Logic**: If the user hasn't granted location permissions, fallback to a standard list.
 
 ### 3.3 Laundry Detail Screen
@@ -119,6 +124,14 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 - **Stats**: `GET /dashboard/stats/` (Total revenue, active orders).
 - **Order Management**: `GET /dashboard/orders/`.
 - **Status Updates**: Call the lifecycle endpoints (e.g., `/lifecycle/{id}/mark-washed/`) to push orders through the pipeline.
+
+### 5.3 Notifications & Inbox
+
+- **List Notifications**: `GET /support/notifications/`
+- **Unread Count**: `GET /support/notifications/unread-count/` (Useful for a notification badge on the bell icon).
+- **Mark Single as Read**: `PATCH /support/notifications/{id}/mark-read/`
+- **Mark All as Read**: `POST /support/notifications/mark-all-read/`
+- **Logic**: Use the `type` field returned on each notification to determine the leading icon or tap action.
 
 ---
 

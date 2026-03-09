@@ -43,7 +43,8 @@ class Command(BaseCommand):
                 'latitude': 5.6037,
                 'longitude': -0.1870,
                 'price_range': Laundry.PriceRange.MEDIUM,
-                'is_featured': True
+                'is_featured': True,
+                'image': 'laundries/laundry1.jpg'
             },
             {
                 'name': 'Express Wash',
@@ -51,7 +52,8 @@ class Command(BaseCommand):
                 'latitude': 5.6148,
                 'longitude': -0.2058,
                 'price_range': Laundry.PriceRange.LOW,
-                'is_featured': False
+                'is_featured': False,
+                'image': 'laundries/laundry2.jpg'
             },
             {
                 'name': 'Elite Dry Clean',
@@ -59,7 +61,8 @@ class Command(BaseCommand):
                 'latitude': 5.5900,
                 'longitude': -0.1750,
                 'price_range': Laundry.PriceRange.HIGH,
-                'is_featured': True
+                'is_featured': True,
+                'image': 'laundries/laundry3.jpg'
             }
         ]
 
@@ -72,6 +75,7 @@ class Command(BaseCommand):
                     'longitude': ld['longitude'],
                     'price_range': ld['price_range'],
                     'is_featured': ld['is_featured'],
+                    'image': ld.get('image'),
                     'owner': owner,
                     'phone_number': '0245555555',
                     'address': f"Location for {ld['name']}"
