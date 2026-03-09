@@ -29,17 +29,26 @@ class DiagnosisView(APIView):
 
         def check_model_deep(model_class):
             try:
-                # Use exists() for a light query
-                model_class.objects.all()[:1].exists()
+                # 1. Check if table exists
+                if not model_class.objects.exists():
+                    return "OK (Empty)"
+                
+                # 2. Try to fetch one full record and serialize it to check for field errors
+                obj = model_class.objects.first()
+                # Dummy access to fields
+                str(obj)
                 return "OK"
             except Exception as e:
-                return f"Error: {str(e)}"
+                import traceback
+                return f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
 
         from laundries.models.laundry import Laundry
         from laundries.models.service import Service
         from laundries.models.review import Review
         from laundries.models.favorite import Favorite
         from ordering.models.base import Order
+        from marketplace.models.special_offer import SpecialOffer
+        from marketplace.models.notifications import Notification
         
         # Check for pending migrations
         pending_migrations = []
@@ -66,6 +75,8 @@ class DiagnosisView(APIView):
                     "Review": check_model_deep(Review),
                     "Favorite": check_model_deep(Favorite),
                     "Order": check_model_deep(Order),
+                    "SpecialOffer": check_model_deep(SpecialOffer),
+                    "Notification": check_model_deep(Notification),
                 },
                 "allowed_hosts": settings.ALLOWED_HOSTS,
             }

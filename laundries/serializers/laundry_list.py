@@ -87,7 +87,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
                 from ordering.models import Order
                 active_order_count = Order.objects.filter(
                     laundry=obj, 
-                    status__in=['PENDING', 'PICKED_UP', 'WASHING']
+                status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
                 ).count()
                 cache.set(cache_key, active_order_count, 120) # 2 minutes
 
