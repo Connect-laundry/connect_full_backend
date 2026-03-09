@@ -34,8 +34,17 @@ class LaundryListSerializer(serializers.ModelSerializer):
         )
 
     def get_distance(self, obj):
-        # distance is annotated in the queryset
-        return getattr(obj, 'distance', None)
+        # distance is annotated in the queryset as a Distance object
+        dist = getattr(obj, 'distance', None)
+        if dist is not None:
+            try:
+                # Distance objects have .km, .m etc attributes
+                if hasattr(dist, 'km'):
+                    return round(float(dist.km), 2)
+                return round(float(dist), 2)
+            except (TypeError, ValueError):
+                return None
+        return None
 
     def get_isOpen(self, obj):
         cache_key = f"laundry_is_open_{obj.id}"

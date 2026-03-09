@@ -51,7 +51,7 @@ class DiagnosisView(APIView):
         from marketplace.models.notification import Notification
         
         # Check for pending migrations
-        pending_migrations = []
+        pending_migrations = []     
         try:
             from django.db.migrations.executor import MigrationExecutor
             executor = MigrationExecutor(connections['default'])
@@ -59,6 +59,33 @@ class DiagnosisView(APIView):
             pending_migrations = [str(p[0]) for p in plan]
         except Exception as e:
             pending_migrations = [f"Check Failed: {str(e)}"]
+
+        spatial_search_status = "N/A (Non-PostGIS)"
+        if os.getenv('USE_POSTGIS', 'False') == 'True':
+            try:
+                from django.contrib.gis.geos import Point
+                from django.contrib.gis.measure import D
+                # Test a simple spatial query
+                pnt = Point(0, 0, srid=4326)
+                qs = Laundry.objects.filter(location__dwithin=(pnt, D(km=10))).annotate(
+                    test_dist=Distance('location', pnt)
+                )
+                if qs.exists():
+                    obj = qs.first()
+                    dist = getattr(obj, 'test_dist', None)
+                    # Check serialization
+                    try:
+                        import json
+                        from rest_framework.renderers import JSONRenderer
+                        JSONRenderer().render({"d": dist})
+                        spatial_search_status = "OK"
+                    except Exception as e:
+                        spatial_search_status = f"Serialization Error: {str(e)}"
+                else:
+                    spatial_search_status = "OK (No data to test)"
+            except Exception as e:
+                import traceback
+                spatial_search_status = f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
 
         return Response({
             "status": "success",
@@ -77,6 +104,7 @@ class DiagnosisView(APIView):
                     "Order": check_model_deep(Order),
                     "SpecialOffer": check_model_deep(SpecialOffer),
                     "Notification": check_model_deep(Notification),
+                    "SpatialSearchTest": spatial_search_status,
                 },
                 "allowed_hosts": settings.ALLOWED_HOSTS,
             }
