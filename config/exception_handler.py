@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 # pyre-ignore[missing-module]
 from rest_framework.exceptions import Throttled
+from django.conf import settings
 
 def custom_exception_handler(exc, context):
     """

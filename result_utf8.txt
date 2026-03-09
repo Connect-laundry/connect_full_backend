@@ -1,0 +1,626 @@
+﻿python : {"message": "(0.300) 
+SELECT oid, typarray FROM 
+pg_type WHERE typname = 
+'hstore'; args=('hstore',); 
+alias=default", "duration": 
+0.3003605999983847, "sql": 
+"SELECT oid, typarray FROM 
+pg_type WHERE typname = 
+'hstore'", "params": ["hstore"], 
+"alias": "default", "level": 
+"DEBUG", "timestamp": "2026-03-09
+T02:56:47.421607+00:00"}
+At line:1 char:1
++ python manage.py shell -c 
+"import test_locally; 
+test_locally.test_dis ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo          : No 
+   tSpecified: ({"message": "(0  
+  ....421607+00:00"}:String) [   
+ ], RemoteException
+    + FullyQualifiedErrorId : Na 
+   tiveCommandError
+ 
+{"message": "(0.300) SELECT oid, 
+typarray FROM pg_type WHERE 
+typname = 'citext'; 
+args=('citext',); 
+alias=default", "duration": 
+0.29986270000517834, "sql": 
+"SELECT oid, typarray FROM 
+pg_type WHERE typname = 
+'citext'", "params": ["citext"], 
+"alias": "default", "level": 
+"DEBUG", "timestamp": "2026-03-09
+T02:56:47.738024+00:00"}
+{"message": "(0.371) SELECT 
+\"users_user\".\"password\", 
+\"users_user\".\"last_login\", 
+\"users_user\".\"is_superuser\", 
+\"users_user\".\"id\", 
+\"users_user\".\"email\", 
+\"users_user\".\"phone\", 
+\"users_user\".\"first_name\", 
+\"users_user\".\"last_name\", \"u
+sers_user\".\"referral_code\", \"
+users_user\".\"referred_by_id\", 
+\"users_user\".\"role\", 
+\"users_user\".\"is_verified\", 
+\"users_user\".\"is_active\", 
+\"users_user\".\"is_staff\", \"us
+ers_user\".\"deactivated_at\", \"
+users_user\".\"deactivation_reaso
+n\", \"users_user\".\"avatar\", 
+\"users_user\".\"created_at\", 
+\"users_user\".\"updated_at\" 
+FROM \"users_user\" WHERE 
+\"users_user\".\"email\" = 
+'test_tester@test.com' LIMIT 21; 
+args=('test_tester@test.com',); 
+alias=default", "duration": 
+0.37062190000142436, "sql": 
+"SELECT 
+\"users_user\".\"password\", 
+\"users_user\".\"last_login\", 
+\"users_user\".\"is_superuser\", 
+\"users_user\".\"id\", 
+\"users_user\".\"email\", 
+\"users_user\".\"phone\", 
+\"users_user\".\"first_name\", 
+\"users_user\".\"last_name\", \"u
+sers_user\".\"referral_code\", \"
+users_user\".\"referred_by_id\", 
+\"users_user\".\"role\", 
+\"users_user\".\"is_verified\", 
+\"users_user\".\"is_active\", 
+\"users_user\".\"is_staff\", \"us
+ers_user\".\"deactivated_at\", \"
+users_user\".\"deactivation_reaso
+n\", \"users_user\".\"avatar\", 
+\"users_user\".\"created_at\", 
+\"users_user\".\"updated_at\" 
+FROM \"users_user\" WHERE 
+\"users_user\".\"email\" = 
+'test_tester@test.com' LIMIT 
+21", "params": 
+["test_tester@test.com"], 
+"alias": "default", "level": 
+"DEBUG", "timestamp": "2026-03-09
+T02:56:48.108943+00:00"}
+C:\Users\odame\AppData\Roaming\Py
+thon\Python314\site-packages\rest
+_framework\pagination.py:207: 
+UnorderedObjectListWarning: 
+Pagination may yield 
+inconsistent results with an 
+unordered object_list: <class 'la
+undries.models.laundry.Laundry'> 
+QuerySet.
+  paginator = self.django_paginat
+or_class(queryset, page_size)
+{"message": "(0.394) SELECT 
+COUNT(*) FROM (SELECT 
+\"laundries_laundry\".\"id\" AS 
+\"col1\" FROM 
+\"laundries_laundry\" LEFT OUTER 
+JOIN \"laundries_review\" ON 
+(\"laundries_laundry\".\"id\" = \
+"laundries_review\".\"laundry_id\
+") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ WHERE (\"laundries_laundry\".\"i
+s_active\" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED' AND \"laundries_laun
+dry\".\"is_featured\") GROUP BY 
+1) subquery; args=(Laundry.Approv
+alStatus.APPROVED,); 
+alias=default", "duration": 
+0.39404660000582226, "sql": 
+"SELECT COUNT(*) FROM (SELECT 
+\"laundries_laundry\".\"id\" AS 
+\"col1\" FROM 
+\"laundries_laundry\" LEFT OUTER 
+JOIN \"laundries_review\" ON 
+(\"laundries_laundry\".\"id\" = \
+"laundries_review\".\"laundry_id\
+") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ WHERE (\"laundries_laundry\".\"i
+s_active\" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED' AND \"laundries_laun
+dry\".\"is_featured\") GROUP BY 
+1) subquery", "params": 
+["APPROVED"], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:51
+.718592+00:00"}
+{"message": "(0.306) SELECT 
+COUNT(*) FROM (SELECT 
+\"laundries_laundry\".\"id\" AS 
+\"col1\" FROM 
+\"laundries_laundry\" LEFT OUTER 
+JOIN \"laundries_review\" ON 
+(\"laundries_laundry\".\"id\" = \
+"laundries_review\".\"laundry_id\
+") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ WHERE (\"laundries_laundry\".\"i
+s_active\" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED') GROUP BY 1) 
+subquery; args=(Laundry.ApprovalS
+tatus.APPROVED,); 
+alias=default", "duration": 
+0.3056951000035042, "sql": 
+"SELECT COUNT(*) FROM (SELECT 
+\"laundries_laundry\".\"id\" AS 
+\"col1\" FROM 
+\"laundries_laundry\" LEFT OUTER 
+JOIN \"laundries_review\" ON 
+(\"laundries_laundry\".\"id\" = \
+"laundries_review\".\"laundry_id\
+") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ WHERE (\"laundries_laundry\".\"i
+s_active\" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED') GROUP BY 1) 
+subquery", "params": 
+["APPROVED"], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:52
+.036152+00:00"}
+{"message": "(0.325) SELECT 
+\"laundries_laundry\".\"id\", 
+\"laundries_laundry\".\"name\", \
+"laundries_laundry\".\"descriptio
+n\", 
+\"laundries_laundry\".\"image\", 
+\"laundries_laundry\".\"address\"
+, 
+\"laundries_laundry\".\"city\", \
+"laundries_laundry\".\"latitude\"
+, \"laundries_laundry\".\"longitu
+de\", \"laundries_laundry\".\"pho
+ne_number\", \"laundries_laundry\
+".\"price_range\", \"laundries_la
+undry\".\"estimated_delivery_hour
+s\", \"laundries_laundry\".\"deli
+very_fee\", \"laundries_laundry\"
+.\"min_order\", \"laundries_laund
+ry\".\"is_featured\", \"laundries
+_laundry\".\"is_active\", \"laund
+ries_laundry\".\"status\", \"laun
+dries_laundry\".\"approved_at\", 
+\"laundries_laundry\".\"rejected_
+at\", \"laundries_laundry\".\"dea
+ctivated_at\", \"laundries_laundr
+y\".\"deactivation_reason\", \"la
+undries_laundry\".\"owner_id\", \
+"laundries_laundry\".\"created_at
+\", \"laundries_laundry\".\"updat
+ed_at\", AVG(\"laundries_review\"
+.\"rating\") AS \"rating\", COUNT
+(\"laundries_review\".\"id\") AS 
+\"reviewsCount\", 
+COUNT(\"ordering_order\".\"id\") 
+FILTER (WHERE 
+\"ordering_order\".\"status\" IN 
+('PENDING', 'PICKED_UP', 
+'IN_PROCESS', 
+'OUT_FOR_DELIVERY')) AS 
+\"active_order_count\", 
+\"users_user\".\"password\", 
+\"users_user\".\"last_login\", 
+\"users_user\".\"is_superuser\", 
+\"users_user\".\"id\", 
+\"users_user\".\"email\", 
+\"users_user\".\"phone\", 
+\"users_user\".\"first_name\", 
+\"users_user\".\"last_name\", \"u
+sers_user\".\"referral_code\", \"
+users_user\".\"referred_by_id\", 
+\"users_user\".\"role\", 
+\"users_user\".\"is_verified\", 
+\"users_user\".\"is_active\", 
+\"users_user\".\"is_staff\", \"us
+ers_user\".\"deactivated_at\", \"
+users_user\".\"deactivation_reaso
+n\", \"users_user\".\"avatar\", 
+\"users_user\".\"created_at\", 
+\"users_user\".\"updated_at\" 
+FROM \"laundries_laundry\" LEFT 
+OUTER JOIN \"laundries_review\" 
+ON (\"laundries_laundry\".\"id\" 
+= \"laundries_review\".\"laundry_
+id\") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ INNER JOIN \"users_user\" ON (\"
+laundries_laundry\".\"owner_id\" 
+= \"users_user\".\"id\") WHERE (\
+"laundries_laundry\".\"is_active\
+" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED') GROUP BY 
+\"laundries_laundry\".\"id\", 
+\"users_user\".\"id\" LIMIT 1; 
+args=('PENDING', 'PICKED_UP', 
+'IN_PROCESS', 
+'OUT_FOR_DELIVERY', Laundry.Appro
+valStatus.APPROVED); 
+alias=default", "duration": 
+0.32465230001253076, "sql": 
+"SELECT 
+\"laundries_laundry\".\"id\", 
+\"laundries_laundry\".\"name\", \
+"laundries_laundry\".\"descriptio
+n\", 
+\"laundries_laundry\".\"image\", 
+\"laundries_laundry\".\"address\"
+, 
+\"laundries_laundry\".\"city\", \
+"laundries_laundry\".\"latitude\"
+, \"laundries_laundry\".\"longitu
+de\", \"laundries_laundry\".\"pho
+ne_number\", \"laundries_laundry\
+".\"price_range\", \"laundries_la
+undry\".\"estimated_delivery_hour
+s\", \"laundries_laundry\".\"deli
+very_fee\", \"laundries_laundry\"
+.\"min_order\", \"laundries_laund
+ry\".\"is_featured\", \"laundries
+_laundry\".\"is_active\", \"laund
+ries_laundry\".\"status\", \"laun
+dries_laundry\".\"approved_at\", 
+\"laundries_laundry\".\"rejected_
+at\", \"laundries_laundry\".\"dea
+ctivated_at\", \"laundries_laundr
+y\".\"deactivation_reason\", \"la
+undries_laundry\".\"owner_id\", \
+"laundries_laundry\".\"created_at
+\", \"laundries_laundry\".\"updat
+ed_at\", AVG(\"laundries_review\"
+.\"rating\") AS \"rating\", COUNT
+(\"laundries_review\".\"id\") AS 
+\"reviewsCount\", 
+COUNT(\"ordering_order\".\"id\") 
+FILTER (WHERE 
+\"ordering_order\".\"status\" IN 
+('PENDING', 'PICKED_UP', 
+'IN_PROCESS', 
+'OUT_FOR_DELIVERY')) AS 
+\"active_order_count\", 
+\"users_user\".\"password\", 
+\"users_user\".\"last_login\", 
+\"users_user\".\"is_superuser\", 
+\"users_user\".\"id\", 
+\"users_user\".\"email\", 
+\"users_user\".\"phone\", 
+\"users_user\".\"first_name\", 
+\"users_user\".\"last_name\", \"u
+sers_user\".\"referral_code\", \"
+users_user\".\"referred_by_id\", 
+\"users_user\".\"role\", 
+\"users_user\".\"is_verified\", 
+\"users_user\".\"is_active\", 
+\"users_user\".\"is_staff\", \"us
+ers_user\".\"deactivated_at\", \"
+users_user\".\"deactivation_reaso
+n\", \"users_user\".\"avatar\", 
+\"users_user\".\"created_at\", 
+\"users_user\".\"updated_at\" 
+FROM \"laundries_laundry\" LEFT 
+OUTER JOIN \"laundries_review\" 
+ON (\"laundries_laundry\".\"id\" 
+= \"laundries_review\".\"laundry_
+id\") LEFT OUTER JOIN 
+\"ordering_order\" ON 
+(\"laundries_laundry\".\"id\" = \
+"ordering_order\".\"laundry_id\")
+ INNER JOIN \"users_user\" ON (\"
+laundries_laundry\".\"owner_id\" 
+= \"users_user\".\"id\") WHERE (\
+"laundries_laundry\".\"is_active\
+" AND 
+\"laundries_laundry\".\"status\" 
+= 'APPROVED') GROUP BY 
+\"laundries_laundry\".\"id\", 
+\"users_user\".\"id\" LIMIT 1", 
+"params": ["PENDING", 
+"PICKED_UP", "IN_PROCESS", 
+"OUT_FOR_DELIVERY", "APPROVED"], 
+"alias": "default", "level": 
+"DEBUG", "timestamp": "2026-03-09
+T02:56:52.363205+00:00"}
+{"message": "(0.320) SELECT \"lau
+ndries_openinghours\".\"id\", \"l
+aundries_openinghours\".\"laundry
+_id\", \"laundries_openinghours\"
+.\"day\", \"laundries_openinghour
+s\".\"opening_time\", \"laundries
+_openinghours\".\"closing_time\",
+ \"laundries_openinghours\".\"is_
+closed\" FROM 
+\"laundries_openinghours\" WHERE 
+(\"laundries_openinghours\".\"day
+\" = 1 AND NOT \"laundries_openin
+ghours\".\"is_closed\" AND \"laun
+dries_openinghours\".\"laundry_id
+\" = '8a220bbbd6e84253a5678a13eb8
+6dc8b'::uuid) ORDER BY \"laundrie
+s_openinghours\".\"day\" ASC, \"l
+aundries_openinghours\".\"opening
+_time\" ASC LIMIT 1; 
+args=(Int4(1), UUID('8a220bbb-d6e
+8-4253-a567-8a13eb86dc8b')); 
+alias=default", "duration": 
+0.31977960000222083, "sql": 
+"SELECT \"laundries_openinghours\
+".\"id\", \"laundries_openinghour
+s\".\"laundry_id\", \"laundries_o
+peninghours\".\"day\", \"laundrie
+s_openinghours\".\"opening_time\"
+, \"laundries_openinghours\".\"cl
+osing_time\", \"laundries_opening
+hours\".\"is_closed\" FROM 
+\"laundries_openinghours\" WHERE 
+(\"laundries_openinghours\".\"day
+\" = 1 AND NOT \"laundries_openin
+ghours\".\"is_closed\" AND \"laun
+dries_openinghours\".\"laundry_id
+\" = '8a220bbbd6e84253a5678a13eb8
+6dc8b'::uuid) ORDER BY \"laundrie
+s_openinghours\".\"day\" ASC, \"l
+aundries_openinghours\".\"opening
+_time\" ASC LIMIT 1", "params": 
+[1, "8a220bbb-d6e8-4253-a567-8a13
+eb86dc8b"], "alias": "default", 
+"level": "DEBUG", "timestamp": "2
+026-03-09T02:56:52.693780+00:00"}
+{"message": "(0.287) SELECT 1 AS 
+\"a\" FROM 
+\"laundries_favorite\" WHERE (\"l
+aundries_favorite\".\"laundry_id\
+" = '8a220bbbd6e84253a5678a13eb86
+dc8b'::uuid AND \"laundries_favor
+ite\".\"user_id\" = 'fae1a0927c11
+49fc8620ab170fb98946'::uuid) 
+LIMIT 1; args=(Int4(1), UUID('8a2
+20bbb-d6e8-4253-a567-8a13eb86dc8b
+'), UUID('fae1a092-7c11-49fc-8620
+-ab170fb98946')); 
+alias=default", "duration": 
+0.2873144000041066, "sql": 
+"SELECT 1 AS \"a\" FROM 
+\"laundries_favorite\" WHERE (\"l
+aundries_favorite\".\"laundry_id\
+" = '8a220bbbd6e84253a5678a13eb86
+dc8b'::uuid AND \"laundries_favor
+ite\".\"user_id\" = 'fae1a0927c11
+49fc8620ab170fb98946'::uuid) 
+LIMIT 1", "params": [1, "8a220bbb
+-d6e8-4253-a567-8a13eb86dc8b", "f
+ae1a092-7c11-49fc-8620-ab170fb989
+46"], "alias": "default", 
+"level": "DEBUG", "timestamp": "2
+026-03-09T02:56:52.982331+00:00"}
+{"message": "(0.290) SELECT 1; 
+args=None; alias=default", 
+"duration": 0.2904839999973774, 
+"sql": "SELECT 1", "params": 
+null, "alias": "default", 
+"level": "DEBUG", "timestamp": "2
+026-03-09T02:56:53.364038+00:00"}
+{"message": "(0.330) SELECT 
+postgis_full_version(); 
+args=None; alias=default", 
+"duration": 0.33014510000066366, 
+"sql": "SELECT 
+postgis_full_version()", 
+"params": null, "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:53
+.694715+00:00"}
+{"message": "(0.599) \n          
+  SELECT\n                
+c.relname,\n                
+CASE\n                    WHEN 
+c.relispartition THEN 'p'\n      
+              WHEN c.relkind IN 
+('m', 'v') THEN 'v'\n            
+        ELSE 't'\n               
+ END,\n                
+obj_description(c.oid, 
+'pg_class')\n            FROM 
+pg_catalog.pg_class c\n          
+  LEFT JOIN 
+pg_catalog.pg_namespace n ON 
+n.oid = c.relnamespace\n         
+   WHERE c.relkind IN ('f', 'm', 
+'p', 'r', 'v')\n                
+AND n.nspname NOT IN 
+('pg_catalog', 'pg_toast')\n     
+           AND pg_catalog.pg_tabl
+e_is_visible(c.oid)\n        ; 
+args=None; alias=default", 
+"duration": 0.5990267000015592, 
+"sql": "\n            SELECT\n   
+             c.relname,\n        
+        CASE\n                   
+ WHEN c.relispartition THEN 
+'p'\n                    WHEN 
+c.relkind IN ('m', 'v') THEN 
+'v'\n                    ELSE 
+'t'\n                END,\n      
+          obj_description(c.oid, 
+'pg_class')\n            FROM 
+pg_catalog.pg_class c\n          
+  LEFT JOIN 
+pg_catalog.pg_namespace n ON 
+n.oid = c.relnamespace\n         
+   WHERE c.relkind IN ('f', 'm', 
+'p', 'r', 'v')\n                
+AND n.nspname NOT IN 
+('pg_catalog', 'pg_toast')\n     
+           AND pg_catalog.pg_tabl
+e_is_visible(c.oid)\n        ", 
+"params": null, "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:54
+.422189+00:00"}
+{"message": "(2.121) SELECT 
+\"django_migrations\".\"id\", 
+\"django_migrations\".\"app\", 
+\"django_migrations\".\"name\", \
+"django_migrations\".\"applied\" 
+FROM \"django_migrations\"; 
+args=(); alias=default", 
+"duration": 2.1209546999889426, 
+"sql": "SELECT 
+\"django_migrations\".\"id\", 
+\"django_migrations\".\"app\", 
+\"django_migrations\".\"name\", \
+"django_migrations\".\"applied\" 
+FROM \"django_migrations\"", 
+"params": [], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:56
+.545030+00:00"}
+{"message": "(0.352) SELECT 1 AS 
+\"a\" FROM \"laundries_laundry\" 
+LIMIT 1; args=(Int4(1),); 
+alias=default", "duration": 
+0.3519721000047866, "sql": 
+"SELECT 1 AS \"a\" FROM 
+\"laundries_laundry\" LIMIT 1", 
+"params": [1], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:56
+.901332+00:00"}
+{"message": "(0.288) SELECT 1 AS 
+\"a\" FROM \"laundries_service\" 
+LIMIT 1; args=(Int4(1),); 
+alias=default", "duration": 
+0.2883622999943327, "sql": 
+"SELECT 1 AS \"a\" FROM 
+\"laundries_service\" LIMIT 1", 
+"params": [1], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:57
+.190335+00:00"}
+{"message": "(0.303) SELECT 1 AS 
+\"a\" FROM \"laundries_review\" 
+LIMIT 1; args=(Int4(1),); 
+alias=default", "duration": 
+0.30305840000801254, "sql": 
+"SELECT 1 AS \"a\" FROM 
+\"laundries_review\" LIMIT 1", 
+"params": [1], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:57
+.494314+00:00"}
+{"message": "(0.298) SELECT 1 AS 
+\"a\" FROM 
+\"laundries_favorite\" LIMIT 1; 
+args=(Int4(1),); alias=default", 
+"duration": 0.29837279999628663, 
+"sql": "SELECT 1 AS \"a\" FROM 
+\"laundries_favorite\" LIMIT 1", 
+"params": [1], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:57
+.793731+00:00"}
+{"message": "(0.284) SELECT 1 AS 
+\"a\" FROM \"ordering_order\" 
+LIMIT 1; args=(Int4(1),); 
+alias=default", "duration": 
+0.28448600000410806, "sql": 
+"SELECT 1 AS \"a\" FROM 
+\"ordering_order\" LIMIT 1", 
+"params": [1], "alias": 
+"default", "level": "DEBUG", 
+"timestamp": "2026-03-09T02:56:58
+.079258+00:00"}
+40 objects imported automatically (use -v 2 for details).
+
+
+--- Featured Laundries ---
+Status: 200
+JSON Output: {
+  "status": "success",
+  "message": "Data retrieved successfully.",
+  "data": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}
+
+--- Nearby Search ---
+Status: 200
+JSON Output: {
+  "status": "success",
+  "message": "Data retrieved successfully.",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": "8a220bbb-d6e8-4253-a567-8a13eb86dc8b",
+        "name": "Test Laundry",
+        "image": null,
+        "location": "123 Street",
+        "distance": null,
+        "rating": null,
+        "reviewsCount": 0,
+        "isOpen": false,
+        "priceRange": "$$",
+        "isFavorite": false,
+        "estimatedDelivery": "24h 21m",
+        "minOrder": "0.00",
+        "deliveryFee": "0.00"
+      }
+    ]
+  }
+}
+
+--- Diagnosis ---
+Status: 200
+JSON Output: {
+  "status": "success",
+  "message": "Use POST to trigger migrations remotely.",
+  "data": {
+    "db_connection": true,
+    "postgis": "POSTGIS=\"3.3.3 2355e8e\" [EXTENSION] PGSQL=\"160\" GEOS=\"3.9.0-CAPI-1.16.2\" PROJ=\"7.2.1\" LIBXML=\"2.9.10\" LIBJSON=\"0.15\" LIBPROTOBUF=\"1.3.3\" WAGYU=\"0.5.0 (Internal)\"",
+    "use_postgis_setting": "False",
+    "debug_mode": true,
+    "pending_migrations": [],
+    "model_health": {
+      "Laundry": "OK",
+      "Service": "OK",
+      "Review": "OK",
+      "Favorite": "OK",
+      "Order": "OK"
+    },
+    "allowed_hosts": [
+      "*"
+    ]
+  }
+}
