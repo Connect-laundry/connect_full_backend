@@ -82,6 +82,30 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 - **Nested Data**: Includes `services` (Wash, Iron, Dry Clean), `reviews`, and `opening_hours`.
 - **Favorites**: `POST /laundries/{id}/favorite/` (Toggles heart icon).
 
+### 3.4 Laundry Object Schema (Reference)
+
+When calling the list or detail endpoints, the Laundry object follows this structure:
+
+```json
+{
+  "id": "uuid",
+  "name": "Sparkle Cleaners",
+  "description": "Premium service...",
+  "imageUrl": "https://res.cloudinary.com/...",
+  "location": "123 Accra St",
+  "latitude": "5.603700",
+  "longitude": "-0.187000",
+  "priceRange": "$$",
+  "rating": 4.5,
+  "reviewsCount": 12,
+  "isOpen": true,
+  "isFavorite": false,
+  "minOrder": "10.00",
+  "deliveryFee": "5.00",
+  "estimatedDelivery": "2 hours"
+}
+```
+
 ---
 
 ## 🛒 4. CHECKOUT & ORDERS

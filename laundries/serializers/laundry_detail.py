@@ -24,13 +24,16 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     isFavorite = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
     imageUrl = serializers.SerializerMethodField()
+    minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
+    deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Laundry
         fields = (
             'id', 'name', 'description', 'image', 'imageUrl', 'address', 'latitude', 
             'longitude', 'phone_number', 'priceRange', 'estimated_delivery_hours',
-            'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite'
+            'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
+            'minOrder', 'deliveryFee'
         )
 
     def get_imageUrl(self, obj):
