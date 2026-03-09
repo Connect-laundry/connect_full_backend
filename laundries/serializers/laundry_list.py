@@ -50,10 +50,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
         
         # Check OpeningHours
         oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
-        is_open_now = False
-        if oh:
-            if oh.opening_time <= current_time <= oh.closing_time:
-                is_open_now = True
+        is_open_now = bool(oh and oh.opening_time <= current_time <= oh.closing_time)
         
         cache.set(cache_key, is_open_now, 300) # 5 minutes
         return is_open_now
@@ -84,10 +81,10 @@ class LaundryListSerializer(serializers.ModelSerializer):
             
             if active_order_count is None:
                 # pyre-ignore[missing-module]
-                from ordering.models import Order
+                from ordering.models.base import Order
                 active_order_count = Order.objects.filter(
                     laundry=obj, 
-                status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
+                    status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
                 ).count()
                 cache.set(cache_key, active_order_count, 120) # 2 minutes
 
