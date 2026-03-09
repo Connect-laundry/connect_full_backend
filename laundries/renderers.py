@@ -11,7 +11,12 @@ class StandardResponseRenderer(JSONRenderer):
     }
     """
     def render(self, data, accepted_media_type=None, renderer_context=None):
-        response = renderer_context['response']
+        if renderer_context is None:
+            return super().render(data, accepted_media_type, renderer_context)
+            
+        response = renderer_context.get('response')
+        if response is None:
+            return super().render(data, accepted_media_type, renderer_context)
         
         # If response is already in our format, don't wrap it again
         if isinstance(data, dict) and ('status' in data and 'message' in data):
@@ -29,7 +34,6 @@ class StandardResponseRenderer(JSONRenderer):
                     message = data['detail']
                 elif 'error' in data:
                     message = data['error']
-                # If it's a validation error, data itself is a dict of fields -> errors
             elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], str):
                  message = data[0]
 

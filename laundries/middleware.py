@@ -19,12 +19,11 @@ class JSONErrorMiddleware:
     def process_exception(self, request, exception):
         logger.error(f"Unhandled exception at {request.path}: {exception}", exc_info=True)
         
-        # Only handle if it's an API request or Admin request that we want to keep JSON (optional)
-        # For now, let's satisfy the frontend requirement for ALL 500s to be JSON.
+        error_msg = str(exception)
         
         data = {
             "status": "error",
-            "message": f"Server Error: {str(exception)}" if settings.DEBUG else "An internal server error occurred.",
+            "message": f"Server Error: {error_msg}",
             "data": {}
         }
         
