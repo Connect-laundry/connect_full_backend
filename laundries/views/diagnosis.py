@@ -48,7 +48,7 @@ class DiagnosisView(APIView):
         from laundries.models.favorite import Favorite
         from ordering.models.base import Order
         from marketplace.models.special_offer import SpecialOffer
-        from marketplace.models.notifications import Notification
+        from marketplace.models.notification import Notification
         
         # Check for pending migrations
         pending_migrations = []
