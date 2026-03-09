@@ -77,7 +77,7 @@ class DiagnosisView(APIView):
                 from django.contrib.gis.db.models.functions import Distance
                 # Test a simple spatial query
                 pnt = Point(0, 0, srid=4326)
-                qs = Laundry.objects.filter(location__dwithin=(pnt, D(km=10))).annotate(
+                qs = Laundry.objects.filter(location__distance_lte=(pnt, D(km=10))).annotate(
                     test_dist=Distance('location', pnt)
                 )
                 if qs.exists():
@@ -92,15 +92,15 @@ class DiagnosisView(APIView):
                     except Exception as e:
                         spatial_search_status = f"Serialization Error: {str(e)}"
                 else:
-                    spatial_search_status = "OK (No data to test)"
+                    spatial_search_status = "OK (No data in 10km radius, test query passed)"
             except Exception as e:
                 import traceback
                 spatial_search_status = f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
 
         return Response({
             "status": "success",
-            "diagnosis_version": "v1.7-DeepVerification",
-            "message": "Use POST to trigger migrations remotely.",
+            "diagnosis_version": "v1.8-SpatialFix",
+            "message": "Use POST to trigger migrations and Location sync.",
             "data": {
                 "db_connection": db_conn,
                 "postgis": postgis_available,
@@ -123,20 +123,35 @@ class DiagnosisView(APIView):
 
     def post(self, request):
         """
-        Trigger python manage.py migrate remotely.
+        Trigger python manage.py migrate and sync Laundry locations.
         """
         out = io.StringIO()
         try:
+            # 1. Run Migrations
             call_command('migrate', interactive=False, stdout=out)
-            result = out.getvalue()
+            migration_result = out.getvalue()
+            
+            # 2. Sync Locations
+            sync_count = 0
+            if os.getenv('USE_POSTGIS', 'False') == 'True':
+                from laundries.models.laundry import Laundry
+                from django.contrib.gis.geos import Point
+                
+                laundries_to_sync = Laundry.objects.filter(location__isnull=True)
+                for l in laundries_to_sync:
+                    if l.latitude and l.longitude:
+                        l.location = Point(float(l.longitude), float(l.latitude), srid=4326)
+                        l.save()
+                        sync_count += 1
+            
             return Response({
                 "status": "success",
-                "message": "Migration completed.",
-                "output": result
+                "message": f"Tasks completed. Synced {sync_count} laundries.",
+                "output": migration_result
             })
         except Exception as e:
             return Response({
                 "status": "error",
-                "message": f"Migration failed: {str(e)}",
+                "message": f"Tasks failed: {str(e)}",
                 "output": out.getvalue()
             }, status=500)
