@@ -55,12 +55,14 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',
     'django.contrib.staticfiles',
     'django.contrib.postgres',
 
     'rest_framework',
     'drf_spectacular',
     'corsheaders',
+    'cloudinary',
 ]
 
 # Add GIS support only if USE_POSTGIS is enabled
