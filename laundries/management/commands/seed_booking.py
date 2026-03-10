@@ -5,7 +5,9 @@ from django.core.management.base import BaseCommand
 # pyre-ignore[missing-module]
 from laundries.models import Laundry, Category, LaundryService
 # pyre-ignore[missing-module]
-from ordering.models import LaunderableItem
+from ordering.models import LaunderableItem, BookingSlot
+from django.utils import timezone
+from datetime import timedelta
 
 class Command(BaseCommand):
     help = 'Seed database with sample laundry custom pricing data'
@@ -56,3 +58,36 @@ class Command(BaseCommand):
                         seeded_count += 1
                         
         self.stdout.write(self.style.SUCCESS(f'Successfully created {seeded_count} price configurations!'))
+
+        # Seed Booking Slots
+        self.stdout.write('Seeding booking slots for the next 7 days...')
+        slots_count = 0
+        now = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        for laundry in laundries:
+            for day in range(1, 8): # Next 7 days
+                date = now + timedelta(days=day)
+                # Create 3 slots per day: Morning, Afternoon, Evening
+                time_windows = [
+                    (8, 12),  # 8 AM - 12 PM
+                    (13, 17), # 1 PM - 5 PM
+                    (18, 21)  # 6 PM - 9 PM
+                ]
+                for start_h, end_h in time_windows:
+                    start_time = date.replace(hour=start_h)
+                    end_time = date.replace(hour=end_h)
+                    
+                    _, created = BookingSlot.objects.get_or_create(
+                        laundry=laundry,
+                        start_time=start_time,
+                        end_time=end_time,
+                        defaults={
+                            'is_available': True,
+                            'max_bookings': random.randint(3, 8),
+                            'current_bookings': 0
+                        }
+                    )
+                    if created:
+                        slots_count += 1
+                        
+        self.stdout.write(self.style.SUCCESS(f'Successfully created {slots_count} booking slots!'))
