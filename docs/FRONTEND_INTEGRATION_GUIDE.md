@@ -110,21 +110,57 @@ When calling the list or detail endpoints, the Laundry object follows this struc
 
 ## 🛒 4. CHECKOUT & ORDERS
 
-### 4.1 Catalog & Vendor Pricing (New Architecture)
+### 4.1 Catalog & Vendor Pricing
 
-The backend now uses a Vendor-Specific Pricing architecture. Global items do not have fixed prices. Instead, each laundry sets its own menu.
+The backend uses a Vendor-Specific Pricing architecture.
 
 1. **Global Item Catalog**: `GET /api/v1/booking/catalog/items/`
-   - Returns all launderable items without prices (e.g. "Men's Shirt").
 2. **Global Service Types**: `GET /api/v1/booking/catalog/services/`
-   - Returns service categories (e.g. "Wash & Fold", "Dry Cleaning").
 3. **Vendor Specific Menu**: `GET /api/v1/laundries/laundries/{laundry_id}/services/`
-   - **Crucial step**: Call this endpoint when a user selects a laundry to see the actual tailored menu, prices, and exact availability for that specific vendor.
-   - Example Response: `[{ "price": "15.00", "estimated_duration": "24 hours", "is_available": true, "item": { "id": "...", "name": "Shirt" }, "service_type": { "name": "Wash & Fold" } }]`
+   - **Important**: This returns the `price` and `estimated_duration` for that specific laundry.
 
-### 4.2 Order Creation (Modified for Mixed Carts)
+### 4.2 Checkout Preview (Calculation)
 
-- **Endpoint**: `POST /booking/create/`
+Before the user clicks "Confirm Order", use this endpoint to show them the full price breakdown on the **Review Order** screen.
+
+- **Endpoint**: `POST /api/v1/booking/calculate/`
+- **Payload**:
+  ```json
+  {
+    "laundry": "uuid",
+    "items": [{ "item": "uuid", "service_type": "uuid", "quantity": 2 }]
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "items_total": "30.00",
+      "delivery_fee": "5.00",
+      "pickup_fee": "2.00",
+      "tax": "1.50",
+      "platform_fee": "0.60",
+      "total": "39.10",
+      "currency": "GHS"
+    }
+  }
+  ```
+
+### 4.3 Scheduling & Pickup Slots
+
+To let users pick a pickup time on the **Review Order** screen:
+
+- **Endpoint**: `GET /api/v1/booking/schedule/?laundry_id={laundry_uuid}`
+- **Response**: Returns a list of `BookingSlot` objects.
+  - `start_time`, `end_time`: The window for pickup.
+  - `is_available`: Only show slots where this is `true`.
+
+### 4.4 Order Creation (Mixed Cart Support)
+
+Once the user confirms the details on the **Review Order** screen:
+
+- **Endpoint**: `POST /api/v1/booking/create/`
 - **Payload**:
   ```json
   {
@@ -146,18 +182,26 @@ The backend now uses a Vendor-Specific Pricing architecture. Global items do not
     "special_instructions": "Pick up at the gate"
   }
   ```
-- **Logic**: You can now mix items with different service types in one order. The `service_type` is required for each item in the array so the backend can look up the correct vendor price.
+- **Logic**: You can mix items with different service types. The backend fetches the correct vendor prices and calculates the final total securely.
 
-### 4.2 Payment Flow (Paystack)
+### 4.5 Payment Flow (Paystack)
 
 1. **Initialize**: `POST /payments/initialize/` (Send `order_id`).
-2. **Result**: Backend returns an `authorization_url`. Open this in a `WebView` or `InAppBrowser`.
-3. **Verification**: Once the user finishes payment, call `GET /payments/verify/{reference}/` to confirm success.
+2. **Result**: Backend returns an `authorization_url`. Open it in an `InAppBrowser`.
+3. **Verification**: After payment, call `GET /payments/verify/{reference}/`.
 
-### 4.3 Order Tracking (Lifecycle)
+### 4.6 Order Tracking (Lifecycle)
 
-- **Status List**: `PENDING`, `CONFIRMED`, `REJECTED`, `PICKED_UP`, `IN_PROCESS`, `OUT_FOR_DELIVERY`, `DELIVERED`, `COMPLETED`.
-- **Logic**: Use a progress stepper UI. Poll `GET /orders/{id}/` every 30 seconds for real-time status updates.
+- **Status List**: `PENDING`, `CONFIRMED`, `PICKED_UP`, `IN_PROCESS`, `OUT_FOR_DELIVERY`, `DELIVERED`, `COMPLETED`.
+- **Logic**: Use a progress stepper. Fetch `GET /orders/{id}/` for real-time status.
+
+### 4.7 Ratings & Reviews
+
+1. **Viewing Ratings**:
+   - Headers return `rating` (Avg stars) and `reviewsCount`.
+2. **Submitting a Review**:
+   - **Endpoint**: `POST /api/v1/laundries/{laundry_id}/reviews/`
+   - **Payload**: `{"rating": 5, "comment": "Great!"}`
 
 ---
 
@@ -190,38 +234,3 @@ The backend now uses a Vendor-Specific Pricing architecture. Global items do not
 2. ✅ **Auth**: Removed all Clerk SDKs. Use standard Fetch/Axios.
 3. ✅ **Validation**: Handle `400` errors by displaying field-specific messages from the `data` object.
 4. ✅ **Icons**: Use the `type` field in notifications to show the correct icon (Order update vs Promo).
-
-Walkthrough: Authentication Overhaul & Production Release
-We have successfully migrated the backend from an external Clerk/OTP system to a production-ready, unified JWT authentication system. The backend is now live and fully functional.
-
-🏁 Key Accomplishments
-
-1. Simplified Authentication System
-   Clerk Removal: Eliminated all dependencies on the external Clerk service.
-   OTP/2FA Deletion: Removed the complex OTP flow to provide immediate user access upon registration.
-   Direct JWT: Implemented standard accessToken/
-   refreshToken
-   flow using SimpleJWT.
-   Auto-Verification: New users are marked as is_verified = True by default.
-2. Database & Schema Resolution
-   Missing Migrations: Fixed critical ProgrammingError issues by manually creating migrations for
-   SpecialOffer
-   and the min_order field in the
-   Laundry
-   model.
-   User Model: Cleaned up legacy fields and enforced immediate verification logic.
-3. Production Deployment (Render)
-   Zero-Downtime Migration: Successfully deployed the new system to https://connect-full-backend.onrender.com.
-   Dependency Fixes: Resolved psycopg environment issues in the Render build process.
-   🎥 Demonstration
-   Live URL: https://connect-full-backend.onrender.com
-   Admin Panel: https://connect-full-backend.onrender.com/admin/
-   📄 Documentation Handover
-   I have prepared two critical documents for your frontend developer:
-
-FRONTEND_INTEGRATION_GUIDE.md
-: A complete roadmap of every API endpoint, request schemas, and guidance on how to build the corresponding mobile screens.
-Testing Guide
-: A step-by-step Postman guide to verify the new auth flow.
-✅ Final Status
-All backend APIs are ready for integration. The system is simple, secure, and scalable.
