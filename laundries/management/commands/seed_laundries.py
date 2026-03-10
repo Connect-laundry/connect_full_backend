@@ -3,7 +3,7 @@ import uuid
 # pyre-ignore[missing-module]
 from django.core.management.base import BaseCommand
 # pyre-ignore[missing-module]
-from laundries.models import Category, Laundry, Service
+from laundries.models import Category, Laundry
 # pyre-ignore[missing-module]
 from users.models import User
 
@@ -84,13 +84,8 @@ class Command(BaseCommand):
             
             # 4. Services for each laundry
             if l_created:
-                for cat in categories:
-                    Service.objects.create(
-                        laundry=laundry,
-                        category=cat,
-                        name=f"{cat.name} Special",
-                        description=f"Our best {cat.name} service.",
-                        base_price=random.randint(10, 50)
-                    )
+                # Seeded LaundryServices will be handled via the new seed_booking.py 
+                # to map specific items to services. We skip legacy Service creation here.
+                pass
 
         self.stdout.write(self.style.SUCCESS('Successfully seeded database!'))

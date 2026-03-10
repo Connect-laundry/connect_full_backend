@@ -52,7 +52,7 @@ class DiagnosisView(APIView):
                 return f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
 
         from laundries.models.laundry import Laundry
-        from laundries.models.service import Service
+        from laundries.models.service import LaundryService
         from laundries.models.review import Review
         from laundries.models.favorite import Favorite
         from ordering.models.base import Order

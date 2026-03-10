@@ -10,8 +10,14 @@ class LaunderableItem(models.Model):
     """Global catalog of items that can be laundered (e.g., Shirt, Trouser)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
-    category = models.ForeignKey('laundries.Category', on_delete=models.CASCADE, related_name='launderable_items')
-    base_price = models.DecimalField(max_digits=10, decimal_places=2)
+    item_category = models.ForeignKey(
+        'laundries.Category', 
+        on_delete=models.CASCADE, 
+        related_name='launderable_items',
+        limit_choices_to={'type': 'ITEM_CATEGORY'},
+        null=True,
+        blank=True
+    )
     image = models.ImageField(upload_to='items/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     

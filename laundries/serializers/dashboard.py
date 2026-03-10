@@ -3,7 +3,7 @@ from rest_framework import serializers
 # pyre-ignore[missing-module]
 from ordering.models import Order
 # pyre-ignore[missing-module]
-from laundries.models.service import Service
+from laundries.models.service import LaundryService
 
 class DashboardOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='user.get_full_name', read_only=True)
@@ -32,5 +32,5 @@ class DashboardEarningsSerializer(serializers.Serializer):
 
 class ServiceStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Service
-        fields = ['is_active']
+        model = LaundryService
+        fields = ['is_available']
