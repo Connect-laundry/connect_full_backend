@@ -73,20 +73,72 @@ class BookingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['post'])
     def estimate(self, request):
-        items_inputs = request.data.get('items', [])
-        if not items_inputs:
-            return Response({"error": "items are required"}, status=status.HTTP_400_BAD_REQUEST)
-             
-        item_ids = [i.get('item') for i in items_inputs if i.get('item')]
-        items_objs = {str(item.id): item for item in LaunderableItem.objects.filter(id__in=item_ids)}
+        """
+        Provides a real-time price breakdown before the user clicks 'Confirm Order'.
+        Uses FinanceService and LaundryService for vendor-specific accuracy.
+        """
+        laundry_id = request.data.get('laundry')
+        items_data = request.data.get('items', [])
         
-        total = Decimal('0.00')
-        for entry in items_inputs:
-            item_id = str(entry.get('item'))
-            if item_id in items_objs:
-                total += Decimal(str(items_objs[item_id].base_price)) * Decimal(str(entry.get('quantity', 1)))
+        if not laundry_id or not items_data:
+            return Response(
+                {"status": "error", "message": "laundry and items are required for estimation."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 1. Create a transient order object (not saved to DB)
+        try:
+            from laundries.models.laundry import Laundry
+            laundry = Laundry.objects.get(id=laundry_id)
+        except Laundry.DoesNotExist:
+            return Response({"status": "error", "message": "Laundry not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # 2. Extract specific prices from LaundryService
+        from laundries.models.service import LaundryService
+        from ordering.models import OrderItem
         
-        return Response({"estimated_total": str(total)})
+        # We'll create a mock Order and mock OrderItems in memory
+        temp_order = Order(laundry=laundry, user=request.user)
+        
+        total_items_price = Decimal('0.00')
+        for data in items_data:
+            item_id = data.get('item')
+            service_type_id = data.get('service_type')
+            quantity = data.get('quantity', 1)
+            
+            try:
+                l_svc = LaundryService.objects.get(laundry_id=laundry_id, item_id=item_id, service_type_id=service_type_id)
+                total_items_price += l_svc.price * Decimal(str(quantity))
+            except LaundryService.DoesNotExist:
+                continue # Or handle error if item is not offered
+                
+        # 3. Use FinanceService for the full breakdown
+        from ..services.finance_service import FinanceService
+        # Note: Since calculate_price_breakdown usually queries the DB for items, 
+        # we might need a modified version or just calculate manually here if it's simpler for preview.
+        
+        # Let's do a semi-manual calculation for the preview to avoid DB order creation
+        delivery_fee = FinanceService.calculate_delivery_fee(temp_order)
+        pickup_fee = FinanceService.calculate_pickup_fee(temp_order)
+        # Platform fee & Tax logic
+        tax = FinanceService.calculate_tax_amount(total_items_price)
+        from django.conf import settings
+        platform_fee = (total_items_price * Decimal(str(settings.PLATFORM_FEE_RATE))).quantize(Decimal('0.01'))
+        
+        total = total_items_price + delivery_fee + pickup_fee + tax + platform_fee
+
+        return Response({
+            "status": "success",
+            "data": {
+                "items_total": str(total_items_price.quantize(Decimal('0.01'))),
+                "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
+                "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
+                "tax": str(tax.quantize(Decimal('0.01'))),
+                "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
+                "total": str(total.quantize(Decimal('0.01'))),
+                "currency": "GHS"
+            }
+        })
 
     @action(detail=False, methods=['post'])
     def calculate(self, request):
