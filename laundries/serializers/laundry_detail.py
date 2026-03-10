@@ -14,10 +14,26 @@ from .review import ReviewSerializer
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
     serviceType = serializers.CharField(source='service_type.name', read_only=True)
+    serviceTypeId = serializers.UUIDField(source='service_type.id', read_only=True)
+    itemCategory = serializers.CharField(source='item.item_category.name', read_only=True)
+    itemCategoryId = serializers.UUIDField(source='item.item_category.id', read_only=True)
+    itemImage = serializers.SerializerMethodField()
 
     class Meta:
         model = LaundryService
-        fields = ('id', 'itemName', 'serviceType', 'price', 'estimated_duration', 'is_available')
+        fields = (
+            'id', 'itemName', 'serviceType', 'serviceTypeId', 
+            'itemCategory', 'itemCategoryId', 'itemImage', 
+            'price', 'estimated_duration', 'is_available'
+        )
+
+    def get_itemImage(self, obj):
+        if not obj.item.image:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.item.image.url)
+        return obj.item.image.url
 
 class LaundryDetailSerializer(serializers.ModelSerializer):
     services = serializers.SerializerMethodField()
@@ -50,7 +66,7 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     def get_services(self, obj):
         services = obj.laundry_services.filter(is_available=True).select_related('item', 'service_type')
         # pyre-ignore[missing-module]
-        return LaundryServiceSerializer(services, many=True).data
+        return LaundryServiceSerializer(services, many=True, context=self.context).data
 
     def get_reviews(self, obj):
         reviews = obj.reviews.all()[:5]
