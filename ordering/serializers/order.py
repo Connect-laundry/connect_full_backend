@@ -5,9 +5,11 @@ from decimal import Decimal
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
+    item_category_name = serializers.CharField(source='item_category.name', read_only=True)
+
     class Meta:
         model = LaunderableItem
-        fields = ['id', 'name', 'category', 'base_price', 'image', 'is_active']
+        fields = ['id', 'name', 'item_category', 'item_category_name', 'image', 'is_active']
 
 class BookingSlotSerializer(serializers.ModelSerializer):
     class Meta:
@@ -93,8 +95,32 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
+        # pyre-ignore[missing-module]
+        from laundries.models.service import LaundryService
+
         for item_data in items_data:
-            OrderItem.objects.create(order=order, **item_data)
+            item_instance = item_data.get('item')
+            quantity = item_data.get('quantity', 1)
+            
+            try:
+                l_service = LaundryService.objects.get(
+                    laundry=order.laundry,
+                    item=item_instance,
+                    service_type=order.service_type
+                )
+                if not l_service.is_available:
+                     raise serializers.ValidationError(f"{item_instance.name} is not available for this service.")
+                item_price = l_service.price
+            except LaundryService.DoesNotExist:
+                raise serializers.ValidationError(f"Laundry does not offer {order.service_type.name} for {item_instance.name}")
+
+            OrderItem.objects.create(
+                order=order, 
+                item=item_instance,
+                name=item_instance.name,
+                quantity=quantity,
+                price=item_price
+            )
             
         # Now calculate real total
         # pyre-ignore[missing-module]

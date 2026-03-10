@@ -5,16 +5,19 @@ from django.db.models import Avg, Count
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
-from ..models.service import Service
+from ..models.service import LaundryService
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
 from .review import ReviewSerializer
 
-class ServiceSerializer(serializers.ModelSerializer):
+class LaundryServiceSerializer(serializers.ModelSerializer):
+    itemName = serializers.CharField(source='item.name', read_only=True)
+    serviceType = serializers.CharField(source='service_type.name', read_only=True)
+
     class Meta:
-        model = Service
-        fields = ('id', 'name', 'description', 'base_price', 'category')
+        model = LaundryService
+        fields = ('id', 'itemName', 'serviceType', 'price', 'estimated_duration', 'is_available')
 
 class LaundryDetailSerializer(serializers.ModelSerializer):
     services = serializers.SerializerMethodField()
@@ -45,10 +48,9 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
         return obj.image.url
 
     def get_services(self, obj):
-        # We'll group them by category in the view or return flat list
-        services = obj.services.filter(is_active=True).select_related('category')
+        services = obj.laundry_services.filter(is_available=True).select_related('item', 'service_type')
         # pyre-ignore[missing-module]
-        return ServiceSerializer(services, many=True).data
+        return LaundryServiceSerializer(services, many=True).data
 
     def get_reviews(self, obj):
         reviews = obj.reviews.all()[:5]

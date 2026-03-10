@@ -3,7 +3,7 @@ from django.contrib import admin
 # pyre-ignore[missing-module]
 from .models.base import Order, OrderItem
 # pyre-ignore[missing-module]
-from laundries.models import Category, Service
+from laundries.models import Category, LaundryService
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
@@ -32,8 +32,8 @@ class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
     search_fields = ('name',)
 
-@admin.register(Service)
-class ServiceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'base_price', 'laundry')
-    list_filter = ('category', 'laundry')
-    search_fields = ('name', 'description')
+@admin.register(LaundryService)
+class LaundryServiceAdmin(admin.ModelAdmin):
+    list_display = ('item', 'service_type', 'price', 'laundry')
+    list_filter = ('service_type', 'laundry')
+    search_fields = ('item__name', 'laundry__name')

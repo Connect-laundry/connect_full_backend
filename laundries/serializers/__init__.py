@@ -8,7 +8,7 @@ from .dashboard import (
 # pyre-ignore[missing-module]
 from .laundry_list import LaundryListSerializer
 # pyre-ignore[missing-module]
-from .laundry_detail import LaundryDetailSerializer, ServiceSerializer
+from .laundry_detail import LaundryDetailSerializer, LaundryServiceSerializer
 # pyre-ignore[missing-module]
 from .review import ReviewSerializer
 
@@ -19,6 +19,6 @@ __all__ = [
     'ServiceStatusUpdateSerializer',
     'LaundryListSerializer',
     'LaundryDetailSerializer',
-    'ServiceSerializer',
+    'LaundryServiceSerializer',
     'ReviewSerializer'
 ]

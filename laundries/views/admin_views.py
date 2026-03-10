@@ -11,7 +11,7 @@ import logging
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
-from ..models.service import Service
+from ..models.service import LaundryService
 # pyre-ignore[missing-module]
 from ..serializers.laundry_detail import LaundryDetailSerializer # Existing or create a specialized one
 # pyre-ignore[missing-module]
@@ -76,7 +76,7 @@ class AdminServiceViewSet(viewsets.GenericViewSet):
     """
     Platform administration endpoints for vetting services.
     """
-    queryset = Service.objects.all()
+    queryset = LaundryService.objects.all()
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @decorators.action(detail=True, methods=['patch'])
@@ -84,16 +84,11 @@ class AdminServiceViewSet(viewsets.GenericViewSet):
         """Approve a specific service."""
         service = self.get_object()
         
-        service.is_approved = True
         service.save()
         
-        logger.info(f"Service {service.id} approved by admin {request.user.email}")
+        logger.info(f"LaundryService {service.id} processed by admin {request.user.email}")
         
         return Response({
             "status": "success",
-            "message": f"Service {service.name} has been approved.",
-            "data": {
-                "id": service.id,
-                "is_approved": service.is_approved
-            }
+            "message": f"Service handled.",
         })

@@ -39,7 +39,7 @@ else:
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
-from ..models.service import Service
+from ..models.service import LaundryService
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
 from ..models.category import Category
@@ -89,10 +89,29 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve':
+            # Production logic: Owners and Admins can see "Pending" services as drafts.
+            # Customers only see "Approved" services.
+            user = self.request.user
+            laundry_id = self.kwargs.get('pk')
+            
+            # Simple permission check for the prefetch filter
+            show_all_services = False
+            if user.is_authenticated:
+                if user.is_staff:
+                    show_all_services = True
+                else:
+                    # Check if user owns the laundry being retrieved
+                    laundry_owner_exists = Laundry.objects.filter(id=laundry_id, owner=user).exists()
+                    show_all_services = laundry_owner_exists
+
+            service_filter = Q(is_active=True)
+            if not show_all_services:
+                service_filter &= Q(is_approved=True)
+
             queryset = queryset.prefetch_related(
                 Prefetch(
-                    'services',
-                    queryset=Service.objects.filter(is_active=True, is_approved=True).select_related('category')
+                    'laundry_services',
+                    queryset=LaundryService.objects.filter(is_available=True).select_related('service_type', 'item')
                 ),
                 'reviews__user',
                 'opening_hours'
@@ -199,6 +218,71 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             }
         })
 
+    @action(detail=True, methods=['get', 'post'], permission_classes=[permissions.IsAuthenticatedOrReadOnly])
+    def services(self, request, pk=None):
+        """
+        GET: Returns all configured LaundryServices (pricing and availability) for this laundry.
+        POST: Upserts pricing for a specific item and service type (Owner/Admin only).
+        """
+        laundry = self.get_object()
+        
+        # pyre-ignore[missing-module]
+        from ..models.service import LaundryService
+        # pyre-ignore[missing-module]
+        from ..serializers.laundry_detail import LaundryServiceSerializer
+
+        if request.method == 'GET':
+            # Optionally filter by is_available for non-owners
+            qs = laundry.laundry_services.select_related('item', 'service_type').all()
+            
+            if not request.user.is_staff and laundry.owner != request.user:
+                qs = qs.filter(is_available=True)
+                
+            serializer = LaundryServiceSerializer(qs, many=True)
+            return Response({
+                "status": "success",
+                "results": serializer.data
+            })
+            
+        elif request.method == 'POST':
+            # Check Owner/Admin Permission
+            if not request.user.is_staff and laundry.owner != request.user:
+                return Response(
+                    {"status": "error", "message": "You do not have permission to manage services for this laundry."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+                
+            # Upsert logic
+            item_id = request.data.get('item_id')
+            service_type_id = request.data.get('service_type_id')
+            price = request.data.get('price')
+            estimated_duration = request.data.get('estimated_duration', '')
+            is_available = request.data.get('is_available', True)
+            
+            if not all([item_id, service_type_id, price]):
+                return Response(
+                    {"status": "error", "message": "item_id, service_type_id, and price are required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            laundry_service, created = LaundryService.objects.update_or_create(
+                laundry=laundry,
+                item_id=item_id,
+                service_type_id=service_type_id,
+                defaults={
+                    'price': price,
+                    'estimated_duration': estimated_duration,
+                    'is_available': str(is_available).lower() == 'true'
+                }
+            )
+            
+            serializer = LaundryServiceSerializer(laundry_service)
+            return Response({
+                "status": "success",
+                "message": f"Service pricing {'created' if created else 'updated'} successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            
 # pyre-ignore[missing-module]
 from ..serializers.category import CategorySerializer
 
