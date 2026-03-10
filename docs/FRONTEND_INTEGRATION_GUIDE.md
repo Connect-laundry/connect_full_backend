@@ -122,18 +122,31 @@ The backend now uses a Vendor-Specific Pricing architecture. Global items do not
    - **Crucial step**: Call this endpoint when a user selects a laundry to see the actual tailored menu, prices, and exact availability for that specific vendor.
    - Example Response: `[{ "price": "15.00", "estimated_duration": "24 hours", "is_available": true, "item": { "id": "...", "name": "Shirt" }, "service_type": { "name": "Wash & Fold" } }]`
 
-### 4.2 Order Creation
+### 4.2 Order Creation (Modified for Mixed Carts)
 
 - **Endpoint**: `POST /booking/create/`
 - **Payload**:
   ```json
   {
     "laundry": "uuid",
-    "items": [{ "item": "uuid", "quantity": 2 }],
-    "slot": "uuid",
-    "notes": "Pick up at the gate"
+    "pickup_date": "2023-10-27T10:00:00Z",
+    "address": "123 Accra St",
+    "items": [
+      {
+        "item": "uuid-for-shirt",
+        "service_type": "uuid-for-wash-fold",
+        "quantity": 2
+      },
+      {
+        "item": "uuid-for-suit",
+        "service_type": "uuid-for-dry-clean",
+        "quantity": 1
+      }
+    ],
+    "special_instructions": "Pick up at the gate"
   }
   ```
+- **Logic**: You can now mix items with different service types in one order. The `service_type` is required for each item in the array so the backend can look up the correct vendor price.
 
 ### 4.2 Payment Flow (Paystack)
 

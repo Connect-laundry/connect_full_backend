@@ -55,7 +55,7 @@ class Order(models.Model):
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     laundry = models.ForeignKey('laundries.Laundry', on_delete=models.CASCADE, related_name='orders')
-    service_type = models.ForeignKey('laundries.Category', on_delete=models.SET_NULL, null=True, related_name='orders')
+    service_type = models.ForeignKey('laundries.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
@@ -114,6 +114,7 @@ class OrderItem(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     item = models.ForeignKey(LaunderableItem, on_delete=models.SET_NULL, null=True)
+    service_type = models.ForeignKey('laundries.Category', on_delete=models.SET_NULL, null=True, related_name='order_items')
     
     # Snapshot fields to preserve history if catalog items change
     name = models.CharField(max_length=100)
