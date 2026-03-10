@@ -73,8 +73,10 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 ### 3.2 Discovery Screen (Search & Map)
 
 - **Discovery**: `GET /laundries/laundries/`
-- **Nearby Filter**: Use `?nearby=true&lat=X&lng=Y&radius=10` (Radius is in km, defaults to 10. Automatically triggers high-performance spatial search and sorts by strict proximity).
-- **Logic**: If the user hasn't granted location permissions, fallback to a standard list.
+- **Nearby Filter**: Use `?nearby=true&lat=X&lng=Y&radius=10`
+  - `lat`, `lng`: User's current coordinates in decimal degrees (e.g., `5.6037`).
+  - `radius`: Search radius in km (defaults to 10).
+- **Logic**: The backend performs high-performance spatial search using PostGIS. If the user hasn't granted location permissions, fallback to a standard list.
 
 ### 3.3 Laundry Detail Screen
 
@@ -134,7 +136,9 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
         "service_type": "uuid", // IMPORTANT: Use 'serviceTypeId'
         "quantity": 2
       }
-    ]
+    ],
+    "pickup_address": "123 Office St", // Optional for calculation
+    "delivery_address": "456 Home St" // Optional for calculation
   }
   ```
 - **Note**: In the services list, `id` is the bridge record ID. Use **`itemId`** for the item and **`serviceTypeId`** for the service type in this payload.
@@ -176,7 +180,8 @@ Once the user confirms the details on the **Review Order** screen:
 {
   "laundry": "uuid",
   "pickup_date": "2023-10-27T10:00:00Z",
-  "address": "123 Accra St",
+  "pickup_address": "123 Office St",
+  "delivery_address": "456 Home St",
   "items": [
     {
       "item": "uuid-for-shirt",
@@ -189,7 +194,7 @@ Once the user confirms the details on the **Review Order** screen:
       "quantity": 1
     }
   ],
-  "special_instructions": "Pick up at the gate"
+  "special_instructions": "Pick up from office reception, deliver to main gate at home"
 }
 ```
 
@@ -218,9 +223,30 @@ Once the user confirms the details on the **Review Order** screen:
 
 ## 📈 5. DASHBOARDS
 
-### 5.1 Customer Profile
+### 5.1 Address Management
 
-- **Address Management**: `GET/POST/DELETE /addresses/`.
+To provide a seamless delivery experience, users should save their physical locations.
+
+- **List Addresses**: `GET /api/v1/addresses/`
+- **Create Address**: `POST /api/v1/addresses/`
+  - **Fields**:
+    - `label`: String (e.g., "Home", "Office").
+    - `address_line1`: String (Full street address).
+    - `city`: String (Default: "Accra").
+    - `latitude`, `longitude`: Decimal (Optional but highly recommended for the driver's map).
+    - `is_default`: Boolean (If `true`, this becomes the primary address).
+- **Update/Delete**: `PATCH/DELETE /api/v1/addresses/{id}/`
+- **Supported Cities**: `GET /api/v1/addresses/supported-cities/` (Use this to restrict address entry to cities where you actually have laundries).
+
+#### 💡 Implementation Tip for Address Entry:
+
+1. **Frontend Search**: Use the **Google Places API** (Autocomplete) to let users search for their address string.
+2. **GPS Capture**: When they select a result, Google returns the `lat` and `lng`. Save these along with the address string to the backend.
+3. **Checkout Selection**:
+   - The User should be able to select TWO addresses on the review screen: **"Pickup From"** and **"Deliver To"**.
+   - These should be sent as `pickup_address` and `delivery_address` in the `POST /api/v1/booking/create/` payload.
+   - **"Same as Pickup" Logic**: Add a checkbox that, when checked, simply copies the `pickup_address` value into the `delivery_address` field before sending the request. This avoids double entry for the user.
+
 - **Referrals**: `GET /referral/stats/` (Show "Invite Friends" earn logic).
 
 ### 5.2 Laundry Owner Dashboard
