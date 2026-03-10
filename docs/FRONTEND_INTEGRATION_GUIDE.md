@@ -165,9 +165,22 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
 To let users pick a pickup time on the **Review Order** screen:
 
 - **Endpoint**: `GET /api/v1/booking/schedule/?laundry_id={laundry_uuid}`
-- **Response**: Returns a list of `BookingSlot` objects.
-- `start_time`, `end_time`: The window for pickup.
-- `is_available`: Only show slots where this is `true`.
+- **Response**:
+  ```json
+  {
+    "status": "success",
+    "message": "Available slots fetched successfully.",
+    "data": [
+      {
+        "id": "slot-uuid",
+        "start_time": "2023-11-01T08:00:00Z",
+        "end_time": "2023-11-01T12:00:00Z",
+        "is_available": true
+      }
+    ]
+  }
+  ```
+- **Logic**: Only show slots where `is_available` is `true`.
 
 ### 4.4 Order Creation (Mixed Cart Support)
 
