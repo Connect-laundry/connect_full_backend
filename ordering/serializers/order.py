@@ -31,7 +31,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_no', 'laundryName', 
             'status', 'payment_status', 'total_amount', 
-            'pickup_date', 'delivery_date', 'address', 
+            'pickup_date', 'delivery_date', 
+            'pickup_address', 'delivery_address', 'address', 
             'special_instructions', 'items', 'created_at'
         ]
 
@@ -44,7 +45,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'laundry', 'pickup_date', 
-            'address', 'special_instructions', 'items', 'coupon_code'
+            'pickup_address', 'delivery_address',
+            'special_instructions', 'items', 'coupon_code'
         ]
 
     def validate(self, data):

@@ -16,3 +16,4 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, choices=[('SERVICE_TYPE', 'Service Type'), ('ITEM_CATEGORY', 'Item Category')], db_index=True, default='SERVICE_TYPE', max_length=20, null=True, verbose_name='type'),
         ),
     ]
+      
