@@ -31,18 +31,24 @@ class FinanceService:
         return Decimal(str(settings.DELIVERY_FEE_BASE))
 
     @staticmethod
+    def calculate_pickup_fee(order):
+        """Calculates the pickup fee for an order."""
+        return Decimal(str(getattr(order.laundry, 'pickup_fee', 0.00)))
+
+    @staticmethod
     def calculate_price_breakdown(order, coupon=None):
         """
         Calculates full financial snapshot for an order.
-        Returns dict with: items_total, delivery_fee, discount, tax, platform_fee, total
+        Returns dict with: items_total, delivery_fee, pickup_fee, discount, tax, platform_fee, total
         """
         # 1. Sum items
         items_total = order.items.aggregate(
             total=Sum(F('quantity') * F('price'))
         )['total'] or Decimal('0.00')
         
-        # 2. Delivery Fee
+        # 2. Fees
         delivery_fee = FinanceService.calculate_delivery_fee(order)
+        pickup_fee = FinanceService.calculate_pickup_fee(order)
         
         # 3. Discount
         discount = Decimal('0.00')
@@ -71,11 +77,12 @@ class FinanceService:
         platform_fee = (taxable_amount * platform_fee_rate).quantize(Decimal('0.01'))
         
         # 6. Final Total
-        total = taxable_amount + delivery_fee + tax + platform_fee
+        total = taxable_amount + delivery_fee + pickup_fee + tax + platform_fee
         
         return {
             "items_total": str(items_total.quantize(Decimal('0.01'))),
             "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
+            "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
             "discount": str(discount.quantize(Decimal('0.01'))),
             "tax": str(tax.quantize(Decimal('0.01'))),
             "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),

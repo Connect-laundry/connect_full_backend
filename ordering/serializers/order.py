@@ -19,19 +19,17 @@ class BookingSlotSerializer(serializers.ModelSerializer):
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ['id', 'item', 'name', 'quantity', 'price']
-        read_only_fields = ['id']
+        fields = ['id', 'item', 'service_type', 'name', 'quantity', 'price']
+        read_only_fields = ['id', 'name', 'price']
 
 class OrderDetailSerializer(serializers.ModelSerializer):
-    # pyre-ignore[missing-module]
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
-    serviceName = serializers.CharField(source='service_type.name', read_only=True)
     
     class Meta:
         model = Order
         fields = [
-            'id', 'order_no', 'laundryName', 'serviceName', 
+            'id', 'order_no', 'laundryName', 
             'status', 'payment_status', 'total_amount', 
             'pickup_date', 'delivery_date', 'address', 
             'special_instructions', 'items', 'created_at'
@@ -45,7 +43,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'laundry', 'service_type', 'pickup_date', 
+            'laundry', 'pickup_date', 
             'address', 'special_instructions', 'items', 'coupon_code'
         ]
 
@@ -80,8 +78,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         # Temporary order object to pass to FinanceService
         temp_order = Order(
             user=user,
-            laundry=validated_data.get('laundry'),
-            service_type=validated_data.get('service_type')
+            laundry=validated_data.get('laundry')
         )
         # We need to add items to temp_order for FinanceService
         # But FinanceService uses DB queries. So we must create the order first then update amount?
@@ -100,23 +97,28 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         for item_data in items_data:
             item_instance = item_data.get('item')
+            service_type_instance = item_data.get('service_type')
             quantity = item_data.get('quantity', 1)
             
+            if not service_type_instance:
+                 raise serializers.ValidationError(f"Service type is required for {item_instance.name}")
+
             try:
                 l_service = LaundryService.objects.get(
                     laundry=order.laundry,
                     item=item_instance,
-                    service_type=order.service_type
+                    service_type=service_type_instance
                 )
                 if not l_service.is_available:
-                     raise serializers.ValidationError(f"{item_instance.name} is not available for this service.")
+                      raise serializers.ValidationError(f"{item_instance.name} is not available for {service_type_instance.name}.")
                 item_price = l_service.price
             except LaundryService.DoesNotExist:
-                raise serializers.ValidationError(f"Laundry does not offer {order.service_type.name} for {item_instance.name}")
+                raise serializers.ValidationError(f"Laundry does not offer {service_type_instance.name} for {item_instance.name}")
 
             OrderItem.objects.create(
                 order=order, 
                 item=item_instance,
+                service_type=service_type_instance,
                 name=item_instance.name,
                 quantity=quantity,
                 price=item_price
