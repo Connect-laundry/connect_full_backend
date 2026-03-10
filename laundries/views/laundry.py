@@ -238,10 +238,11 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             if not request.user.is_staff and laundry.owner != request.user:
                 qs = qs.filter(is_available=True)
                 
-            serializer = LaundryServiceSerializer(qs, many=True)
+            serializer = LaundryServiceSerializer(qs, many=True, context={'request': request})
             return Response({
                 "status": "success",
-                "results": serializer.data
+                "message": "Laundry services retrieved successfully.",
+                "data": serializer.data
             })
             
         elif request.method == 'POST':
@@ -276,7 +277,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
             
-            serializer = LaundryServiceSerializer(laundry_service)
+            serializer = LaundryServiceSerializer(laundry_service, context={'request': request})
             return Response({
                 "status": "success",
                 "message": f"Service pricing {'created' if created else 'updated'} successfully.",
