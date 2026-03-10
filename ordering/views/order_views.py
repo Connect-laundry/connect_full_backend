@@ -101,6 +101,7 @@ class BookingViewSet(viewsets.GenericViewSet):
         temp_order = Order(laundry=laundry, user=request.user)
         
         total_items_price = Decimal('0.00')
+        errors = []
         for data in items_data:
             item_id = data.get('item')
             service_type_id = data.get('service_type')
@@ -110,7 +111,13 @@ class BookingViewSet(viewsets.GenericViewSet):
                 l_svc = LaundryService.objects.get(laundry_id=laundry_id, item_id=item_id, service_type_id=service_type_id)
                 total_items_price += l_svc.price * Decimal(str(quantity))
             except LaundryService.DoesNotExist:
-                continue # Or handle error if item is not offered
+                errors.append(f"Price not found! Ensure 'item' is the 'itemId' (NOT 'id') and 'service_type' is the 'serviceTypeId'. Failed for item: {item_id}, service: {service_type_id}")
+                
+        if errors:
+            return Response(
+                {"status": "error", "message": "Invalid item or service type IDs.", "data": {"errors": errors}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
                 
         # 3. Use FinanceService for the full breakdown
         from ..services.finance_service import FinanceService
@@ -129,6 +136,7 @@ class BookingViewSet(viewsets.GenericViewSet):
 
         return Response({
             "status": "success",
+            "message": "Price breakdown calculated successfully.",
             "data": {
                 "items_total": str(total_items_price.quantize(Decimal('0.01'))),
                 "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
