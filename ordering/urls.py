@@ -19,6 +19,8 @@ urlpatterns = [
     
     # Booking endpoints
     path('schedule/', BookingViewSet.as_view({'get': 'schedule'}), name='booking-schedule'),
+    path('calculate/', BookingViewSet.as_view({'post': 'calculate'}), name='booking-calculate'),
+    path('estimate/', BookingViewSet.as_view({'post': 'estimate'}), name='booking-estimate'),
     path('create/', BookingViewSet.as_view({'post': 'create'}), name='booking-create'),
     
     path('', include(router.urls)),
