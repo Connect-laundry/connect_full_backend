@@ -128,13 +128,22 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
   ```json
   {
     "laundry": "uuid",
-    "items": [{ "item": "uuid", "service_type": "uuid", "quantity": 2 }]
+    "items": [
+      {
+        "item": "uuid", // IMPORTANT: Use 'itemId' from the services list
+        "service_type": "uuid", // IMPORTANT: Use 'serviceTypeId'
+        "quantity": 2
+      }
+    ]
   }
   ```
-- **Response**:
+- **Note**: In the services list, `id` is the bridge record ID. Use **`itemId`** for the item and **`serviceTypeId`** for the service type in this payload.
+
+- **Response (Now Flattened)**:
   ```json
   {
     "status": "success",
+    "message": "Price breakdown calculated successfully.",
     "data": {
       "items_total": "30.00",
       "delivery_fee": "5.00",
@@ -153,8 +162,8 @@ To let users pick a pickup time on the **Review Order** screen:
 
 - **Endpoint**: `GET /api/v1/booking/schedule/?laundry_id={laundry_uuid}`
 - **Response**: Returns a list of `BookingSlot` objects.
-  - `start_time`, `end_time`: The window for pickup.
-  - `is_available`: Only show slots where this is `true`.
+- `start_time`, `end_time`: The window for pickup.
+- `is_available`: Only show slots where this is `true`.
 
 ### 4.4 Order Creation (Mixed Cart Support)
 
@@ -162,26 +171,28 @@ Once the user confirms the details on the **Review Order** screen:
 
 - **Endpoint**: `POST /api/v1/booking/create/`
 - **Payload**:
-  ```json
-  {
-    "laundry": "uuid",
-    "pickup_date": "2023-10-27T10:00:00Z",
-    "address": "123 Accra St",
-    "items": [
-      {
-        "item": "uuid-for-shirt",
-        "service_type": "uuid-for-wash-fold",
-        "quantity": 2
-      },
-      {
-        "item": "uuid-for-suit",
-        "service_type": "uuid-for-dry-clean",
-        "quantity": 1
-      }
-    ],
-    "special_instructions": "Pick up at the gate"
-  }
-  ```
+
+```json
+{
+  "laundry": "uuid",
+  "pickup_date": "2023-10-27T10:00:00Z",
+  "address": "123 Accra St",
+  "items": [
+    {
+      "item": "uuid-for-shirt",
+      "service_type": "uuid-for-wash-fold",
+      "quantity": 2
+    },
+    {
+      "item": "uuid-for-suit",
+      "service_type": "uuid-for-dry-clean",
+      "quantity": 1
+    }
+  ],
+  "special_instructions": "Pick up at the gate"
+}
+```
+
 - **Logic**: You can mix items with different service types. The backend fetches the correct vendor prices and calculates the final total securely.
 
 ### 4.5 Payment Flow (Paystack)
@@ -234,3 +245,7 @@ Once the user confirms the details on the **Review Order** screen:
 2. ✅ **Auth**: Removed all Clerk SDKs. Use standard Fetch/Axios.
 3. ✅ **Validation**: Handle `400` errors by displaying field-specific messages from the `data` object.
 4. ✅ **Icons**: Use the `type` field in notifications to show the correct icon (Order update vs Promo).
+
+```
+
+```

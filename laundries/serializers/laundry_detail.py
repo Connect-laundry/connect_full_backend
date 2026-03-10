@@ -13,6 +13,7 @@ from .review import ReviewSerializer
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
+    itemId = serializers.UUIDField(source='item.id', read_only=True)
     serviceType = serializers.CharField(source='service_type.name', read_only=True)
     serviceTypeId = serializers.UUIDField(source='service_type.id', read_only=True)
     itemCategory = serializers.CharField(source='item.item_category.name', read_only=True)
@@ -22,7 +23,7 @@ class LaundryServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaundryService
         fields = (
-            'id', 'itemName', 'serviceType', 'serviceTypeId', 
+            'id', 'itemName', 'itemId', 'serviceType', 'serviceTypeId', 
             'itemCategory', 'itemCategoryId', 'itemImage', 
             'price', 'estimated_duration', 'is_available'
         )
