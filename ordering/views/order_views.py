@@ -69,7 +69,11 @@ class BookingViewSet(viewsets.GenericViewSet):
         
         slots = BookingSlot.objects.filter(laundry_id=laundry_id, is_available=True)
         serializer = BookingSlotSerializer(slots, many=True)
-        return Response(serializer.data)
+        return Response({
+            "status": "success",
+            "message": "Available slots fetched successfully.",
+            "data": serializer.data
+        })
 
     @action(detail=False, methods=['post'])
     def estimate(self, request):
