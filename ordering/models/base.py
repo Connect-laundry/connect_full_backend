@@ -72,7 +72,12 @@ class Order(models.Model):
     pickup_date = models.DateTimeField()
     delivery_date = models.DateTimeField(null=True, blank=True)
     
-    address = models.TextField()
+    # Dual Address Support
+    pickup_address = models.TextField(null=True, blank=True)
+    delivery_address = models.TextField(null=True, blank=True)
+    
+    # Legacy field (marking as nullable for migration)
+    address = models.TextField(null=True, blank=True)
     special_instructions = models.TextField(null=True, blank=True)
     
     # Transition Timestamps
