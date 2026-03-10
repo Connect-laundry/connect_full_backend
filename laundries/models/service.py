@@ -4,30 +4,39 @@ from django.db import models
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
-class Service(models.Model):
+class LaundryService(models.Model):
+    """Bridge table mapping global items to specific laundries with custom pricing."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     laundry = models.ForeignKey(
         'laundries.Laundry',
         on_delete=models.CASCADE,
-        related_name='services'
+        related_name='laundry_services'
     )
-    category = models.ForeignKey(
+    item = models.ForeignKey(
+        'ordering.LaunderableItem',
+        on_delete=models.CASCADE,
+        related_name='laundry_services'
+    )
+    service_type = models.ForeignKey(
         'laundries.Category',
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='services'
+        on_delete=models.CASCADE,
+        related_name='laundry_services',
+        limit_choices_to={'type': 'SERVICE_TYPE'}
     )
-    name = models.CharField(_('name'), max_length=255)
-    description = models.TextField(_('description'), blank=True)
-    base_price = models.DecimalField(_('base price'), max_digits=10, decimal_places=2)
-    is_active = models.BooleanField(_('is active'), default=True)
-    is_approved = models.BooleanField(_('is approved'), default=False, db_index=True)
+    price = models.DecimalField(_('price'), max_digits=10, decimal_places=2)
+    # E.g., '24 hours', '2 days'
+    estimated_duration = models.CharField(_('estimated duration'), max_length=50, blank=True)
+    is_available = models.BooleanField(_('is available'), default=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Service')
-        verbose_name_plural = _('Services')
-        ordering = ['name']
+        verbose_name = _('Laundry Service')
+        verbose_name_plural = _('Laundry Services')
+        # A laundry can only define a specific service for a specific item once
+        unique_together = ('laundry', 'item', 'service_type')
+        ordering = ['laundry', 'item__name']
 
     def __str__(self):
-        return f"{self.name} - {self.laundry.name}"
+        return f"{self.item.name} ({self.service_type.name}) - {self.price} at {self.laundry.name}"

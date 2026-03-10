@@ -110,7 +110,19 @@ When calling the list or detail endpoints, the Laundry object follows this struc
 
 ## 🛒 4. CHECKOUT & ORDERS
 
-### 4.1 Order Creation
+### 4.1 Catalog & Vendor Pricing (New Architecture)
+
+The backend now uses a Vendor-Specific Pricing architecture. Global items do not have fixed prices. Instead, each laundry sets its own menu.
+
+1. **Global Item Catalog**: `GET /api/v1/booking/catalog/items/`
+   - Returns all launderable items without prices (e.g. "Men's Shirt").
+2. **Global Service Types**: `GET /api/v1/booking/catalog/services/`
+   - Returns service categories (e.g. "Wash & Fold", "Dry Cleaning").
+3. **Vendor Specific Menu**: `GET /api/v1/laundries/laundries/{laundry_id}/services/`
+   - **Crucial step**: Call this endpoint when a user selects a laundry to see the actual tailored menu, prices, and exact availability for that specific vendor.
+   - Example Response: `[{ "price": "15.00", "estimated_duration": "24 hours", "is_available": true, "item": { "id": "...", "name": "Shirt" }, "service_type": { "name": "Wash & Fold" } }]`
+
+### 4.2 Order Creation
 
 - **Endpoint**: `POST /booking/create/`
 - **Payload**:

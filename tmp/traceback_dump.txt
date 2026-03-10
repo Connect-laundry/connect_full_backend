@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "C:\projects\connect_new_backend\tmp\debug_mgr.py", line 9, in <module>
+    execute_from_command_line(["manage.py", "seed_booking"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\core\management\base.py", line 420, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\core\management\base.py", line 464, in execute
+    output = self.handle(*args, **options)
+  File "C:\projects\connect_new_backend\ordering\management\commands\seed_booking.py", line 91, in handle
+    item.supported_services.add(services[s_name])
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'LaunderableItem' object has no attribute 'supported_services'

@@ -24,17 +24,37 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
     Viewset for global catalog of items and services.
     Strictly filters for active items from approved/active laundries.
     """
-    queryset = LaunderableItem.objects.filter(is_active=True)
+    queryset = LaunderableItem.objects.filter(is_active=True).prefetch_related('item_category')
     serializer_class = LaunderableItemSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return super().get_queryset()
+    @action(detail=False, methods=['get'])
+    def services(self, request):
+        """Returns the list of service types (Wash, Iron, etc)"""
+# pyre-ignore[missing-module]
+        from laundries.models.category import Category
+# pyre-ignore[missing-module]
+        from laundries.serializers.category import CategorySerializer
+        services = Category.objects.filter(type='SERVICE_TYPE')
+        serializer = CategorySerializer(services, many=True)
+        return Response({
+            "status": "success",
+            "results": serializer.data
+        })
+
+    def list(self, request, *args, **kwargs):
+        # Alias for backward compatibility if /booking/services/ was pointing to list
+        return self.services(request)
 
     @action(detail=False, methods=['get'])
     def items(self, request):
-        # Already filtered by queryset, but keeping this for explicit backward compatibility if used
-        return self.list(request)
+        """Returns the actual catalog of items with supported services"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": "success",
+            "results": serializer.data
+        })
 
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""

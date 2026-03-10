@@ -13,7 +13,7 @@ from ordering.models import Order
 # pyre-ignore[missing-module]
 from laundries.models.laundry import Laundry
 # pyre-ignore[missing-module]
-from laundries.models.service import Service
+from laundries.models.service import LaundryService
 # pyre-ignore[missing-module]
 from ..serializers.dashboard import (
     DashboardOrderSerializer,
@@ -114,5 +114,5 @@ class ServiceStatusUpdateView(generics.UpdateAPIView, DashboardBaseView):
     def get_queryset(self):
         laundry = self.get_laundry(self.request)
         if not laundry:
-            return Service.objects.none()
-        return Service.objects.filter(laundry=laundry)
+            return LaundryService.objects.none()
+        return LaundryService.objects.filter(laundry=laundry)

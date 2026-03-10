@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "C:\projects\connect_new_backend\tmp\debug_import.py", line 9, in <module>
+    django.setup()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\__init__.py", line 24, in setup
+    apps.populate(settings.INSTALLED_APPS)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\apps\registry.py", line 116, in populate
+    app_config.import_models()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\odame\AppData\Roaming\Python\Python314\site-packages\django\apps\config.py", line 269, in import_models
+    self.models_module = import_module(models_module_name)
+                         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\projects\connect_new_backend\laundries\models\__init__.py", line 3, in <module>
+    from .service import Service
+ImportError: cannot import name 'Service' from 'laundries.models.service' (C:\projects\connect_new_backend\laundries\models\service.py)
