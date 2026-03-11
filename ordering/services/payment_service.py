@@ -32,6 +32,7 @@ class PaymentService:
             Payment.objects.update_or_create(
                 order=order,
                 defaults={
+                    'user': order.user,
                     'amount': amount,
                     'payment_method': payment_method,
                     'transaction_reference': reference,
