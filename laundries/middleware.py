@@ -21,16 +21,16 @@ class JSONErrorMiddleware:
         traceback.print_exc()  # Force traceback to stdout for Render logs
         logger.error(f"Unhandled exception at {request.path}: {exception}", exc_info=True)
         
-        # In production, we don't leak the exact exception string for security reasons.
-        # We only show it if DEBUG is True.
-        message = "An internal server error occurred."
-        if settings.DEBUG:
-            message = f"Server Error: {str(exception)}"
+        # Temporarily include the exact exception in the response for production debugging
+        # We will remove this once the 500 error is resolved.
+        message = f"Server Error: {str(exception)}"
             
         data = {
             "status": "error",
             "message": message,
-            "data": {}
+            "data": {
+                "traceback": traceback.format_exc()
+            }
         }
         
         return JsonResponse(data, status=500)
