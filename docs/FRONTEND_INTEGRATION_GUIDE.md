@@ -251,11 +251,17 @@ To provide a seamless delivery experience, users should save their physical loca
 - **Update/Delete**: `PATCH/DELETE /api/v1/addresses/{id}/`
 - **Supported Cities**: `GET /api/v1/addresses/supported-cities/` (Use this to restrict address entry to cities where you actually have laundries).
 
-#### 💡 Implementation Tip for Address Entry:
+#### 💡 Professional UX: Google Places + Map Integration
 
-1. **Frontend Search**: Use the **Google Places API** (Autocomplete) to let users search for their address string.
-2. **GPS Capture**: When they select a result, Google returns the `lat` and `lng`. Save these along with the address string to the backend.
-3. **Checkout Selection**:
+To ensure accuracy and a "wow" factor, implement the following flow for both Pickup and Delivery addresses:
+
+1. **Auto-Detect**: On screen load, use `expo-location` to get the user's current GPS. Show this on a **Map View** with a pin.
+2. **Autocomplete Input**: Use the **Google Places Autocomplete SDK**. As the user types, they _must_ pick an address from the dropdown suggestions.
+3. **Strict Validation**: Do not allow the user to type a random text. Force selection from the Google list. This ensures you always have the correct `address_string`, `latitude`, and `longitude`.
+4. **Interactive Map**: If the user moves the map pin manually, perform **Reverse Geocoding** (Google Maps API) to update the text input automatically.
+5. **Final Storage**: Save the validated `address_string`, `lat`, and `lng` to the backend `POST /api/v1/addresses/`.
+
+6. **Checkout Selection**:
    - The User should be able to select TWO addresses on the review screen: **"Pickup From"** and **"Deliver To"**.
    - These should be sent as `pickup_address` and `delivery_address` in the `POST /api/v1/booking/create/` payload.
    - **"Same as Pickup" Logic**: Add a checkbox that, when checked, simply copies the `pickup_address` value into the `delivery_address` field before sending the request. This avoids double entry for the user.
