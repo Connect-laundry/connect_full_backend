@@ -89,6 +89,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         coupon_obj = validated_data.pop('coupon_obj', None)
         # Discard frontend-only fields not stored on Order model
         validated_data.pop('payment_method', None)
+        validated_data.pop('coupon_code', None)
         user = self.context['request'].user
         
         # Temporary order object to pass to FinanceService
