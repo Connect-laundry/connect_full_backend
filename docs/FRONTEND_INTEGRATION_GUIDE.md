@@ -130,15 +130,19 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
   ```json
   {
     "laundry": "uuid",
+    "pickup_address": "123 Office St", // Optional for calculation
+    "pickup_lat": 5.6037, // Optional
+    "pickup_lng": -0.187, // Optional
+    "delivery_address": "456 Home St", // Optional for calculation
+    "delivery_lat": 5.6037, // Optional
+    "delivery_lng": -0.187, // Optional
     "items": [
       {
         "item": "uuid", // IMPORTANT: Use 'itemId' from the services list
         "service_type": "uuid", // IMPORTANT: Use 'serviceTypeId'
         "quantity": 2
       }
-    ],
-    "pickup_address": "123 Office St", // Optional for calculation
-    "delivery_address": "456 Home St" // Optional for calculation
+    ]
   }
   ```
 - **Note**: In the services list, `id` is the bridge record ID. Use **`itemId`** for the item and **`serviceTypeId`** for the service type in this payload.
@@ -194,7 +198,11 @@ Once the user confirms the details on the **Review Order** screen:
   "laundry": "uuid",
   "pickup_date": "2023-10-27T10:00:00Z",
   "pickup_address": "123 Office St",
+  "pickup_lat": 5.6037,
+  "pickup_lng": -0.187,
   "delivery_address": "456 Home St",
+  "delivery_lat": 5.6037,
+  "delivery_lng": -0.187,
   "items": [
     {
       "item": "uuid-for-shirt",
@@ -207,7 +215,8 @@ Once the user confirms the details on the **Review Order** screen:
       "quantity": 1
     }
   ],
-  "special_instructions": "Pick up from office reception, deliver to main gate at home"
+  "special_instructions": "Pick up from office reception, deliver to main gate at home",
+  "payment_method": "paystack"
 }
 ```
 
