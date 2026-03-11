@@ -74,7 +74,12 @@ class Order(models.Model):
     
     # Dual Address Support
     pickup_address = models.TextField(null=True, blank=True)
+    pickup_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    pickup_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    
     delivery_address = models.TextField(null=True, blank=True)
+    delivery_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    delivery_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     
     # Legacy field (marking as nullable for migration)
     address = models.TextField(null=True, blank=True)

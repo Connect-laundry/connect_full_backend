@@ -32,7 +32,9 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'id', 'order_no', 'laundryName', 
             'status', 'payment_status', 'total_amount', 
             'pickup_date', 'delivery_date', 
-            'pickup_address', 'delivery_address', 'address', 
+            'pickup_address', 'pickup_lat', 'pickup_lng',
+            'delivery_address', 'delivery_lat', 'delivery_lng',
+            'address', 
             'special_instructions', 'items', 'created_at'
         ]
 
@@ -41,12 +43,22 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     coupon_code = serializers.CharField(required=False, write_only=True)
 
+    # Accept GPS coords and payment_method from frontend
+    pickup_lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    pickup_lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    delivery_lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    delivery_lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    # payment_method accepted for future use but not saved on Order
+    payment_method = serializers.CharField(required=False, write_only=True)
+
     class Meta:
         model = Order
         fields = [
             'laundry', 'pickup_date', 
-            'pickup_address', 'delivery_address',
-            'special_instructions', 'items', 'coupon_code'
+            'pickup_address', 'pickup_lat', 'pickup_lng',
+            'delivery_address', 'delivery_lat', 'delivery_lng',
+            'special_instructions', 'items', 'coupon_code',
+            'payment_method',
         ]
 
     def validate(self, data):
@@ -75,6 +87,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         coupon_obj = validated_data.pop('coupon_obj', None)
+        # Discard frontend-only fields not stored on Order model
+        validated_data.pop('payment_method', None)
         user = self.context['request'].user
         
         # Temporary order object to pass to FinanceService
