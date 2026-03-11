@@ -97,9 +97,9 @@ MIDDLEWARE = [
 ]
 
 # Security Settings
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = os.getenv('DEBUG', 'False') == 'True'        
 
-if not DEBUG:
+if not DEBUG:    
     # SSL/HTTPS
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
