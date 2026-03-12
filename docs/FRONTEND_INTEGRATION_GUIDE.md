@@ -243,7 +243,32 @@ Once the user confirms the details on the **Review Order** screen:
 
 > **Important**: Ensure you are calling `GET /api/v1/orders/{id}/`. Do **not** use the redundant `/orders/orders/` path.
 
-### 4.7 Ratings & Reviews
+### 4.7 Receipt & Order Summary (View Receipt)
+
+The "View Receipt" screen should combine data from the **Order Detail** and the **Price Breakdown** endpoints.
+
+#### 📄 Data Fields for the UI:
+
+| Category | Unified Field Name | Description |
+| :--- | :--- | :--- |
+| **Header** | `order_no` | Human-readable ID (e.g. `ORD-8821`). |
+| | `created_at` | Date/Time of order. |
+| | `status` | Progress state (e.g. `CONFIRMED`). |
+| **Laundry** | `laundryName` | Name of the shop. |
+| **Logistics** | `pickup_date` | When the items will be picked up. |
+| | `delivery_date` | **"Ready by"** - The estimated completion time. |
+| | `pickup_address` | Physical pickup location. |
+| | `delivery_address`| Physical delivery location. |
+| **Items** | `items[]` | List including `name`, `service_type`, `quantity`, and `price`. |
+| **Money** | `items_total` | Subtotal of all items. |
+| | `discount` | Savings from coupon. |
+| | `delivery_fee` | Cost of transport. |
+| | `tax` | VAT/Tax amount. |
+| | `total` | **Final amount paid.** |
+
+> **Note**: For a professional look, ensure you show the `order_no` prominently at the top and the `delivery_date` clearly as the "Estimated Completion".
+
+### 4.8 Ratings & Reviews
 
 1. **Viewing Ratings**:
    - Headers return `rating` (Avg stars) and `reviewsCount`.
