@@ -19,20 +19,12 @@ def custom_exception_handler(exc, context):
         import traceback
         import logging
         logger = logging.getLogger(__name__)
-        
-        # Log the full traceback to stdout (Render logs)
-        print("\n=== CRITICAL API ERROR TRACEBACK ===")
-        traceback.print_exc()
-        print("=====================================\n")
-        
         logger.error(f"DRF Exception at {context['request'].path}: {str(exc)}", exc_info=True)
 
         data = {
             "status": "error",
-            "message": f"Server Error: {str(exc)}",
-            "data": {
-                "traceback": traceback.format_exc()
-            }
+            "message": "An internal server error occurred.",
+            "data": {}
         }
         return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

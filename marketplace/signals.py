@@ -1,3 +1,4 @@
+import logging
 # pyre-ignore[missing-module]
 from django.db.models.signals import post_save
 # pyre-ignore[missing-module]
@@ -9,23 +10,46 @@ from ordering.services.order_state_machine import order_status_changed
 # pyre-ignore[missing-module]
 from marketplace.tasks import create_notification
 
+logger = logging.getLogger(__name__)
+
+
+def _safe_delay(task, **kwargs):
+    """
+    Safely dispatch a Celery task.
+    If the broker (Redis) is unavailable, it falls back to synchronous execution
+    so the process still completes and the notification is created.
+    """
+    try:
+        task.delay(**kwargs)
+    except Exception as e:
+        logger.warning(
+            f"Celery broker unavailable, falling back to synchronous execution for {task.name}: {e}"
+        )
+        try:
+            # task.apply() runs the task synchronously in the current process
+            task.apply(kwargs=kwargs)
+        except Exception as sync_err:
+            logger.error(f"Synchronous fallback also failed for {task.name}: {sync_err}")
+
+
 @receiver(post_save, sender=Order)
 def notify_on_order_creation(sender, instance, created, **kwargs):
     """Notify the laundry owner when a new order is placed."""
     if created:
         owner = instance.laundry.owner
-        create_notification.delay(
-            user_id=owner.id,
+        _safe_delay(
+            create_notification,
+            user_id=str(owner.id),
             title="New Laundry Order",
             body=f"You have a new order {instance.order_no} from {instance.user.get_full_name()}.",
             notification_type='ORDER',
-            related_order_id=instance.id
+            related_order_id=str(instance.id)
         )
+
 
 @receiver(order_status_changed)
 def notify_on_status_change(sender, order, from_status, to_status, user, **kwargs):
     """Notify the customer on important order status updates."""
-    # Mapping of status to notification content
     status_content = {
         Order.Status.CONFIRMED: {
             "title": "Order Confirmed",
@@ -33,11 +57,11 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
         },
         Order.Status.PICKED_UP: {
             "title": "Laundry Picked Up",
-            "body": f"The rider has picked up your laundry from {order.address}."
+            "body": f"The rider has picked up your laundry."
         },
         Order.Status.OUT_FOR_DELIVERY: {
             "title": "Out for Delivery",
-            "body": f"Your fresh laundry is on its way to you!"
+            "body": "Your fresh laundry is on its way to you!"
         },
         Order.Status.DELIVERED: {
             "title": "Laundry Delivered",
@@ -51,11 +75,11 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
 
     if to_status in status_content:
         content = status_content[to_status]
-        # Notify the Customer
-        create_notification.delay(
-            user_id=order.user.id,
+        _safe_delay(
+            create_notification,
+            user_id=str(order.user.id),
             title=content["title"],
             body=content["body"],
             notification_type='ORDER',
-            related_order_id=order.id
+            related_order_id=str(order.id)
         )
