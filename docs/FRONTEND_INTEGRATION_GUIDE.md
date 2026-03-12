@@ -104,9 +104,11 @@ When calling the list or detail endpoints, the Laundry object follows this struc
   "isFavorite": false,
   "minOrder": "10.00",
   "deliveryFee": "5.00",
-  "estimatedDelivery": "2 hours"
+  "estimated_delivery_hours": 24
 }
 ```
+
+> **Note**: `estimated_delivery_hours` is an integer representing hours. E.g. `24` means 1 day.
 
 ---
 
@@ -228,10 +230,18 @@ Once the user confirms the details on the **Review Order** screen:
 2. **Result**: Backend returns an `authorization_url`. Open it in an `InAppBrowser`.
 3. **Verification**: After payment, call `GET /payments/verify/{reference}/`.
 
-### 4.6 Order Tracking (Lifecycle)
+### 4.6 Order Tracking & Success Screen
 
 - **Status List**: `PENDING`, `CONFIRMED`, `PICKED_UP`, `IN_PROCESS`, `OUT_FOR_DELIVERY`, `DELIVERED`, `COMPLETED`.
-- **Logic**: Use a progress stepper. Fetch `GET /orders/{id}/` for real-time status.
+- **Logic**: 
+    1. The `POST /api/v1/booking/create/` response returns the full `Order` object.
+    2. Use the `id` from that response to immediately fetch full details or track status.
+    3. **Order Detail Endpoint**: `GET /api/v1/orders/{id}/`
+    4. **Response Fields**:
+        - `order_no`: Human-readable ID (e.g. `ORD-12345`).
+        - `delivery_date`: The calculated timestamp when the laundry will be ready.
+
+> **Important**: Ensure you are calling `GET /api/v1/orders/{id}/`. Do **not** use the redundant `/orders/orders/` path.
 
 ### 4.7 Ratings & Reviews
 
