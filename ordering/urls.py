@@ -8,7 +8,7 @@ from .views import CatalogViewSet, BookingViewSet, OrderViewSet, CouponViewSet
 from .views.lifecycle import OrderLifecycleViewSet
 
 router = DefaultRouter()
-router.register(r'orders', OrderViewSet, basename='order')
+router.register(r'', OrderViewSet, basename='order')
 router.register(r'lifecycle', OrderLifecycleViewSet, basename='order-lifecycle')
 router.register(r'coupons', CouponViewSet, basename='coupon')
 
