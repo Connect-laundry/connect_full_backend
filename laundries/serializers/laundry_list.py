@@ -66,8 +66,15 @@ class LaundryListSerializer(serializers.ModelSerializer):
         current_day = now.isoweekday() # 1-7
         current_time = now.time()
         
-        # Check OpeningHours
-        oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
+        # Check OpeningHours (Optimized to use prefetched data if available)
+        # If prefetched, obj.opening_hours.all() will not hit the DB
+        opening_hours = getattr(obj, 'opening_hours', None)
+        if opening_hours is not None:
+             # Search in the prefetched list
+             oh = next((h for h in opening_hours.all() if h.day == current_day and not h.is_closed), None)
+        else:
+             oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
+             
         is_open_now = bool(oh and oh.opening_time <= current_time <= oh.closing_time)
         
         cache.set(cache_key, is_open_now, 300) # 5 minutes
