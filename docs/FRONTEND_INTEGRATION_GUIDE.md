@@ -449,6 +449,28 @@ Use this endpoint to hydrate the "Help" or "FAQ" screens.
 
 ### 7.2 Feedback Submission
 
+Users can submit general feedback, report issues, or contact support via this endpoint.
+
 - **Endpoint**: `POST /api/v1/support/help/feedback/`
-- **Fields**: `subject`, `message`, `email`.
-- **Logic**: Used for the "Contact Us" or "Report an Issue" forms.
+- **Authentication**: **Required** (Bearer Token). The feedback is automatically associated with the logged-in user.
+- **Payload**:
+  ```json
+  {
+    "subject": "App Suggestion", // Required (Max 150 chars)
+    "message": "I would love to see a dark mode toggle!" // Required
+  }
+  ```
+- **Response Format**:
+  ```json
+  {
+    "status": "success",
+    "message": "Feedback submitted successfully.",
+    "data": {
+      "id": "uuid",
+      "subject": "App Suggestion",
+      "message": "I would love to see a dark mode toggle!",
+      "created_at": "2023-11-01T10:00:00Z"
+    }
+  }
+  ```
+- **Logic**: Use this for the "Contact Us" or "Feedback" screen. Ensure both fields are validated on the client side before submission.
