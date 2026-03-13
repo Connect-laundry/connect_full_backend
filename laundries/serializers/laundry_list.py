@@ -25,14 +25,21 @@ class LaundryListSerializer(serializers.ModelSerializer):
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
     estimatedDelivery = serializers.SerializerMethodField()
     imageUrl = serializers.SerializerMethodField()
+    avgPrice = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
         fields = (
-            'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating', 
+            'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
             'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee'
+            'minOrder', 'deliveryFee', 'avgPrice'
         )
+
+    def get_avgPrice(self, obj):
+        avg = getattr(obj, 'avg_price', None)
+        if avg is not None:
+            return round(float(avg), 2)
+        return None
 
     def get_imageUrl(self, obj):
         if not obj.image:

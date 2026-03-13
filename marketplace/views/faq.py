@@ -8,9 +8,17 @@ class FAQView(views.APIView):
     
     def get(self, request):
         faqs = FAQ.objects.filter(is_active=True)
-        data = [{"question": f.question, "answer": f.answer} for f in faqs]
+        data = [
+            {
+                "id": str(f.id),
+                "question": f.question,
+                "answer": f.answer,
+                "order": f.order,
+            }
+            for f in faqs
+        ]
         return Response({
             "status": "success",
-            "message": "FAQs fetched",
+            "message": "FAQs retrieved successfully.",
             "data": data
         })
