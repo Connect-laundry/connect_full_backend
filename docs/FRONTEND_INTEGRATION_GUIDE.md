@@ -53,7 +53,8 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 - **Update Profile (including Profile Pic)**: `PATCH /auth/me/`
   - **Payload**: `multipart/form-data`
   - **Fields**: `first_name`, `last_name`, `avatar` (File)
-  - **Logic**: Use this to update user details or upload a new profile picture.
+  - **Response Structure**: Returns the updated user object wrapped in a `"user"` key, matching the `GET` endpoint.
+  - **Logic**: Use this to update user details or upload a new profile picture. This ensures your frontend state remains consistent across all profile actions.
 
 ### 2.4 Token Refresh (Silent)
 
