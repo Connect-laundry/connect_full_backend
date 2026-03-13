@@ -109,7 +109,7 @@ class DiagnosisView(APIView):
                 "pending_migrations": pending_migrations,
                 "model_health": {
                     "Laundry": check_model_deep(Laundry),
-                    "Service": check_model_deep(Service),
+                    "Service": check_model_deep(LaundryService),
                     "Review": check_model_deep(Review),
                     "Favorite": check_model_deep(Favorite),
                     "Order": check_model_deep(Order),

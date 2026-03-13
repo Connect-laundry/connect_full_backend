@@ -27,6 +27,7 @@ router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry
 router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
 
 urlpatterns = [
+    path('featured/', LaundryViewSet.as_view({'get': 'featured'}), name='laundry-featured-top'),
     path('diagnosis/', DiagnosisView.as_view(), name='diagnosis'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
