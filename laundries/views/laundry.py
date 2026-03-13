@@ -166,8 +166,15 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 safe_rating=Coalesce('rating', 0.0, output_field=FloatField()),
                 score=ExpressionWrapper(F('safe_rating') * F('reviewsCount'), output_field=FloatField())
             ).order_by('-score', '-safe_rating')
+
+        # 5. Cheapest Sorting Logic
+        cheapest = self.request.query_params.get('cheapest') == 'true'
+        if cheapest:
+            queryset = queryset.annotate(
+                avg_price=Avg('laundry_services__price')
+            ).order_by(F('avg_price').asc(nulls_last=True))
         
-        # 5. Featured Filter
+        # 6. Featured Filter
         if self.request.query_params.get('is_featured') == 'true' or self.request.query_params.get('featured') == 'true':
             queryset = queryset.filter(is_featured=True)
                 

@@ -73,6 +73,7 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 - **Featured Laundries (Recommended)**: `GET /laundries/featured/` (High-performance dedicated endpoint for featured laundries. Optimized with prefetching to avoid latency).
 - **Featured (Alternative)**: `GET /laundries/laundries/?is_featured=true` (Also supported).
 - **Recommended Laundries**: `GET /laundries/laundries/?recommended=true` (Returns laundries sorted by a computed weighted score based on their ratings and number of reviews).
+- **Cheapest Laundries**: `GET /laundries/laundries/?cheapest=true` (Returns laundries ranked from cheapest to most expensive based on their average item price across all services).
 - **Favorites**: `GET /laundries/favorites/` (Returns a list of laundries the user has favorited).
 
 > **Important Image Note**: When rendering `Laundry` items on cards, **always use the `imageUrl` property** (e.g. `item.imageUrl`) to load the image, as it provides the fully-qualified absolute URL expected by mobile Image components (not the relative `image` field).
@@ -111,11 +112,65 @@ When calling the list or detail endpoints, the Laundry object follows this struc
   "isFavorite": false,
   "minOrder": "10.00",
   "deliveryFee": "5.00",
-  "estimated_delivery_hours": 24
+  "estimated_delivery_hours": 24,
+  "avgPrice": 12.50
 }
 ```
 
 > **Note**: `estimated_delivery_hours` is an integer representing hours. E.g. `24` means 1 day.
+
+> **Note on `avgPrice`**: Present only when calling `?cheapest=true`. It is the average price (in GHS) across all launderable items offered by that laundry. Will be `null` for laundries with no configured services.
+
+### 3.5 Cheapest Category
+
+The **Cheapest** filter ranks all active laundries by their average item price, cheapest first. No AI or complex logic is needed on the frontend — just call the endpoint and render the sorted list.
+
+#### Endpoint
+
+```
+GET /laundries/laundries/?cheapest=true
+```
+
+#### How it Works
+- The backend computes `avg_price` = average of all `LaundryService.price` values for each laundry.
+- Laundries are returned **ascending** by `avg_price` (cheapest → most expensive).
+- Laundries with **no services configured** are pushed to the **very end** of the list.
+
+#### Example Response Item
+
+```json
+{
+  "id": "uuid",
+  "name": "Budget Wash Co.",
+  "avgPrice": 8.75,
+  "minOrder": "10.00",
+  "deliveryFee": "3.00",
+  "rating": 4.2,
+  "reviewsCount": 34,
+  "isOpen": true,
+  "isFavorite": false,
+  "imageUrl": "https://..."
+}
+```
+
+#### Combining with Other Filters
+
+You can chain `?cheapest=true` with any other supported filter:
+
+| Use Case | URL |
+|:---|:---|
+| Cheapest laundries only | `?cheapest=true` |
+| Cheapest near user | `?cheapest=true&nearby=true&lat=5.60&lng=-0.18` |
+| Cheapest by search term | `?cheapest=true&search=dry+clean` |
+| Cheapest with pagination | `?cheapest=true&page=2` |
+
+#### Frontend Implementation Notes
+
+1. **On selecting "Cheapest" category pill/tab**: Call `GET /laundries/laundries/?cheapest=true`.
+2. **Rank badge**: Optionally render a rank number (1st, 2nd, 3rd…) or a 🏷️ price tag badge on each card using the list index.
+3. **Show `avgPrice`**: Display it on the laundry card as **"Avg. GHS 8.75"** as a subtitle or badge.
+4. **Null handling**: If `avgPrice` is `null`, show **"Pricing TBD"** or hide the price badge.
+5. **Loading state**: Use a skeleton loader while the request is in flight — the response time is very fast (single DB query).
 
 ---
 
@@ -361,12 +416,39 @@ If you need to upload an image independently (e.g., for a support chat or a cust
     "message": "File uploaded successfully",
     "data": {
       "url": "https://res.cloudinary.com/...",
-      "filename": "uuid_hex.jpg",
       "type": "image/jpeg"
     }
   }
   ```
 
-```
+---
 
-```
+## 🙋‍♂️ 7. HELP & SUPPORT
+
+### 7.1 FAQ (Frequently Asked Questions)
+
+Use this endpoint to hydrate the "Help" or "FAQ" screens.
+
+- **Endpoint**: `GET /api/v1/support/faqs/`
+- **Logic**: No authentication required. Returns a list of active FAQs sorted by their display order.
+- **Response Format**:
+  ```json
+  {
+    "status": "success",
+    "message": "FAQs retrieved successfully.",
+    "data": [
+      {
+        "id": "uuid",
+        "question": "How long does delivery take?",
+        "answer": "Most orders are completed within 24-48 hours.",
+        "order": 1
+      }
+    ]
+  }
+  ```
+
+### 7.2 Feedback Submission
+
+- **Endpoint**: `POST /api/v1/support/help/feedback/`
+- **Fields**: `subject`, `message`, `email`.
+- **Logic**: Used for the "Contact Us" or "Report an Issue" forms.
