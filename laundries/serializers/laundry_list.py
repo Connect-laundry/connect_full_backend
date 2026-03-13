@@ -81,9 +81,9 @@ class LaundryListSerializer(serializers.ModelSerializer):
         return is_open_now
 
     def get_isFavorite(self, obj):
-        user = self.context.get('request').user
-        if user.is_authenticated:
-            return Favorite.objects.filter(user=user, laundry=obj).exists()
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            return Favorite.objects.filter(user=request.user, laundry=obj).exists()
         return False
 
     def get_estimatedDelivery(self, obj):
@@ -92,8 +92,11 @@ class LaundryListSerializer(serializers.ModelSerializer):
         
         # 1. Get user location from context if available
         request = self.context.get('request')
-        user_lat = request.query_params.get('lat') if request else None
-        user_lng = request.query_params.get('lng') if request else None
+        user_lat = None
+        user_lng = None
+        if request and hasattr(request, 'query_params'):
+            user_lat = request.query_params.get('lat')
+            user_lng = request.query_params.get('lng')
 
         # 2. Get active order count (either annotated or via cached lookup)
         # Check if already annotated (efficient)

@@ -37,33 +37,46 @@ class DeliveryEstimator:
         - Peak hour (5pm-9pm) = +15% multiplier
         - Cap at 48 hours
         """
-        base_hours = laundry.estimated_delivery_hours
-        total_minutes = base_hours * 60
+        import logging
+        logger = logging.getLogger(__name__)
 
-        # 1. Queue Delay (+10 mins per active order)
-        total_minutes += (active_order_count * 10)
+        try:
+            base_hours = laundry.estimated_delivery_hours or 24
+            total_minutes = base_hours * 60
 
-        # 2. Distance Delay (+5 mins per 5 km)
-        if user_lat is not None and user_lng is not None:
-            distance = self.calculate_haversine_distance(
-                laundry.latitude, laundry.longitude, user_lat, user_lng
-            )
-            distance_delay = (distance / 5) * 5
-            total_minutes += distance_delay
+            # 1. Queue Delay (+10 mins per active order)
+            total_minutes += (int(active_order_count or 0) * 10)
 
-        # 3. Peak Hour Surge (+15%)
-        # Peak hours: 17:00 to 21:00
-        now = timezone.localtime()
-        if 17 <= now.hour < 21:
-            total_minutes *= 1.15
+            # 2. Distance Delay (+5 mins per 5 km)
+            if user_lat is not None and user_lng is not None:
+                try:
+                    distance = self.calculate_haversine_distance(
+                        laundry.latitude, laundry.longitude, user_lat, user_lng
+                    )
+                    distance_delay = (distance / 5) * 5
+                    total_minutes += distance_delay
+                except Exception as e:
+                    logger.warning(f"Distance calculation failed for laundry {laundry.id}: {e}")
 
-        # 4. Caps
-        # Minimum is base time
-        total_minutes = max(total_minutes, base_hours * 60)
-        # Maximum cap at 48 hours
-        total_minutes = min(total_minutes, 48 * 60)
+            # 3. Peak Hour Surge (+15%)
+            # Peak hours: 17:00 to 21:00
+            try:
+                now = timezone.localtime()
+                if 17 <= now.hour < 21:
+                    total_minutes *= 1.15
+            except Exception as e:
+                logger.warning(f"Peak hour check failed: {e}")
 
-        return self.format_duration(total_minutes)
+            # 4. Caps
+            # Minimum is base time
+            total_minutes = max(total_minutes, base_hours * 60)
+            # Maximum cap at 48 hours
+            total_minutes = min(total_minutes, 48 * 60)
+
+            return self.format_duration(total_minutes)
+        except Exception as e:
+            logger.error(f"Error calculating delivery time for laundry {laundry.id}: {e}", exc_info=True)
+            return f"{laundry.estimated_delivery_hours or 24}h 0m"
 
     def format_duration(self, total_minutes):
         """Format minutes into '3h 25m' string."""
