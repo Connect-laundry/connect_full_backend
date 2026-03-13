@@ -64,7 +64,8 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 
 - **Special Offers**: `GET /support/home/special-offers/` (Returns promotional carousels/banners).
 - **Categories**: `GET /laundries/categories/` (Returns service categories like Wash & Fold, Dry Cleaning to display as pills/chips).
-- **Featured Laundries**: `GET /laundries/laundries/?is_featured=true` (Returns laundries manually curated by admins to be featured).
+- **Featured Laundries (Recommended)**: `GET /laundries/featured/` (High-performance dedicated endpoint for featured laundries. Optimized with prefetching to avoid latency).
+- **Featured (Alternative)**: `GET /laundries/laundries/?is_featured=true` (Also supported).
 - **Recommended Laundries**: `GET /laundries/laundries/?recommended=true` (Returns laundries sorted by a computed weighted score based on their ratings and number of reviews).
 - **Favorites**: `GET /laundries/favorites/` (Returns a list of laundries the user has favorited).
 

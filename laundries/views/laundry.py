@@ -81,14 +81,14 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                     'orders',
                     filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
                 )
-            )
+            ).order_by('-created_at')
         except Exception as e:
             logger.error(f"Error in Laundry base queryset: {e}")
             # Fallback to a very safe queryset if status or other fields are missing
-            queryset = Laundry.objects.all().select_related('owner')
+            queryset = Laundry.objects.all().select_related('owner').order_by('-created_at')
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
-        if self.action == 'retrieve':
+        if self.action == 'retrieve' or self.action == 'list' or self.action == 'featured':
             # Production logic: Owners and Admins can see "Pending" services as drafts.
             # Customers only see "Approved" services.
             user = self.request.user
@@ -99,7 +99,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             if user.is_authenticated:
                 if user.is_staff:
                     show_all_services = True
-                else:
+                elif laundry_id:
                     # Check if user owns the laundry being retrieved
                     laundry_owner_exists = Laundry.objects.filter(id=laundry_id, owner=user).exists()
                     show_all_services = laundry_owner_exists
@@ -108,46 +108,50 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             if not show_all_services:
                 service_filter &= Q(is_approved=True)
 
-            queryset = queryset.prefetch_related(
-                Prefetch(
-                    'laundry_services',
-                    queryset=LaundryService.objects.filter(is_available=True).select_related('service_type', 'item')
-                ),
-                'reviews__user',
-                'opening_hours'
-            )
+            prefetch_items = [
+                'opening_hours',
+            ]
+
+            if self.action == 'retrieve':
+                prefetch_items.extend([
+                    Prefetch(
+                        'laundry_services',
+                        queryset=LaundryService.objects.filter(is_available=True).select_related('service_type', 'item')
+                    ),
+                    'reviews__user',
+                ])
+
+            queryset = queryset.prefetch_related(*prefetch_items)
         
         # 3. Optimized Spatial Nearby Search Logic (only if PostGIS is enabled)
-        if not USE_POSTGIS:
-            return queryset
-            
-        nearby = self.request.query_params.get('nearby') == 'true'
-        lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
-        lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
-        radius_km = 10
-        try:
-            radius_param = self.request.query_params.get('radius')
-            if radius_param:
-                radius_km = float(radius_param)
-        except (ValueError, TypeError):
-            pass
-
-        if nearby and lat and lng:
+        if USE_POSTGIS:
+            nearby = self.request.query_params.get('nearby') == 'true'
+            lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
+            lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
+            radius_km = 10
             try:
-                # pyre-ignore[reportAttributeAccessIssue]
-                user_location = Point(float(lng), float(lat), srid=4326)
-                
-                # Spatial filter using PostGIS distance lookup (standard for Geography/Geometry)
-                # pyre-ignore[reportAttributeAccessIssue]
-                queryset = queryset.filter(location__distance_lte=(user_location, D(km=radius_km)))
-                
-                # Annotate exact distance for display (ST_Distance)
-                # pyre-ignore[reportAttributeAccessIssue]
-                queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
-                
-                logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
-            except (ValueError, TypeError, Exception) as e:
-                logger.error(f"Error in nearby search: {e}", exc_info=True)
+                radius_param = self.request.query_params.get('radius')
+                if radius_param:
+                    radius_km = float(radius_param)
+            except (ValueError, TypeError):
+                pass
+
+            if nearby and lat and lng:
+                try:
+                    # pyre-ignore[reportAttributeAccessIssue]
+                    user_location = Point(float(lng), float(lat), srid=4326)
+                    
+                    # Spatial filter using PostGIS distance lookup (standard for Geography/Geometry)
+                    # pyre-ignore[reportAttributeAccessIssue]
+                    queryset = queryset.filter(location__distance_lte=(user_location, D(km=radius_km)))
+                    
+                    # Annotate exact distance for display (ST_Distance)
+                    # pyre-ignore[reportAttributeAccessIssue]
+                    queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
+                    
+                    logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
+                except (ValueError, TypeError, Exception) as e:
+                    logger.error(f"Error in nearby search: {e}", exc_info=True)
 
         # 4. Recommended Sorting Logic
         recommended = self.request.query_params.get('recommended') == 'true'
@@ -157,13 +161,36 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 safe_rating=Coalesce('rating', 0.0, output_field=FloatField()),
                 score=ExpressionWrapper(F('safe_rating') * F('reviewsCount'), output_field=FloatField())
             ).order_by('-score', '-safe_rating')
+        
+        # 5. Featured Filter
+        if self.request.query_params.get('is_featured') == 'true' or self.request.query_params.get('featured') == 'true':
+            queryset = queryset.filter(is_featured=True)
                 
         return queryset
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == 'list' or self.action == 'featured':
             return LaundryListSerializer
         return LaundryDetailSerializer
+
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """
+        Dedicated endpoint for featured laundries.
+        """
+        queryset = self.get_queryset().filter(is_featured=True)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": "success",
+            "message": "Featured laundries retrieved successfully.",
+            "data": serializer.data
+        })
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def favorite(self, request, pk=None):
