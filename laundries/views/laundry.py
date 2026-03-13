@@ -83,9 +83,13 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             ).order_by('-created_at')
         except Exception as e:
-            logger.error(f"Error in Laundry base queryset: {e}")
-            # Fallback to a very safe queryset if status or other fields are missing
-            queryset = Laundry.objects.all().select_related('owner').order_by('-created_at')
+            logger.error(f"Error in Laundry base queryset: {e}", exc_info=True)
+            # Fallback must include same annotations to avoid Serializer errors
+            queryset = Laundry.objects.all().select_related('owner').annotate(
+                rating=Avg('reviews__rating'),
+                reviewsCount=Count('reviews'),
+                active_order_count=models.Value(0, output_field=models.IntegerField())
+            ).order_by('-created_at')
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve' or self.action == 'list' or self.action == 'featured':
@@ -106,7 +110,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
             service_filter = Q(is_active=True)
             if not show_all_services:
-                service_filter &= Q(is_approved=True)
+                # Note: LaundryService model uses 'is_available', not 'is_approved'
+                service_filter &= Q(is_available=True)
 
             prefetch_items = [
                 'opening_hours',
@@ -178,19 +183,27 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Dedicated endpoint for featured laundries.
         """
-        queryset = self.get_queryset().filter(is_featured=True)
-        
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        try:
+            queryset = self.get_queryset().filter(is_featured=True)
+            
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            "status": "success",
-            "message": "Featured laundries retrieved successfully.",
-            "data": serializer.data
-        })
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "status": "success",
+                "message": "Featured laundries retrieved successfully.",
+                "data": serializer.data
+            })
+        except Exception as e:
+            logger.error(f"Critical error in featured laundries endpoint: {e}", exc_info=True)
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching featured laundries.",
+                "data": {}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def favorite(self, request, pk=None):

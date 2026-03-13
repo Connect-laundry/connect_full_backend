@@ -46,9 +46,14 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 
 ### 2.3 Profile & "Me" Screen
 
-- **Endpoint**: `GET /auth/me/`
-- **Logic**: Call this on app start to hydrate your global user state (Zustand/Redux).
-- **Response**: Full user profile including `fullName`, `role`, and `addresses`.
+- **Fetch Profile**: `GET /auth/me/`
+  - **Logic**: Call this on app start to hydrate your global user state (Zustand/Redux).
+  - **Response**: Full user profile including `fullName`, `avatar`, and `addresses`.
+
+- **Update Profile (including Profile Pic)**: `PATCH /auth/me/`
+  - **Payload**: `multipart/form-data`
+  - **Fields**: `first_name`, `last_name`, `avatar` (File)
+  - **Logic**: Use this to update user details or upload a new profile picture.
 
 ### 2.4 Token Refresh (Silent)
 
@@ -335,6 +340,31 @@ To ensure accuracy and a "wow" factor, implement the following flow for both Pic
 2. ✅ **Auth**: Removed all Clerk SDKs. Use standard Fetch/Axios.
 3. ✅ **Validation**: Handle `400` errors by displaying field-specific messages from the `data` object.
 4. ✅ **Icons**: Use the `type` field in notifications to show the correct icon (Order update vs Promo).
+
+---
+
+## 📷 6. MEDIA & ASSETS
+
+### 6.1 Generic Media Upload
+If you need to upload an image independently (e.g., for a support chat or a custom field), use the generic upload endpoint.
+
+- **Endpoint**: `POST /media/upload/`
+- **Payload**: `multipart/form-data`
+- **Fields**: 
+  - `file`: The image file (Required).
+  - `folder`: String (Optional, e.g., "support", "avatars").
+- **Response**:
+  ```json
+  {
+    "status": "success",
+    "message": "File uploaded successfully",
+    "data": {
+      "url": "https://res.cloudinary.com/...",
+      "filename": "uuid_hex.jpg",
+      "type": "image/jpeg"
+    }
+  }
+  ```
 
 ```
 
