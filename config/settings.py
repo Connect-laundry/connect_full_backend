@@ -173,11 +173,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 db_scheme = 'postgis' if USE_POSTGIS else 'postgres'
 default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'connect_db')}"
 
+# Determine if SSL is required for the database
+# By default, SSL is required if DEBUG is False (production)
+# Use DATABASE_SSL_REQUIRE environmental variable to override (e.g., in CI)
+DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', str(not DEBUG)).lower() == 'true'
+
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', default_db_url),
         conn_max_age=600,
-        ssl_require=not DEBUG
+        ssl_require=DATABASE_SSL_REQUIRE
     )
 }
 
