@@ -57,7 +57,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'cloudinary_storage',
-    'django.contrib.postgres',
 
     'rest_framework',
     'drf_spectacular',
@@ -79,6 +78,10 @@ INSTALLED_APPS += [
     'django_celery_results',
     'rest_framework_simplejwt.token_blacklist',
 ]
+
+# Add postgres support only if we are not using SQLite
+if 'sqlite' not in DATABASES['default']['ENGINE']:
+    INSTALLED_APPS.append('django.contrib.postgres')
 
 MIDDLEWARE = [
     'laundries.middleware.JSONErrorMiddleware',

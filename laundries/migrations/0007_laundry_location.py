@@ -1,4 +1,7 @@
+# pyre-ignore[missing-module]
 from django.db import migrations
+# pyre-ignore[missing-module]
+import os
 
 
 def add_postgis_location(apps, schema_editor):
