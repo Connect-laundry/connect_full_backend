@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 import logging
+from django.conf import settings
 from payments.services.paystack import PaystackService
 
 logger = logging.getLogger(__name__)
