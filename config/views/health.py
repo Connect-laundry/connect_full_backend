@@ -19,7 +19,8 @@ def health_check(request):
     components_status = {
         "database": "down",
         "redis": "down",
-        "celery": "down"
+        "celery": "down",
+        "storage": "down"
     }
     
     health_status = {
@@ -29,8 +30,9 @@ def health_check(request):
     
     # 1. Check Database (Essential)
     try:
-        db_conn = connections['default']
-        db_conn.cursor()
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
         components_status['database'] = "up"
     except (OperationalError, Exception) as e:
         health_status['status'] = "down"
