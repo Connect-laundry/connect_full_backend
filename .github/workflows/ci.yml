@@ -96,11 +96,12 @@ jobs:
     - name: Build & Health Check (Docker Smoke Test)
       run: |
         docker build -t connect-backend:latest .
-        docker run -d --name smoke-test -p 8000:8000 \
+        docker run -d --name smoke-test -p 10000:10000 \
           -e SECRET_KEY=smoke-test-key \
           -e DEBUG=True \
+          -e PORT=10000 \
           -e DATABASE_URL=sqlite:///:memory: \
           connect-backend:latest
         sleep 10
-        curl -f http://localhost:8000/health/ || (docker logs smoke-test && exit 1)
+        curl -f http://localhost:10000/health/ || (docker logs smoke-test && exit 1)
         docker stop smoke-test && docker rm smoke-test

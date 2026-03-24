@@ -45,9 +45,12 @@ USER django
 
 # Healthcheck to ensure the container is responding
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD curl -f http://localhost:8000/api/v1/support/faqs/ || exit 1
+  CMD curl -f http://localhost:${PORT}/api/v1/support/faqs/ || exit 1
 
-EXPOSE 8000
+# Render will set $PORT, but we provide a default for local testing
+ENV PORT=10000
+EXPOSE ${PORT}
 
 # Use a shell script for entrypoint to handle migrations and static files
-CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 config.wsgi:application"]
+# We bind to $PORT for Render compatibility
+CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 config.wsgi:application"]
