@@ -211,7 +211,7 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
   ```
 - **Note**: In the services list, `id` is the bridge record ID. Use **`itemId`** for the item and **`serviceTypeId`** for the service type in this payload.
 
-- **Response (Now Flattened)**:
+- **Response (Standardized)**:
   ```json
   {
     "status": "success",
@@ -223,7 +223,7 @@ Before the user clicks "Confirm Order", use this endpoint to show them the full 
       "tax": "1.50",
       "platform_fee": "0.60",
       "total": "39.10",
-      "currency": "GHS"
+      "currency": "GHS" // Configurable via backend settings
     }
   }
   ```
@@ -329,6 +329,15 @@ The "View Receipt" screen should combine data from the **Order Detail** and the 
 | | `total` | **Final amount paid.** |
 
 > **Note**: For a professional look, ensure you show the `order_no` prominently at the top and the `delivery_date` clearly as the "Estimated Completion".
+
+---
+
+## 🎁 5. LOYALTY & REWARDS
+
+### 5.1 Loyalty Points
+Users now earn points for usage.
+- **Award Logic**: 10 points are automatically awarded when an order status reaches `COMPLETED`.
+- **Viewing Points**: Available in the user profile `GET /auth/me/` under the `loyalty_points` field (or similar profile extension).
 
 ### 4.8 Ratings & Reviews
 

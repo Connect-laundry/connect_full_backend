@@ -21,7 +21,7 @@ class PaystackService:
     def initialize_transaction(self, email, amount, reference, metadata=None):
         """
         Initialize a payment transaction.
-        Amount should be in kobo (NGN * 100).
+        Amount should be in the lowest currency unit (e.g., kobo for NGN, pesewas for GHS).
         """
         endpoint = f"{self.base_url}/transaction/initialize"
         payload = {

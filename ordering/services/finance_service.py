@@ -87,5 +87,5 @@ class FinanceService:
             "tax": str(tax.quantize(Decimal('0.01'))),
             "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
             "total": str(total.quantize(Decimal('0.01'))),
-            "currency": "GHS" # Standardized
+            "currency": getattr(settings, 'CURRENCY', 'GHS')
         }

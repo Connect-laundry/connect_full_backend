@@ -10,6 +10,8 @@ from .notification import Notification
 from .legal import LegalDocument
 # pyre-ignore[missing-module]
 from .special_offer import SpecialOffer
+# pyre-ignore[missing-module]
+from .loyalty import LoyaltyPoint, LoyaltyTransaction
 
 __all__ = [
     'FAQ',
@@ -18,4 +20,6 @@ __all__ = [
     'Notification',
     'LegalDocument',
     'SpecialOffer',
+    'LoyaltyPoint',
+    'LoyaltyTransaction',
 ]

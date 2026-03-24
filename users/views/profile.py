@@ -45,14 +45,22 @@ class AddressViewSet(viewsets.ModelViewSet):
 
 class LogoutView(APIView):
     """
-    Simulated logout. 
-    In JWT setup, typicallyhandled on client side by deleting the token.
-    This endpoint can be used to blacklist tokens if using SimpleJWT's blacklist app.
+    Blacklist the refresh token to log out the user.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
+        try:
+            from rest_framework_simplejwt.tokens import RefreshToken
+            refresh_token = request.data.get("refreshToken") or request.data.get("refresh")
+            if not refresh_token:
+                return Response({"detail": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class SupportedCitiesView(APIView):
     """Returns a list of unique cities where laundries are available."""
