@@ -22,10 +22,6 @@ class Migration(migrations.Migration):
             model_name='coupon',
             name='ordering_co_is_acti_f554d0_idx',
         ),
-        migrations.RemoveIndex(
-            model_name='coupon',
-            name='ordering_co_expires_e55a2f_idx',
-        ),
         migrations.AlterField(
             model_name='coupon',
             name='max_usage',
