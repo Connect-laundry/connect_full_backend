@@ -90,10 +90,14 @@ jobs:
         DB_HOST: localhost
         DB_PORT: 5432
         SECRET_KEY: test-secret-key
-        DEBUG: True
+        DEBUG: "true"
         DATABASE_SSL_REQUIRE: 'False'
       run: |
-        python manage.py makemigrations --check --dry-run || (echo "Migrations are out of sync with models! Please run makemigrations locally." && exit 1)
+        # Run check and capture output
+        if ! python manage.py makemigrations --check --dry-run; then
+          echo "::error::Migrations are out of sync with models or a system check failed! Please run 'python manage.py makemigrations' locally and commit the changes."
+          exit 1
+        fi
 
     - name: Build & Health Check (Docker Smoke Test)
       run: |

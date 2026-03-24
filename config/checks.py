@@ -8,10 +8,11 @@ def check_production_env_vars(app_configs, **kwargs):
     import sys
     from django.conf import settings
     
-    # Skip checks if running tests or if DEBUG is explicitly True
+    # Skip checks if running tests, makemigrations, or if DEBUG is explicitly True
     IS_TESTING = 'test' in sys.argv or 'pytest' in sys.argv[0]
+    IS_MANAGEMENT_TASK = any(arg in sys.argv for arg in ['makemigrations', 'migrate', 'check'])
     
-    if not settings.DEBUG and not IS_TESTING:
+    if not settings.DEBUG and not IS_TESTING and not IS_MANAGEMENT_TASK:
         critical_vars = [
             'SECRET_KEY',
             'DATABASE_URL',
