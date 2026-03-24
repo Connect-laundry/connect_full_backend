@@ -100,7 +100,7 @@ jobs:
           -e SECRET_KEY=smoke-test-key \
           -e DEBUG=True \
           -e PORT=10000 \
-          -e DATABASE_URL=sqlite:///:memory: \
+          -e DATABASE_URL=sqlite:////tmp/db.sqlite3 \
           connect-backend:latest
         sleep 10
         curl -f http://localhost:10000/health/ || (docker logs smoke-test && exit 1)
