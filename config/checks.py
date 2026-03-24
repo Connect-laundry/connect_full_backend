@@ -5,12 +5,13 @@ from django.core.checks import Error, register
 def check_production_env_vars(app_configs, **kwargs):
     errors = []
     
-    # Only run these checks if NOT in DEBUG mode (production)
-    # However, it's often useful to run them in dev too, but with warnings.
-    # We'll enforce them for production.
-    DEBUG = os.getenv('DEBUG', 'False') == 'True'
+    import sys
+    from django.conf import settings
     
-    if not DEBUG:
+    # Skip checks if running tests or if DEBUG is explicitly True
+    IS_TESTING = 'test' in sys.argv or 'pytest' in sys.argv[0]
+    
+    if not settings.DEBUG and not IS_TESTING:
         critical_vars = [
             'SECRET_KEY',
             'DATABASE_URL',
