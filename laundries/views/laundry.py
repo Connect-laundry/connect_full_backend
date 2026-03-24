@@ -42,6 +42,7 @@ from ..models.laundry import Laundry
 from ..models.service import LaundryService
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
+# pyre-ignore[missing-module]
 from ..models.category import Category
 # pyre-ignore[missing-module]
 from ..models.opening_hours import OpeningHours
@@ -157,6 +158,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         # 4. Recommended Sorting Logic
         recommended = self.request.query_params.get('recommended') == 'true'
         if recommended:
+            # pyre-ignore[missing-module]
             from django.db.models.functions import Coalesce
             queryset = queryset.annotate(
                 safe_rating=Coalesce('rating', 0.0, output_field=FloatField()),
