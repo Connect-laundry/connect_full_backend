@@ -87,6 +87,8 @@ jobs:
         DB_PASSWORD: password
         DB_HOST: localhost
         DB_PORT: 5432
+        SECRET_KEY: test-secret-key
+        DEBUG: True
         DATABASE_SSL_REQUIRE: 'False'
       run: |
         python manage.py makemigrations --check --dry-run || (echo "Migrations are out of sync with models! Please run makemigrations locally." && exit 1)
