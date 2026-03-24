@@ -64,7 +64,7 @@ jobs:
         DB_PORT: 5432
         REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test-secret-key
-        DEBUG: False
+        DEBUG: True
         DATABASE_SSL_REQUIRE: 'False'
       run: |
         python manage.py test

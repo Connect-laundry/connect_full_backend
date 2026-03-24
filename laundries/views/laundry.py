@@ -69,6 +69,10 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
+        # Prevent premature database hits during schema generation or discovery
+        if getattr(self, 'swagger_fake_view', False):
+            return Laundry.objects.none()
+
         # 1. Base queryset with essential annotations
         queryset = Laundry.objects.filter(
             status=Laundry.ApprovalStatus.APPROVED,
