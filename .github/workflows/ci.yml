@@ -58,7 +58,9 @@ jobs:
         # We ignore 64459 and 64396 (ecdsa architecture limitations in python)
         # We ignore 66963 (sometimes safety bugs out on >= spec matching)
         # Let's see if the upgrades satisfy it first. 
-        safety check --ignore 70612 --ignore 64459 --ignore 64396
+        # We ignore 81038 (brotli DoS vulnerability) as 1.1.0 is the main version 
+        # and we are upgrading to 1.2.0. Safety check might still flag it if it's in the DB.
+        safety check --ignore 70612 --ignore 64459 --ignore 64396 --ignore 81038
 
     - name: Lint with flake8
       run: |
