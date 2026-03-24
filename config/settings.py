@@ -79,10 +79,6 @@ INSTALLED_APPS += [
     'rest_framework_simplejwt.token_blacklist',
 ]
 
-# Add postgres support only if we are not using SQLite
-if 'sqlite' not in DATABASES['default']['ENGINE']:
-    INSTALLED_APPS.append('django.contrib.postgres')
-
 MIDDLEWARE = [
     'laundries.middleware.JSONErrorMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -192,6 +188,10 @@ DATABASES = {
 # Set the appropriate database engine to PostGIS only if we're using PostgreSQL and POSTGIS is enabled
 if USE_POSTGIS and DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+
+# Add postgres support only if we are not using SQLite
+if 'sqlite' not in DATABASES['default']['ENGINE'] and 'django.contrib.postgres' not in INSTALLED_APPS:
+    INSTALLED_APPS.append('django.contrib.postgres')
 
 
 # Password validation
