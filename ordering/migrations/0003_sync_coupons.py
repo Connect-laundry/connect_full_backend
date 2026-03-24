@@ -27,6 +27,13 @@ class Migration(migrations.Migration):
             old_name='min_order_amount',
             new_name='min_order_value',
         ),
+        # Remove the expires_at index BEFORE renaming the field.
+        # SQLite's _remake_table recreates all indexes during RenameField,
+        # which fails if the index references an old field name.
+        migrations.RemoveIndex(
+            model_name='coupon',
+            name='ordering_co_expires_e55a2f_idx',
+        ),
         migrations.RenameField(
             model_name='coupon',
             old_name='expires_at',
