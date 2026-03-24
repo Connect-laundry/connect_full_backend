@@ -108,6 +108,24 @@ jobs:
           -e PORT=10000 \
           -e DATABASE_URL=sqlite:////tmp/db.sqlite3 \
           connect-backend:latest
-        sleep 10
-        curl -f http://localhost:10000/health/ || (docker logs smoke-test && exit 1)
+        
+        # Wait up to 75 seconds for the health endpoint
+        HEALTH_CHECK_PASSED=false
+        for i in {1..15}; do
+          if curl -s -f http://localhost:10000/health/ > /dev/null; then
+            echo "Service is healthy!"
+            HEALTH_CHECK_PASSED=true
+            break
+          fi
+          echo "Waiting for service to start... ($i/15)"
+          sleep 5
+        done
+        
+        if [ "$HEALTH_CHECK_PASSED" = false ]; then
+          echo "Service failed to start in time or health check failed."
+          docker logs smoke-test
+          docker stop smoke-test && docker rm smoke-test
+          exit 1
+        fi
+        
         docker stop smoke-test && docker rm smoke-test
