@@ -186,11 +186,9 @@ DATABASES = {
     )
 }
 
-# Set the appropriate database engine
-if USE_POSTGIS:
+# Set the appropriate database engine to PostGIS only if we're using PostgreSQL and POSTGIS is enabled
+if USE_POSTGIS and DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
-else:
-    DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
 
 # Password validation
