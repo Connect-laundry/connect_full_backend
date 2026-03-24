@@ -77,6 +77,7 @@ INSTALLED_APPS += [
     'payments',
     'laundries',
     'django_celery_results',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 MIDDLEWARE = [
@@ -114,6 +115,16 @@ if not DEBUG:
     # Misc
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
+
+    # Sentry Configuration
+    SENTRY_DSN = os.getenv('SENTRY_DSN')
+    if SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration(), CeleryIntegration()],
+            traces_sample_rate=1.0,
+            send_default_pii=True
+        )
 
 # Data limits
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
@@ -291,7 +302,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
@@ -389,4 +400,8 @@ PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
 DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
 PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
+
+# Currency Settings
+CURRENCY = os.getenv('CURRENCY', 'GHS')
+CURRENCY_SYMBOL = os.getenv('CURRENCY_SYMBOL', '₵')
 

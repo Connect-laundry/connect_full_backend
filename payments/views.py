@@ -70,7 +70,7 @@ class PaymentInitializeView(APIView):
                     user=request.user,
                     order=order,
                     amount=order.total_amount,
-                    currency='NGN',
+                    currency=getattr(settings, 'CURRENCY', 'GHS'),
                     transaction_reference=reference,
                     payment_method=payment_method,
                     status=Payment.Status.PENDING,

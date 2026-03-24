@@ -43,6 +43,11 @@ RUN addgroup --system django && adduser --system --group django
 RUN chown -R django:django /app
 USER django
 
+# Healthcheck to ensure the container is responding
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl -f http://localhost:8000/api/v1/support/faqs/ || exit 1
+
 EXPOSE 8000
 
-CMD bash -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 config.wsgi:application"
+# Use a shell script for entrypoint to handle migrations and static files
+CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 config.wsgi:application"]

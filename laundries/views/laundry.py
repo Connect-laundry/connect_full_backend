@@ -69,27 +69,19 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        try:
-            # 1. Base queryset with essential annotations
-            queryset = Laundry.objects.filter(
-                status=Laundry.ApprovalStatus.APPROVED,
-                is_active=True
-            ).select_related('owner').annotate(
-                rating=Avg('reviews__rating'),
-                reviewsCount=Count('reviews'),
-                active_order_count=Count(
-                    'orders',
-                    filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
-                )
-            ).order_by('-created_at')
-        except Exception as e:
-            logger.error(f"Error in Laundry base queryset: {e}", exc_info=True)
-            # Fallback must include same annotations to avoid Serializer errors
-            queryset = Laundry.objects.all().select_related('owner').annotate(
-                rating=Avg('reviews__rating'),
-                reviewsCount=Count('reviews'),
-                active_order_count=models.Value(0, output_field=models.IntegerField())
-            ).order_by('-created_at')
+        # 1. Base queryset with essential annotations
+        queryset = Laundry.objects.filter(
+            status=Laundry.ApprovalStatus.APPROVED,
+            is_active=True
+        ).select_related('owner').annotate(
+            rating=Avg('reviews__rating'),
+            reviewsCount=Count('reviews', distinct=True),
+            active_order_count=Count(
+                'orders',
+                filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']),
+                distinct=True
+            )
+        ).order_by('-created_at')
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve' or self.action == 'list' or self.action == 'featured':

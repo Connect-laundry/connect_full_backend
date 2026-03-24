@@ -39,7 +39,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = CategorySerializer(services, many=True)
         return Response({
             "status": "success",
-            "results": serializer.data
+            "data": serializer.data
         })
 
     def list(self, request, *args, **kwargs):
@@ -53,7 +53,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response({
             "status": "success",
-            "results": serializer.data
+            "data": serializer.data
         })
 
 class BookingViewSet(viewsets.GenericViewSet):
@@ -148,7 +148,7 @@ class BookingViewSet(viewsets.GenericViewSet):
                 "tax": str(tax.quantize(Decimal('0.01'))),
                 "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
                 "total": str(total.quantize(Decimal('0.01'))),
-                "currency": "GHS"
+                "currency": getattr(settings, 'CURRENCY', 'GHS')
             }
         })
 
@@ -178,7 +178,11 @@ class OrderViewSet(viewsets.ModelViewSet):
     throttle_scope = 'burst_user'
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).prefetch_related('items')
+        return Order.objects.filter(user=self.request.user).prefetch_related(
+            'items__item', 
+            'items__service_type',
+            'status_history'
+        ).select_related('laundry', 'laundry__owner', 'coupon')
 
     def get_serializer_class(self):
         if self.action in ['list', 'retrieve']:
@@ -237,7 +241,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({
             "status": "success",
             "count": len(serializer.data),
-            "results": serializer.data
+            "data": serializer.data
         })
 
 class CouponViewSet(viewsets.GenericViewSet):

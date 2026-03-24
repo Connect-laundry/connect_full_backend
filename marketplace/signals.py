@@ -49,7 +49,7 @@ def notify_on_order_creation(sender, instance, created, **kwargs):
 
 @receiver(order_status_changed)
 def notify_on_status_change(sender, order, from_status, to_status, user, **kwargs):
-    """Notify the customer on important order status updates."""
+    """Notify the customer on important order status updates and award loyalty points."""
     status_content = {
         Order.Status.CONFIRMED: {
             "title": "Order Confirmed",
@@ -59,20 +59,33 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
             "title": "Laundry Picked Up",
             "body": f"The rider has picked up your laundry."
         },
+        Order.Status.IN_PROCESS: {
+            "title": "Washing Started",
+            "body": "Your laundry is now being processed."
+        },
         Order.Status.OUT_FOR_DELIVERY: {
             "title": "Out for Delivery",
-            "body": "Your fresh laundry is on its way to you!"
+            "body": "Your fresh laundry is on its way back to you!"
         },
         Order.Status.DELIVERED: {
             "title": "Laundry Delivered",
-            "body": "Your order has been delivered. Thank you for choosing Connect Laundry!"
+            "body": "Your order has been delivered successfully. Thank you for choosing Connect Laundry!"
+        },
+        Order.Status.COMPLETED: {
+            "title": "Order Completed",
+            "body": "Thank you for using Connect Laundry! You've earned loyalty points."
         },
         Order.Status.CANCELLED: {
             "title": "Order Cancelled",
             "body": f"Order {order.order_no} has been cancelled."
+        },
+        Order.Status.REJECTED: {
+            "title": "Order Rejected",
+            "body": f"The laundry has rejected your order."
         }
     }
 
+    # 1. Dispatch Notification
     if to_status in status_content:
         content = status_content[to_status]
         _safe_delay(
@@ -83,3 +96,24 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
             notification_type='ORDER',
             related_order_id=str(order.id)
         )
+
+    # 2. Award Loyalty Points on Completion
+    if to_status == Order.Status.COMPLETED:
+        try:
+            from marketplace.models.loyalty import LoyaltyPoint, LoyaltyTransaction
+            profile, _ = LoyaltyPoint.objects.get_or_create(user=order.user)
+            
+            # Award 10 points per order for now
+            points_to_award = 10
+            profile.points += points_to_award
+            profile.total_earned += points_to_award
+            profile.save()
+            
+            LoyaltyTransaction.objects.create(
+                loyalty_profile=profile,
+                amount=points_to_award,
+                description=f"Points earned from Order {order.order_no}"
+            )
+            logger.info(f"Awarded {points_to_award} points to {order.user.email}")
+        except Exception as e:
+            logger.error(f"Failed to award loyalty points for order {order.id}: {e}")

@@ -43,7 +43,7 @@ class PaymentService:
             return {
                 "transaction_id": reference,
                 "amount": str(amount),
-                "currency": "GHS",
+                "currency": getattr(settings, 'CURRENCY', 'GHS'),
                 "status": "PENDING",
                 "authorization_url": data.get('authorization_url'),
                 "access_code": data.get('access_code')

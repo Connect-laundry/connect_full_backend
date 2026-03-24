@@ -81,14 +81,20 @@ class AdminServiceViewSet(viewsets.GenericViewSet):
 
     @decorators.action(detail=True, methods=['patch'])
     def approve(self, request, pk=None):
-        """Approve a specific service."""
+        """Approve a specific service and make it available."""
         service = self.get_object()
         
-        service.save()
-        
-        logger.info(f"LaundryService {service.id} processed by admin {request.user.email}")
+        with transaction.atomic():
+            service.is_available = True
+            service.save()
+            
+            logger.info(f"LaundryService {service.id} approved by admin {request.user.email}")
         
         return Response({
             "status": "success",
-            "message": f"Service handled.",
+            "message": f"Service {service.item.name} for {service.laundry.name} has been approved.",
+            "data": {
+                "id": str(service.id),
+                "is_available": service.is_available
+            }
         })
