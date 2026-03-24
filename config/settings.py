@@ -77,11 +77,13 @@ INSTALLED_APPS += [
     'laundries',
     'django_celery_results',
     'rest_framework_simplejwt.token_blacklist',
+    'axes',
 ]
 
 MIDDLEWARE = [
     'laundries.middleware.JSONErrorMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -94,6 +96,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'config.middleware.request_id.RequestIDMiddleware',
+    'csp.middleware.CSPMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
 
 # Security Settings
@@ -298,6 +302,13 @@ SPECTACULAR_SETTINGS = {
 
 CACHES = {
     'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    },
+    'clerk-jwks-cache': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'clerk-jwks-cache',
     }
@@ -319,7 +330,7 @@ SIMPLE_JWT = {
 
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'django-db')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -410,4 +421,25 @@ PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% c
 # Currency Settings
 CURRENCY = os.getenv('CURRENCY', 'GHS')
 CURRENCY_SYMBOL = os.getenv('CURRENCY_SYMBOL', '₵')
+
+# --- Security: Brute Force Protection (Axes) ---
+AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', 5))
+AXES_COOLOFF_TIME = timedelta(minutes=int(os.getenv('AXES_COOLOFF_MINUTES', 15)))
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = None # Use default or custom
+AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# --- Security: Content Security Policy (CSP) ---
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'")
+CSP_IMG_SRC = ("'self'", "data:", "https://res.cloudinary.com")
+CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
+CSP_CONNECT_SRC = ("'self'", "https://sentry.io")
+CSP_FRAME_ANCESTORS = ("'none'",)
+CSP_REPORT_ONLY = DEBUG # Only report during dev, enforce in prod
 

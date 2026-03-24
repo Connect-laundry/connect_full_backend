@@ -46,3 +46,6 @@ vine==5.1.0
 wcwidth==0.6.0
 whitenoise==6.7.0
 requests>=2.32.4
+django-axes==6.1.1
+django-csp==3.8
+brotli==1.1.0

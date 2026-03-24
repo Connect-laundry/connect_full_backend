@@ -1,3 +1,2 @@
-from .celery import app as celery_app
-
-__all__ = ('celery_app',)
+# This ensures that our custom checks are registered when Django starts.
+from . import checks
