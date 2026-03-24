@@ -46,16 +46,23 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-django flake8
+        pip install pytest pytest-django flake8 bandit safety pytest-cov
+
+    - name: Security Audit (Bandit)
+      run: |
+        bandit -r . -x ./tests,./scripts -ll
+
+    - name: Dependency Scan (Safety)
+      run: |
+        # We ignore 70612 (psycopg2) as we use psycopg[binary] 3.x for most work
+        safety check --ignore 70612
 
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings.
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Run Tests
+    - name: Run Tests with Coverage
       env:
         DB_NAME: connect_test
         DB_USER: postgres
@@ -67,8 +74,28 @@ jobs:
         DEBUG: True
         DATABASE_SSL_REQUIRE: 'False'
       run: |
-        python manage.py test
+        coverage run manage.py test
+        coverage report --fail-under=40
 
-    - name: Build Docker Image (Smoke Test)
+    - name: Verify Migrations are in Sync
+      env:
+        DB_NAME: connect_test
+        DB_USER: postgres
+        DB_PASSWORD: password
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DATABASE_SSL_REQUIRE: 'False'
+      run: |
+        python manage.py makemigrations --check --dry-run || (echo "Migrations are out of sync with models! Please run makemigrations locally." && exit 1)
+
+    - name: Build & Health Check (Docker Smoke Test)
       run: |
         docker build -t connect-backend:latest .
+        docker run -d --name smoke-test -p 8000:8000 \
+          -e SECRET_KEY=smoke-test-key \
+          -e DEBUG=True \
+          -e DATABASE_URL=sqlite:///:memory: \
+          connect-backend:latest
+        sleep 10
+        curl -f http://localhost:8000/health/ || (docker logs smoke-test && exit 1)
+        docker stop smoke-test && docker rm smoke-test
