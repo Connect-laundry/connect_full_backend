@@ -15,8 +15,6 @@ services:
         value: "10000"
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
-      - key: REDIS_URL
-        sync: false
       - key: DJANGO_LOG_LEVEL
         value: INFO
       - key: CLOUDINARY_URL
@@ -37,33 +35,3 @@ services:
         sync: false
       - key: CSRF_TRUSTED_ORIGINS
         sync: false
-
-  - type: worker
-    name: connect-laundry-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerCommand: "celery -A config worker -l info"
-    plan: free
-    envVars:
-      - key: DATABASE_URL
-        fromService:
-          type: web
-          name: connect-laundry-backend
-          envVar: DATABASE_URL
-      - key: REDIS_URL
-        fromService:
-          type: web
-          name: connect-laundry-backend
-          envVar: REDIS_URL
-      - key: SECRET_KEY
-        fromService:
-          type: web
-          name: connect-laundry-backend
-          envVar: SECRET_KEY
-      - key: SENTRY_DSN
-        fromService:
-          type: web
-          name: connect-laundry-backend
-          envVar: SENTRY_DSN
-      - key: DEBUG
-        value: "False"
