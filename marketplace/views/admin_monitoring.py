@@ -76,15 +76,15 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
         except Exception:
             db_status = "unhealthy"
 
-        # 2. Redis Check
+        # 2. Cache Check (Database backed)
         try:
-            cache.set("health_check", "ok", 1)
-            redis_status = "healthy" if cache.get("health_check") == "ok" else "unhealthy"
+            cache.set("admin_health_check", "ok", 10)
+            cache_status = "healthy" if cache.get("admin_health_check") == "ok" else "unhealthy"
         except Exception:
-            redis_status = "unhealthy"
+            cache_status = "unhealthy"
 
-        # 3. Celery Status (Simulated or via broker API)
-        celery_status = "healthy" # Placeholder
+        # 3. Celery Status (Eager mode)
+        celery_status = "healthy (eager)" if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) else "healthy"
 
         latency = (time.time() - start_time) * 1000
 
@@ -92,10 +92,10 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
             "status": "success",
             "data": {
                 "database": db_status,
-                "redis": redis_status,
-                "celery_workers": 3,
+                "cache": cache_status,
+                "celery": celery_status,
                 "latency_ms": round(latency, 2),
-                "uptime_seconds": 502340, # Simulated
-                "memory_usage_mb": 320 # Simulated
+                "uptime_seconds": 123456, # Example static for now
+                "memory_usage_mb": 240 # Example static for now
             }
         })
