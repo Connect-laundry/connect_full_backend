@@ -53,4 +53,4 @@ EXPOSE ${PORT}
 
 # Use a shell script for entrypoint to handle migrations and static files
 # We bind to $PORT for Render compatibility
-CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 config.wsgi:application"]
+CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 config.wsgi:application"]

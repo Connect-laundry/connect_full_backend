@@ -23,15 +23,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
     - uses: actions/checkout@v4
@@ -74,7 +65,6 @@ jobs:
         DB_PASSWORD: password
         DB_HOST: localhost
         DB_PORT: 5432
-        REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test-secret-key
         DEBUG: True
         DATABASE_SSL_REQUIRE: 'False'
