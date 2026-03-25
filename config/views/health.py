@@ -14,13 +14,12 @@ logger = logging.getLogger(__name__)
 def health_check(request):
     """
     Production health check endpoint.
-    Handles database, redis, and celery status.
+    Handles database, cache, and celery status.
     """
     components_status = {
         "database": "down",
-        "redis": "down",
+        "cache": "down",
         "celery": "down",
-        "storage": "down"
     }
     
     health_status = {
@@ -39,33 +38,32 @@ def health_check(request):
         logger.error(f"Health Check: Database is DOWN - {str(e)}")
         return JsonResponse(health_status, status=503)
 
-    # 2. Check Redis (Optional for smoke tests)
+    # 2. Check Cache (Database backed)
     try:
-        # pyre-ignore[missing-module]
-        from django_redis import get_redis_connection
-        redis_conn = get_redis_connection("default")
-        redis_conn.ping()
-        components_status['redis'] = "up"
+        from django.core.cache import cache
+        cache.set("health_check", "ok", 10)
+        if cache.get("health_check") == "ok":
+            components_status['cache'] = "up"
+        else:
+            components_status['cache'] = "down"
     except Exception as e:
         health_status['status'] = "degraded"
-        logger.warning(f"Health Check: Redis is DOWN or not configured - {str(e)}")
+        logger.warning(f"Health Check: Cache is DOWN - {str(e)}")
 
-    # 3. Check Celery Broker (Optional for smoke tests)
+    # 3. Check Celery (Eager mode)
     try:
-        # pyre-ignore[missing-module]
-        from config.celery import app as celery_app
-        with celery_app.broker_connection() as conn:
-            conn.ensure_connection(max_retries=1)
-            components_status['celery'] = "up"
+        if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+            components_status['celery'] = "up (eager)"
+        else:
+            from config.celery import app as celery_app
+            with celery_app.broker_connection() as conn:
+                conn.ensure_connection(max_retries=1)
+                components_status['celery'] = "up"
     except Exception as e:
         health_status['status'] = "degraded"
-        logger.warning(f"Health Check: Celery Broker is DOWN or not configured - {str(e)}")
+        logger.warning(f"Health Check: Celery is DOWN - {str(e)}")
 
     # Determination of HTTP status code
-    # If DB is down, already returned 503.
-    # If other services are down, we return 200 if SKIP_HEALTH_SERVICES is True,
-    # or if we are running on SQLite (typical for smoke tests/local dev).
-    # Otherwise we return 503 as per production hardening requirements.
     db_engine = connections['default'].settings_dict.get('ENGINE', '')
     is_sqlite = 'sqlite' in db_engine
     skip_services = is_sqlite or os.getenv('SKIP_HEALTH_SERVICES', 'False').lower() == 'true'
