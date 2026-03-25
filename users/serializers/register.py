@@ -26,8 +26,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'email', 'phone', 'first_name', 'last_name', 
-            'password', 'password_confirm'
+            'role', 'password', 'password_confirm'
         )
+
+    def validate_role(self, value):
+        """Only allow CUSTOMER and OWNER self-registration."""
+        allowed = [User.Role.CUSTOMER, User.Role.OWNER]
+        if value not in allowed:
+            raise serializers.ValidationError("Only CUSTOMER and OWNER roles are allowed for self-registration.")
+        return value
+
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

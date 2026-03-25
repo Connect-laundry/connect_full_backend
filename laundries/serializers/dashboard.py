@@ -5,6 +5,8 @@ from ordering.models import Order
 # pyre-ignore[missing-module]
 from laundries.models.service import LaundryService
 
+from .review import ReviewSerializer
+
 class DashboardOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='user.get_full_name', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -23,6 +25,8 @@ class DashboardStatsSerializer(serializers.Serializer):
     picked_up_count = serializers.IntegerField()
     delivered_count = serializers.IntegerField()
     total_orders = serializers.IntegerField()
+    recent_orders = DashboardOrderSerializer(many=True, read_only=True)
+    recent_reviews = ReviewSerializer(many=True, read_only=True)
 
 class DashboardEarningsSerializer(serializers.Serializer):
     today = serializers.DecimalField(max_digits=12, decimal_places=2)

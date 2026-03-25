@@ -18,9 +18,17 @@ from .views.dashboard import (
 )
 # pyre-ignore[missing-module]
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
+# pyre-ignore[missing-module]
+from .views.owner import OwnerLaundryViewSet
+from .views.machine import MachineViewSet
+from .views.staff import StaffViewSet
+from .views.crm import CustomerListView, CustomerProfileView
 
 router = DefaultRouter()
 router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
+router.register(r'dashboard/my-laundry', OwnerLaundryViewSet, basename='owner-laundry')
+router.register(r'dashboard/machines', MachineViewSet, basename='dashboard-machines')
+router.register(r'dashboard/staff', StaffViewSet, basename='dashboard-staff')
 router.register(r'laundries', LaundryViewSet, basename='laundry')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
@@ -32,7 +40,11 @@ urlpatterns = [
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),
+    path('dashboard/customers/', CustomerListView.as_view(), name='dashboard-customers'),
+    path('dashboard/customers/<uuid:user_id>/profile/', CustomerProfileView.as_view(), name='dashboard-customer-profile'),
     path('favorites/', FavoriteListView.as_view(), name='favorite_list'),
     path('<uuid:laundry_id>/reviews/', ReviewCreateView.as_view(), name='review_create'),
     path('', include(router.urls)),
 ]
+
+
