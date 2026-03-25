@@ -21,7 +21,8 @@ class LoginView(APIView):
             try:
                 user, tokens = service.login_user(
                     email=serializer.validated_data['email'],
-                    password=serializer.validated_data['password']
+                    password=serializer.validated_data['password'],
+                    request=request
                 )
                 return Response({
                     "accessToken": tokens['access'],

@@ -13,7 +13,7 @@ class TestThrottling:
         cache.clear()
 
     def test_auth_throttle(self, client):
-        url = reverse('register')
+        url = reverse('auth_register')
         # Rates is 5/minute in our test settings (from os.getenv logic)
         for _ in range(5):
             response = client.post(url, data={})

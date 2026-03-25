@@ -10,6 +10,7 @@ from ..models.service import LaundryService
 from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
 from .review import ReviewSerializer
+from .owner import OpeningHoursSerializer
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
@@ -46,14 +47,18 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     imageUrl = serializers.SerializerMethodField()
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
+    pickupFee = serializers.DecimalField(source='pickup_fee', max_digits=10, decimal_places=2, read_only=True)
+    opening_hours = OpeningHoursSerializer(many=True, read_only=True)
+    statusDisplay = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = Laundry
         fields = (
-            'id', 'name', 'description', 'image', 'imageUrl', 'address', 'latitude', 
+            'id', 'name', 'description', 'image', 'imageUrl', 'address', 'city', 'latitude', 
             'longitude', 'phone_number', 'priceRange', 'estimated_delivery_hours',
-            'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
-            'minOrder', 'deliveryFee'
+            'is_featured', 'is_active', 'status', 'statusDisplay',
+            'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
+            'minOrder', 'deliveryFee', 'pickupFee', 'opening_hours'
         )
 
     def get_imageUrl(self, obj):

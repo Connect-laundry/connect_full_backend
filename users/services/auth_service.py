@@ -35,8 +35,8 @@ class AuthService:
         
         return user, self.get_tokens_for_user(user)
 
-    def login_user(self, email, password):
-        user = authenticate(email=email, password=password)
+    def login_user(self, email, password, request=None):
+        user = authenticate(request=request, email=email, password=password)
         
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
