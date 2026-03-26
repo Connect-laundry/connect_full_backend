@@ -62,6 +62,30 @@ We use **SimpleJWT**. No Clerk or OTP verification is required.
 - **Payload**: `{"refresh": "<refreshToken>"}`
 - **Logic**: Use an Axios interceptor. If a request fails with `401`, attempt to refresh the token and retry the original request.
 
+### 2.5 Password Reset Flow
+
+To reset a password, follow these two steps:
+
+**Step 1: Request Reset Link**
+- **Endpoint**: `POST /auth/forgot-password/`
+- **Payload**: `{"email": "user@example.com"}`
+- **Logic**: The backend will send an email containing a link with a `token`. 
+- **Response**: `{"message": "If an account exists with this email, you will receive a password reset link shortly."}`
+
+**Step 2: Complete Reset**
+- **Endpoint**: `POST /auth/reset-password/`
+- **Payload**: 
+  ```json
+  {
+    "token": "token-from-email",
+    "new_password": "newSecurePassword123",
+    "confirm_password": "newSecurePassword123"
+  }
+  ```
+- **Logic**: Use the `token` extracted from the URL in the reset email.
+- **Response**: `{"message": "Password successfully reset."}`
+- **Error**: `{"detail": "Invalid or expired token."}` (HTTP 400)
+
 ---
 
 ## 🏠 3. HOME & LAUNDRY DISCOVERY
