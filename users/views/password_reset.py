@@ -1,4 +1,8 @@
 from rest_framework import status, response, views, permissions
+import logging
+
+logger = logging.getLogger(__name__)
+
 from django.conf import settings
 from django.utils import timezone
 from ..models import User, PasswordResetToken
@@ -25,7 +29,12 @@ class ForgotPasswordView(views.APIView):
                 reset_link = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
                 
                 # Send email via Celery task
-                send_password_reset_email.delay(email, reset_link)
+                try:
+                    send_password_reset_email.delay(email, reset_link)
+                except Exception as e:
+                    # Log the failure but don't return 500 (silent failure for security & stability)
+                    logger.error(f"Failed to trigger password reset email for {email}: {str(e)}")
+
             
             return response.Response({
                 "message": "If an account exists with this email, you will receive a password reset link shortly."
