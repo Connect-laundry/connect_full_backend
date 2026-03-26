@@ -3,6 +3,7 @@ from rest_framework import serializers
 from decimal import Decimal
 # pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
+from .lifecycle import OrderStatusHistorySerializer
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
@@ -25,7 +26,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
+    history = OrderStatusHistorySerializer(source='status_history', many=True, read_only=True)
     
+    # Live Tracking Fields
+    van_latitude = serializers.SerializerMethodField()
+    van_longitude = serializers.SerializerMethodField()
+
     class Meta:
         model = Order
         fields = [
@@ -35,8 +41,25 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'address', 
-            'special_instructions', 'items', 'created_at'
+            'special_instructions', 'items', 'history',
+            'van_latitude', 'van_longitude', 'created_at'
         ]
+
+    def _get_latest_tracking_coord(self, obj, coord_type):
+        """Helper to get latest coordinate from TrackingLog when out for delivery."""
+        if obj.status == Order.Status.OUT_FOR_DELIVERY:
+            # We import here to avoid circular dependencies if any
+            from logistics.models import TrackingLog
+            log = TrackingLog.objects.filter(order=obj).order_by('-timestamp').first()
+            if log:
+                return getattr(log, coord_type)
+        return None
+
+    def get_van_latitude(self, obj):
+        return self._get_latest_tracking_coord(obj, 'latitude')
+
+    def get_van_longitude(self, obj):
+        return self._get_latest_tracking_coord(obj, 'longitude')
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     # pyre-ignore[missing-module]

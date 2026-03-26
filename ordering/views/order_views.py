@@ -185,7 +185,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         ).select_related('laundry', 'laundry__owner', 'coupon')
 
     def get_serializer_class(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'active']:
             return OrderDetailSerializer
         return OrderCreateSerializer
 

@@ -323,6 +323,25 @@ Once the user confirms the details on the **Review Order** screen:
     1. The `POST /api/v1/booking/create/` response returns the full `Order` object.
     2. Use the `id` from that response to immediately fetch full details or track status.
     3. **Order Detail Endpoint**: `GET /api/v1/orders/{id}/`
+- **Active Orders List**: `GET /api/v1/orders/active/` (Now includes full `id` for each order).
+- **New Tracking Fields**:
+    - `id`: Unique UUID of the order (Always use this for mapping/tracking).
+    - `history`: An array of status transitions with timestamps (e.g., `PICKED_UP -> IN_PROCESS`).
+    - `van_latitude` / `van_longitude`: Live coordinates of the driver. **Only populated** when `status` is `OUT_FOR_DELIVERY`.
+- **Response Structure (Detail/Active)**:
+    ```json
+    {
+      "id": "uuid",
+      "order_no": "ORD-123",
+      "status": "OUT_FOR_DELIVERY",
+      "van_latitude": 5.6037,
+      "van_longitude": -0.187,
+      "history": [
+        { "new_status": "PENDING", "timestamp": "..." },
+        { "new_status": "PICKED_UP", "timestamp": "..." }
+      ]
+    }
+    ```
     4. **Response Fields**:
         - `order_no`: Human-readable ID (e.g. `ORD-12345`).
         - `delivery_date`: The calculated timestamp when the laundry will be ready.
