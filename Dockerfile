@@ -38,9 +38,9 @@ RUN pip install --no-cache /wheels/*
 
 COPY . .
 
-# Create a non-root user
-RUN addgroup --system django && adduser --system --group django
-RUN chown -R django:django /app
+# Create a non-root user with a home directory
+RUN addgroup --system django && adduser --system --group --home /home/django django
+RUN chown -R django:django /app /home/django
 USER django
 
 # Healthcheck to ensure the container is responding
@@ -52,5 +52,5 @@ ENV PORT=10000
 EXPOSE ${PORT}
 
 # Use a shell script for entrypoint to handle migrations and static files
-# We bind to $PORT for Render compatibility
-CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 config.wsgi:application"]
+# Added --worker-tmp-dir /dev/shm to prevent heartbeat permission issues in Docker
+CMD ["bash", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 --worker-tmp-dir /dev/shm config.wsgi:application"]
