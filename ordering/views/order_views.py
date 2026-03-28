@@ -37,10 +37,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         from laundries.serializers.category import CategorySerializer
         services = Category.objects.filter(type='SERVICE_TYPE')
         serializer = CategorySerializer(services, many=True)
-        return Response({
-            "status": "success",
-            "data": serializer.data
-        })
+        return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
         # Alias for backward compatibility if /booking/services/ was pointing to list
@@ -51,10 +48,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         """Returns the actual catalog of items with supported services"""
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            "status": "success",
-            "data": serializer.data
-        })
+        return Response(serializer.data)
 
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""

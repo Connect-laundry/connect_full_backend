@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 # pyre-ignore[missing-module]
 from ..utils.validators import validate_file_upload
+import django.contrib.postgres.fields
 
 # Conditionally import GIS or regular Django models based on USE_POSTGIS
 USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
@@ -62,6 +63,14 @@ class Laundry(models.Model):
     delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
     pickup_fee = models.DecimalField(_('pickup fee'), max_digits=10, decimal_places=2, default=0.00)
     min_order = models.DecimalField(_('minimum order value'), max_digits=10, decimal_places=2, default=0.00)
+    min_weight = models.DecimalField(_('minimum weight'), max_digits=10, decimal_places=2, default=0.00)
+    
+    # Restored Multi-pricing fields
+    price_per_kg = models.DecimalField(_('price per kg'), max_digits=10, decimal_places=2, default=0.00)
+    pricing_methods = django.contrib.postgres.fields.ArrayField(
+        models.CharField(max_length=20, choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')]),
+        default=list
+    )
     
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
     is_active = models.BooleanField(_('is active'), default=False, db_index=True)
