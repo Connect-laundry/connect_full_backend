@@ -1,9 +1,12 @@
 from django.db import migrations, models
 
-def migrate_prices_backward_compatible(apps, schema_editor):
+def migrate_order_total(apps, schema_editor):
     Order = apps.get_model('ordering', 'Order')
-    # Copy final_price (the old total_amount) to estimated_price
-    Order.objects.all().update(estimated_price=models.F('final_price'))
+    # Copy final_price (the old total_amount) to estimated_price where missing
+    for order in Order.objects.all():
+        if not order.estimated_price and order.final_price:
+            order.estimated_price = order.final_price
+            order.save()
 
 class Migration(migrations.Migration):
 
@@ -12,5 +15,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(migrate_prices_backward_compatible, migrations.RunPython.noop),
+        migrations.RunPython(migrate_order_total, migrations.RunPython.noop),
     ]

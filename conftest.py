@@ -1,6 +1,7 @@
 import pytest
 from django.conf import settings
 from unittest.mock import patch
+from decimal import Decimal
 
 @pytest.fixture(autouse=True)
 def force_celery_eager(settings):
@@ -65,7 +66,6 @@ def auth_client(client, authenticated_user):
 @pytest.fixture
 def sample_laundry(db, authenticated_user):
     from laundries.models import Laundry
-    from decimal import Decimal
     return Laundry.objects.create(
         name="Test Laundry",
         owner=authenticated_user,

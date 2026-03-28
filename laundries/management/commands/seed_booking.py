@@ -41,7 +41,7 @@ class Command(BaseCommand):
                 offered_services = random.sample(list(services), min(len(services), random.randint(1, 3)))
                 
                 for service in offered_services:
-                    base_price = Decimal(str(random.randint(15, 60)))
+                    base_price = Decimal(str(random.randint(15, 60)))  # nosec B311
                     
                     # Create or update price configuration
                     _, created = LaundryService.objects.get_or_create(

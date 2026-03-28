@@ -15,7 +15,7 @@ class ResetPasswordSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})  # nosec B105
         
         # Run Django's built-in password validators
         try:

@@ -42,7 +42,8 @@ def http_test():
         response = requests.post(
             'http://localhost:8000/api/v1/booking/create/',
             json=payload,
-            headers={'Authorization': f'Bearer {access_token}'}
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10
         )
         print(f"Status Code: {response.status_code}")
         print("Response:", response.text)
