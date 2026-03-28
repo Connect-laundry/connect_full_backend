@@ -19,7 +19,9 @@ class PaymentService:
         from payments.models import Payment
         paystack = PaystackService()
         email = order.user.email
-        amount = order.total_amount
+        # Use final_price if it's set (e.g. after weighing), else estimated_price
+        amount = order.final_price if order.final_price > 0 else order.estimated_price
+        
         # Safe string conversion for UUID
         order_ref = str(order.id).replace('-', '')[:10]
         reference = f"ORD-{order_ref}-{uuid.uuid4().hex[:6]}"
@@ -30,15 +32,13 @@ class PaymentService:
             data = response.get('data', {})
             
             # Create Payment record for tracking
-            Payment.objects.update_or_create(
+            Payment.objects.create(
                 order=order,
-                defaults={
-                    'user': order.user,
-                    'amount': amount,
-                    'payment_method': payment_method,
-                    'transaction_reference': reference,
-                    'status': 'PENDING'
-                }
+                user=order.user,
+                amount=amount,
+                payment_method=payment_method,
+                transaction_reference=reference,
+                status='PENDING'
             )
             
             return {

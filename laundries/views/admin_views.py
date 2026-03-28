@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from rest_framework import viewsets, permissions, status, decorators
+from rest_framework import viewsets, permissions, status, decorators, mixins
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
@@ -25,11 +25,13 @@ class AdminLaundryApprovalSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'status', 'is_active', 'approved_at', 'rejected_at']
         read_only_fields = ['id', 'name', 'approved_at', 'rejected_at']
 
-class AdminLaundryViewSet(viewsets.GenericViewSet):
+class AdminLaundryViewSet(mixins.ListModelMixin, 
+                        mixins.RetrieveModelMixin,
+                        viewsets.GenericViewSet):
     """
     Platform administration endpoints for vetting laundry businesses.
     """
-    queryset = Laundry.objects.all()
+    queryset = Laundry.objects.all().order_by('-created_at')
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     serializer_class = AdminLaundryApprovalSerializer
 
@@ -72,12 +74,19 @@ class AdminLaundryViewSet(viewsets.GenericViewSet):
             "data": self.get_serializer(laundry).data
         })
 
-class AdminServiceViewSet(viewsets.GenericViewSet):
+class AdminServiceViewSet(mixins.CreateModelMixin,
+                        mixins.ListModelMixin,
+                        mixins.RetrieveModelMixin,
+                        viewsets.GenericViewSet):
     """
-    Platform administration endpoints for vetting services.
+    Platform administration endpoints for vetting and creating services.
     """
-    queryset = LaundryService.objects.all()
+    queryset = LaundryService.objects.all().select_related('laundry', 'item', 'category')
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def get_serializer_class(self):
+        from ..serializers.service import LaundryServiceSerializer
+        return LaundryServiceSerializer
 
     @decorators.action(detail=True, methods=['patch'])
     def approve(self, request, pk=None):

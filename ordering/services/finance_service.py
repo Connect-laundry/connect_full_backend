@@ -41,10 +41,18 @@ class FinanceService:
         Calculates full financial snapshot for an order.
         Returns dict with: items_total, delivery_fee, pickup_fee, discount, tax, platform_fee, total
         """
-        # 1. Sum items
-        items_total = order.items.aggregate(
-            total=Sum(F('quantity') * F('price'))
-        )['total'] or Decimal('0.00')
+        # 1. Calculate base items total based on pricing method
+        if order.pricing_method == 'PER_KG':
+            weight = order.actual_weight or order.estimated_weight or Decimal('0.00')
+            price_per_kg = order.price_per_kg_snapshot or Decimal('0.00')
+            # Use min_weight constraint if weight is low
+            min_weight = getattr(order.laundry, 'min_weight', Decimal('1.00'))
+            effective_weight = max(weight, min_weight)
+            items_total = effective_weight * price_per_kg
+        else:
+            items_total = order.items.aggregate(
+                total=Sum(F('quantity') * F('price'))
+            )['total'] or Decimal('0.00')
         
         # 2. Fees
         delivery_fee = FinanceService.calculate_delivery_fee(order)

@@ -20,7 +20,7 @@ class Payment(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments')
-    order = models.OneToOneField('ordering.Order', on_delete=models.CASCADE, related_name='payment')
+    order = models.ForeignKey('ordering.Order', on_delete=models.CASCADE, related_name='payments')
     
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='NGN')

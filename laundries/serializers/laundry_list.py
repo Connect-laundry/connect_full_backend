@@ -23,6 +23,9 @@ class LaundryListSerializer(serializers.ModelSerializer):
     isFavorite = serializers.SerializerMethodField()
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
+    pricingMethods = serializers.ListField(child=serializers.CharField(), source='pricing_methods', read_only=True)
+    pricePerKg = serializers.DecimalField(source='price_per_kg', max_digits=10, decimal_places=2, read_only=True)
+    minWeight = serializers.DecimalField(source='min_weight', max_digits=5, decimal_places=2, read_only=True)
     estimatedDelivery = serializers.SerializerMethodField()
     imageUrl = serializers.SerializerMethodField()
     avgPrice = serializers.SerializerMethodField()
@@ -32,7 +35,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
             'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice'
+            'minOrder', 'deliveryFee', 'avgPrice', 'pricingMethods', 'pricePerKg', 'minWeight'
         )
 
     def get_avgPrice(self, obj):

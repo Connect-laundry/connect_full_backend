@@ -103,10 +103,10 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
         )
 
         earnings = completed_orders.aggregate(
-            today=Sum('total_amount', filter=Q(created_at__gte=today_start), default=0),
-            this_week=Sum('total_amount', filter=Q(created_at__gte=week_start), default=0),
-            this_month=Sum('total_amount', filter=Q(created_at__gte=month_start), default=0),
-            total_revenue=Sum('total_amount', default=0)
+            today=Sum('final_price', filter=Q(created_at__gte=today_start), default=0),
+            this_week=Sum('final_price', filter=Q(created_at__gte=week_start), default=0),
+            this_month=Sum('final_price', filter=Q(created_at__gte=month_start), default=0),
+            total_revenue=Sum('final_price', default=0)
         )
 
         # ─── Time-Series Revenue (Last 12 days) ─────────────────
@@ -116,7 +116,7 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
             .filter(created_at__gte=now - timedelta(days=12))
             .annotate(date=TruncDate('created_at'))
             .values('date')
-            .annotate(revenue=Sum('total_amount'))
+            .annotate(revenue=Sum('final_price'))
             .order_by('date')
         )
         # Stringify dates for JSON
