@@ -22,7 +22,7 @@ class OwnerLaundryAPITests(APITestCase):
         self.owner = User.objects.create_user(
             email='testowner@example.com',
             phone='+1234567890',
-            password='Password123!',
+            password='Password123!',  # nosec B106
             role='OWNER',
             is_verified=True
         )
@@ -30,7 +30,7 @@ class OwnerLaundryAPITests(APITestCase):
         self.customer = User.objects.create_user(
             email='customer@example.com',
             phone='+0987654321',
-            password='Password123!',
+            password='Password123!',  # nosec B106
             role='CUSTOMER',
             is_verified=True
         )

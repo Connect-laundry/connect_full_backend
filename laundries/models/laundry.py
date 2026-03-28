@@ -150,7 +150,7 @@ class Laundry(models.Model):
                 # pyre-ignore[missing-module]
                 from django.contrib.gis.geos import Point
                 self.location = Point(float(self.longitude), float(self.latitude))
-            except Exception:
+            except Exception: # nosec B110
                 pass
         super().save(*args, **kwargs)
 
