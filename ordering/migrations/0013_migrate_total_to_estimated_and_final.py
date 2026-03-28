@@ -14,7 +14,7 @@ def migrate_order_total(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0012_rename_total_amount_order_final_price_and_more'),
+        ('ordering', '0012_weight_fields'),
     ]
 
     operations = [

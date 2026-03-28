@@ -58,8 +58,7 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
             'longitude', 'phone_number', 'priceRange', 'estimated_delivery_hours',
             'is_featured', 'is_active', 'status', 'statusDisplay',
             'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
-            'minOrder', 'deliveryFee', 'pickupFee', 'opening_hours',
-            'price_per_kg', 'pricing_methods'
+            'minOrder', 'deliveryFee', 'pickupFee', 'opening_hours'
         )
 
     def get_imageUrl(self, obj):

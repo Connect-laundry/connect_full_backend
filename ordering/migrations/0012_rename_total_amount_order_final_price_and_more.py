@@ -3,7 +3,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0011_order_actual_weight_order_estimated_weight_and_more'),
+        ('ordering', '0011_price_fields'),
     ]
 
     operations = [

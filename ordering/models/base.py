@@ -50,10 +50,6 @@ class Order(models.Model):
         UNPAID = 'UNPAID', _('Unpaid')
         REFUNDED = 'REFUNDED', _('Refunded')
 
-    class PricingMethod(models.TextChoices):
-        PER_ITEM = 'PER_ITEM', _('Per Item')
-        PER_KG = 'PER_KG', _('Per Kg')
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_no = models.CharField(max_length=20, unique=True, editable=False)
     
@@ -64,12 +60,7 @@ class Order(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
     
-    estimated_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    final_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    pricing_method = models.CharField(max_length=20, choices=PricingMethod.choices, default=PricingMethod.PER_ITEM)
-    
-    actual_weight = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    estimated_weight = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     coupon = models.ForeignKey(
         'ordering.Coupon', 
         on_delete=models.SET_NULL, 

@@ -12,7 +12,7 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('order_no', 'user', 'laundry', 'status', 'estimated_price', 'final_price', 'created_at')
+    list_display = ('order_no', 'user', 'laundry', 'status', 'total_amount', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('order_no', 'user__email', 'laundry__name')
     inlines = [OrderItemInline]
@@ -20,7 +20,7 @@ class OrderAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Order info', {
-            'fields': ('order_no', 'user', 'laundry', 'status', 'estimated_price', 'final_price')
+            'fields': ('order_no', 'user', 'laundry', 'status', 'total_amount')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at')

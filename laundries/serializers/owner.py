@@ -36,7 +36,6 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
             'address', 'city', 'latitude', 'longitude',
             'phone_number', 'price_range', 'estimated_delivery_hours',
             'delivery_fee', 'pickup_fee', 'min_order',
-            'min_weight', 'price_per_kg', 'pricing_methods',
             'is_featured', 'is_active', 'status', 'statusDisplay',
             'opening_hours',
             'created_at', 'updated_at',

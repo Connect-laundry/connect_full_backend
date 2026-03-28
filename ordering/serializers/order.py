@@ -36,9 +36,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_no', 'laundryName', 
-            'status', 'payment_status', 
-            'estimated_price', 'final_price', 
-            'actual_weight', 'estimated_weight',
+            'status', 'payment_status', 'total_amount', 
             'pickup_date', 'delivery_date', 
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
@@ -83,7 +81,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'special_instructions', 'items', 'coupon_code',
-            'payment_method', 'pricing_method',
+            'payment_method',
         ]
 
     def validate(self, data):
@@ -129,6 +127,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         order = Order.objects.create(
             user=user,
+            total_amount=0, # Placeholder
             coupon=coupon_obj,
             **validated_data
         )
@@ -169,8 +168,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         # pyre-ignore[missing-module]
         from ..services.finance_service import FinanceService
         price_breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon_obj)
-        order.estimated_price = Decimal(price_breakdown['total'])
-        order.final_price = Decimal(price_breakdown['total'])
+        order.total_amount = Decimal(price_breakdown['total'])
         order.save()
         
         # Record Coupon Usage
