@@ -92,11 +92,16 @@ jobs:
     - name: Build & Health Check (Docker Smoke Test)
       run: |
         docker build -t connect-backend:latest .
-        docker run -d --name smoke-test -p 10000:10000 \
+        docker run -d --name smoke-test --network=host \
           -e SECRET_KEY=smoke-test-key \
           -e DEBUG=True \
           -e PORT=10000 \
-          -e DATABASE_URL=sqlite:////tmp/db.sqlite3 \
+          -e DB_NAME=connect_test \
+          -e DB_USER=postgres \
+          -e DB_PASSWORD=password \
+          -e DB_HOST=localhost \
+          -e DB_PORT=5432 \
+          -e DATABASE_SSL_REQUIRE=False \
           connect-backend:latest
         
         # Wait up to 75 seconds for the health endpoint
