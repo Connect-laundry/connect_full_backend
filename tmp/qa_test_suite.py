@@ -32,13 +32,13 @@ class ConnectLaundryQA:
         url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         try:
             if method == "GET":
-                return requests.get(url, headers=headers, params=data)
+                return requests.get(url, headers=headers, params=data, timeout=30)
             elif method == "POST":
-                return requests.post(url, headers=headers, data=json.dumps(data))
+                return requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
             elif method == "PATCH":
-                return requests.patch(url, headers=headers, data=json.dumps(data))
+                return requests.patch(url, headers=headers, data=json.dumps(data), timeout=30)
             elif method == "PUT":
-                return requests.put(url, headers=headers, data=json.dumps(data))
+                return requests.put(url, headers=headers, data=json.dumps(data), timeout=30)
         except Exception as e:
             print(f"Request Error: {e}")
             return None
