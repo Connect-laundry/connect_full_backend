@@ -52,7 +52,8 @@ def authenticated_user(db):
         password="password123", 
         first_name="Test",
         last_name="User",
-        phone="1234567890"
+        phone="1234567890",
+        role="OWNER" # Added role for validation
     )
     return user
 
@@ -64,14 +65,17 @@ def auth_client(client, authenticated_user):
 @pytest.fixture
 def sample_laundry(db, authenticated_user):
     from laundries.models import Laundry
+    from decimal import Decimal
     return Laundry.objects.create(
         name="Test Laundry",
         owner=authenticated_user,
         address="123 Test St",
-        latitude=5.6037,
-        longitude=-0.1870,
+        phone_number="1234567890",
+        latitude=Decimal('5.603700'),
+        longitude=Decimal('-0.187000'),
         status='APPROVED',
-        is_active=True
+        is_active=True,
+        pricing_methods=['PER_KG']
     )
 
 @pytest.fixture
@@ -80,7 +84,8 @@ def sample_order(db, authenticated_user, sample_laundry):
     return Order.objects.create(
         user=authenticated_user,
         laundry=sample_laundry,
-        total_amount=100.00,
+        estimated_price=Decimal('100.00'),
+        final_price=Decimal('100.00'),
         status='PENDING',
         order_no='ORD-TEST-123'
     )

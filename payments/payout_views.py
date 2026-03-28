@@ -111,7 +111,7 @@ class PayoutRequestView(views.APIView):
 
         total_earned = Order.objects.filter(
             laundry=laundry, status__in=['DELIVERED', 'COMPLETED']
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        ).aggregate(total=Sum('final_price'))['total'] or 0
 
         total_paid_out = PayoutRequest.objects.filter(
             owner=request.user, status__in=['PENDING', 'PROCESSING', 'COMPLETED']

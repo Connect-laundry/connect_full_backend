@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 # pyre-ignore[missing-module]
 from django.core.validators import MinValueValidator, MaxValueValidator
 # pyre-ignore[missing-module]
+from django.contrib.postgres.fields import ArrayField
+# pyre-ignore[missing-module]
 from ..utils.validators import validate_file_upload
 
 # Conditionally import GIS or regular Django models based on USE_POSTGIS
@@ -87,6 +89,31 @@ class Laundry(models.Model):
         related_name='owned_laundries',
         limit_choices_to={'role': 'OWNER'}
     )
+    
+    class PricingMethod(models.TextChoices):
+        PER_ITEM = "PER_ITEM", _("Per Item")
+        PER_KG = "PER_KG", _("Per Kg")
+
+    # Pricing Configuration
+    pricing_methods = ArrayField(
+        models.CharField(max_length=20, choices=PricingMethod.choices),
+        default=list,
+        blank=True,
+        help_text=_("List of supported methods: ['PER_ITEM', 'PER_KG']")
+    )
+    price_per_kg = models.DecimalField(
+        _('price per kg'), 
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00
+    )
+    min_weight = models.DecimalField(
+        _('minimum weight'), 
+        max_digits=5, 
+        decimal_places=2, 
+        default=1.00
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -104,7 +131,19 @@ class Laundry(models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        super().clean()
+        # Validation: If PER_ITEM is enabled, laundry must have items in catalog
+        if self.PricingMethod.PER_ITEM in self.pricing_methods:
+            # We check if there are any LaundryService records for this laundry
+            if not self.laundry_services.exists():
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'pricing_methods': _("At least one item/service must be added to the catalog before enabling Per Item pricing.")
+                })
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         # Sync PointField with latitude/longitude for backward compatibility (only if PostGIS is enabled)
         if USE_POSTGIS and self.latitude and self.longitude:
             try:

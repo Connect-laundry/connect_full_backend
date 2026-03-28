@@ -48,6 +48,9 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
     pickupFee = serializers.DecimalField(source='pickup_fee', max_digits=10, decimal_places=2, read_only=True)
+    pricingMethods = serializers.ListField(child=serializers.CharField(), source='pricing_methods', read_only=True)
+    pricePerKg = serializers.DecimalField(source='price_per_kg', max_digits=10, decimal_places=2, read_only=True)
+    minWeight = serializers.DecimalField(source='min_weight', max_digits=5, decimal_places=2, read_only=True)
     opening_hours = OpeningHoursSerializer(many=True, read_only=True)
     statusDisplay = serializers.CharField(source='get_status_display', read_only=True)
 
@@ -58,7 +61,7 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
             'longitude', 'phone_number', 'priceRange', 'estimated_delivery_hours',
             'is_featured', 'is_active', 'status', 'statusDisplay',
             'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
-            'minOrder', 'deliveryFee', 'pickupFee', 'opening_hours'
+            'minOrder', 'deliveryFee', 'pickupFee', 'pricingMethods', 'pricePerKg', 'minWeight', 'opening_hours'
         )
 
     def get_imageUrl(self, obj):

@@ -36,6 +36,7 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
             'address', 'city', 'latitude', 'longitude',
             'phone_number', 'price_range', 'estimated_delivery_hours',
             'delivery_fee', 'pickup_fee', 'min_order',
+            'pricing_methods', 'price_per_kg', 'min_weight',
             'is_featured', 'is_active', 'status', 'statusDisplay',
             'opening_hours',
             'created_at', 'updated_at',
@@ -44,6 +45,12 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
             'id', 'is_featured', 'is_active', 'status',
             'created_at', 'updated_at',
         )
+
+    pricing_methods = serializers.ListField(
+        child=serializers.CharField(), 
+        required=False,
+        help_text="['PER_ITEM', 'PER_KG']"
+    )
 
     def get_imageUrl(self, obj):
         if not obj.image:
@@ -57,30 +64,46 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
         hours_data = validated_data.pop('opening_hours', [])
         request = self.context['request']
 
-        with transaction.atomic():
-            laundry = Laundry.objects.create(
-                owner=request.user,
-                **validated_data
-            )
+        try:
+            with transaction.atomic():
+                laundry = Laundry.objects.create(
+                    owner=request.user,
+                    **validated_data
+                )
 
-            for hour in hours_data:
-                OpeningHours.objects.create(laundry=laundry, **hour)
+                for hour in hours_data:
+                    OpeningHours.objects.create(laundry=laundry, **hour)
 
-        return laundry
+            return laundry
+        except Exception as e:
+            # Handle model level validation errors (raised in Laundry.save() -> full_clean())
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(e, DjangoValidationError):
+                raise serializers.ValidationError(e.message_dict)
+            raise e
 
     def update(self, instance, validated_data):
         hours_data = validated_data.pop('opening_hours', None)
 
-        with transaction.atomic():
-            # Update laundry fields
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
+        try:
+            with transaction.atomic():
+                # Update laundry fields
+                for attr, value in validated_data.items():
+                    setattr(instance, attr, value)
+                
+                # This will trigger Laundry.clean() via Laundry.save() -> full_clean()
+                instance.save()
 
-            # Replace opening hours if provided
-            if hours_data is not None:
-                instance.opening_hours.all().delete()
-                for hour in hours_data:
-                    OpeningHours.objects.create(laundry=instance, **hour)
+                # Replace opening hours if provided
+                if hours_data is not None:
+                    instance.opening_hours.all().delete()
+                    for hour in hours_data:
+                        OpeningHours.objects.create(laundry=instance, **hour)
 
-        return instance
+            return instance
+        except Exception as e:
+            # Handle model level validation errors
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(e, DjangoValidationError):
+                raise serializers.ValidationError(e.message_dict)
+            raise e

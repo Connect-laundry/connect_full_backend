@@ -13,10 +13,10 @@ from ordering.serializers import (
     OrderCreateSerializer,
     CouponSerializer,
     CouponValidationSerializer
-# pyre-ignore[missing-module]
 )
 # pyre-ignore[missing-module]
 from ..services.payment_service import PaymentService
+from django.utils import timezone
 from decimal import Decimal
 
 class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
@@ -37,10 +37,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         from laundries.serializers.category import CategorySerializer
         services = Category.objects.filter(type='SERVICE_TYPE')
         serializer = CategorySerializer(services, many=True)
-        return Response({
-            "status": "success",
-            "data": serializer.data
-        })
+        return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
         # Alias for backward compatibility if /booking/services/ was pointing to list
@@ -51,10 +48,7 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
         """Returns the actual catalog of items with supported services"""
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            "status": "success",
-            "data": serializer.data
-        })
+        return Response(serializer.data)
 
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""
@@ -139,17 +133,13 @@ class BookingViewSet(viewsets.GenericViewSet):
         total = total_items_price + delivery_fee + pickup_fee + tax + platform_fee
 
         return Response({
-            "status": "success",
-            "message": "Price breakdown calculated successfully.",
-            "data": {
-                "items_total": str(total_items_price.quantize(Decimal('0.01'))),
-                "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
-                "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
-                "tax": str(tax.quantize(Decimal('0.01'))),
-                "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
-                "total": str(total.quantize(Decimal('0.01'))),
-                "currency": getattr(settings, 'CURRENCY', 'GHS')
-            }
+            "items_total": str(total_items_price.quantize(Decimal('0.01'))),
+            "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
+            "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
+            "tax": str(tax.quantize(Decimal('0.01'))),
+            "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
+            "total": str(total.quantize(Decimal('0.01'))),
+            "currency": getattr(settings, 'CURRENCY', 'GHS')
         })
 
     @action(detail=False, methods=['post'])
@@ -178,7 +168,18 @@ class OrderViewSet(viewsets.ModelViewSet):
     throttle_scope = 'burst_user'
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).prefetch_related(
+        from django.db.models import Q
+        user = self.request.user
+        if user.is_staff:
+            return Order.objects.all().prefetch_related(
+                'items__item', 
+                'items__service_type',
+                'status_history'
+            ).select_related('laundry', 'laundry__owner', 'coupon')
+            
+        return Order.objects.filter(
+            Q(user=user) | Q(laundry__owner=user)
+        ).prefetch_related(
             'items__item', 
             'items__service_type',
             'status_history'
@@ -243,6 +244,66 @@ class OrderViewSet(viewsets.ModelViewSet):
             "count": len(serializer.data),
             "data": serializer.data
         })
+
+    @action(detail=True, methods=['patch'], url_path='update-weight')
+    def update_weight(self, request, pk=None):
+        """
+        Action for laundry staff to record the actual weight of a Per Kg order.
+        Recalculates the total amount and transitions status.
+        """
+        order = self.get_object()
+        
+        # 1. Authorization: Only Laundry Owner or Staff
+        if order.laundry.owner != request.user and not request.user.is_staff:
+            return Response(
+                {"status": "error", "message": "You do not have permission to update weight for this order."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        if order.pricing_method != 'PER_KG':
+            return Response(
+                {"status": "error", "message": "This order is not a weight-based order."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        actual_weight = request.data.get('actual_weight')
+        if not actual_weight:
+            return Response(
+                {"status": "error", "message": "actual_weight is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            order.actual_weight = Decimal(str(actual_weight))
+            
+            # Recalculate Final Price
+            from ..services.finance_service import FinanceService
+            breakdown = FinanceService.calculate_price_breakdown(order, coupon=order.coupon)
+            order.final_price = Decimal(breakdown['total'])
+            
+            # Transition to WEIGHED status
+            previous_status = order.status
+            order.status = Order.Status.WEIGHED
+            order.save()
+            
+            # Create History Record
+            from ordering.models import OrderStatusHistory
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status=previous_status,
+                new_status=order.status,
+                changed_by=request.user,
+                metadata={"action": "update_weight", "actual_weight": str(actual_weight)}
+            )
+            
+            return Response({
+                "status": "success",
+                "message": "Order weighed. Waiting for user to confirm final price.",
+                "data": OrderDetailSerializer(order).data
+            })
+            
+        except (ValueError, TypeError, Exception) as e:
+             return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class CouponViewSet(viewsets.GenericViewSet):
     """Viewset for validating and listing available coupons."""

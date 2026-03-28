@@ -30,47 +30,53 @@ class PaymentInitializeView(APIView):
         # 1. Validate order existence and ownership
         order = get_object_or_404(Order, id=order_id, user=request.user)
         
-        # 2. Reject if status is not PENDING
-        if order.status != Order.Status.PENDING:
+        # 2. Reject if status is invalid for payment
+        if order.status not in [Order.Status.PENDING, Order.Status.WEIGHED]:
             return Response({
                 "status": "error",
                 "message": f"Cannot pay for order in {order.status} status.",
                 "data": {}
             }, status=status.HTTP_400_BAD_REQUEST)
             
-        # 3. Reject if successful payment already exists
-        if Payment.objects.filter(order=order, status=Payment.Status.SUCCESS).exists():
+        # 3. Calculate amount to pay
+        # For PER_KG, if status is PENDING, pay estimated. If WEIGHED, pay final or balance.
+        # Simplification: If WEIGHED, we charge final_price. If PENDING, we charge estimated_price.
+        amount = order.final_price if order.status == Order.Status.WEIGHED else order.estimated_price
+
+        # 4. Reject if successful payment for this amount already exists (simple check)
+        if Payment.objects.filter(order=order, status=Payment.Status.SUCCESS, amount=amount).exists():
              return Response({
                 "status": "error",
-                "message": "Order is already paid.",
+                "message": "This payment has already been completed.",
                 "data": {}
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # 4. Generate unique reference
+        # 5. Generate unique reference
         reference = f"ORD-{uuid.uuid4().hex[:10].upper()}"
         
         paystack = PaystackService()
         metadata = {
             "order_id": str(order.id),
             "user_id": str(request.user.id),
-            "order_no": order.order_no
+            "order_no": order.order_no,
+            "payment_type": "FINAL" if order.status == Order.Status.WEIGHED else "INITIAL"
         }
         
-        # 5. Initialize with Paystack
+        # 6. Initialize with Paystack
         response = paystack.initialize_transaction(
             email=request.user.email,
-            amount=order.total_amount,
+            amount=amount,
             reference=reference,
             metadata=metadata
         )
         
         if response.get('status'):
-            # 6. Atomic creation of Payment record
+            # 7. Atomic creation of Payment record
             with transaction.atomic():
                 Payment.objects.create(
                     user=request.user,
                     order=order,
-                    amount=order.total_amount,
+                    amount=amount,
                     currency=getattr(settings, 'CURRENCY', 'GHS'),
                     transaction_reference=reference,
                     payment_method=payment_method,
@@ -122,17 +128,29 @@ class PaymentVerifyView(APIView):
                     payment.paid_at = timezone.now()
                     payment.save()
                     
-                    # Update order status
+                    # Update order status based on payment stage
                     order = payment.order
-                    order.status = Order.Status.CONFIRMED
+                    if order.status == Order.Status.WEIGHED:
+                        order.status = Order.Status.IN_PROCESS
+                        order.payment_status = Order.PaymentStatus.PAID
+                        order.processing_started_at = timezone.now()
+                    elif order.status == Order.Status.PENDING:
+                        order.status = Order.Status.CONFIRMED
+                        # If PER_KG, it's only partially paid (estimated)
+                        if order.pricing_method == 'PER_KG':
+                            order.payment_status = Order.PaymentStatus.PARTIALLY_PAID
+                        else:
+                            order.payment_status = Order.PaymentStatus.PAID
+                        order.confirmed_at = timezone.now()
+                    
                     order.save()
             
             return Response({
                 "status": "success", 
-                "message": "Payment verified and order confirmed.",
+                "message": f"Payment verified. Order status is now {order.status}.",
                 "data": {
                     "payment_status": payment.status,
-                    "order_status": payment.order.status
+                    "order_status": order.status
                 }
             }, status=status.HTTP_200_OK)
             
