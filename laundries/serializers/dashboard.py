@@ -15,7 +15,7 @@ class DashboardOrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_no', 'customer_name', 'status', 
-            'status_display', 'total_amount', 'created_at', 
+            'status_display', 'estimated_price', 'final_price', 'created_at', 
             'pickup_date', 'delivery_date'
         ]
 

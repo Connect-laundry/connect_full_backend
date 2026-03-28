@@ -2,7 +2,7 @@ import logging
 import json
 # pyre-ignore[missing-module]
 from pythonjsonlogger import jsonlogger
-
+                                      
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
     """
     Custom JSON formatter to include request data and user info if available.
@@ -14,7 +14,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         # pyre-ignore[import]
         from django.http import HttpRequest
         import threading
-        
+                                             
         # Note: In a production environment, we might use local thread storage 
         # to pass the request object here, but for now we'll rely on the logger having 'request' in extra.
         request = log_record.get('request')
@@ -35,3 +35,5 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
             # pyre-ignore[import]
             from django.utils import timezone
             log_record['timestamp'] = timezone.now().isoformat()
+
+                        

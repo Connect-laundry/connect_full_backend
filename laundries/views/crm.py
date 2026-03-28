@@ -37,7 +37,7 @@ class CustomerListView(views.APIView):
             )
             .annotate(
                 order_count=Count('id'),
-                total_spent=Sum('total_amount'),
+                total_spent=Sum('final_price'),
                 last_order_date=Max('created_at')
             )
             .order_by('-total_spent')
@@ -90,13 +90,14 @@ class CustomerProfileView(views.APIView):
 
         stats = orders.aggregate(
             order_count=Count('id'),
-            total_spent=Sum('total_amount')
+            total_spent=Sum('final_price')
         )
 
         order_list = [{
             'order_no': o.order_no,
             'status': o.status,
-            'total_amount': str(o.total_amount),
+            'estimated_price': str(o.estimated_price),
+            'final_price': str(o.final_price),
             'created_at': o.created_at.isoformat(),
         } for o in orders[:50]]
 

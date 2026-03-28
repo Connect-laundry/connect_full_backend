@@ -39,6 +39,8 @@ class Order(models.Model):
         CONFIRMED = 'CONFIRMED', _('Confirmed')
         REJECTED = 'REJECTED', _('Rejected')
         PICKED_UP = 'PICKED_UP', _('Picked Up')
+        WEIGHED = 'WEIGHED', _('Weighed')
+        AWAITING_FINAL_PAYMENT = 'AWAITING_FINAL_PAYMENT', _('Awaiting Final Payment')
         IN_PROCESS = 'IN_PROCESS', _('In Process')
         OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', _('Out for Delivery')
         DELIVERED = 'DELIVERED', _('Delivered')
@@ -48,6 +50,7 @@ class Order(models.Model):
     class PaymentStatus(models.TextChoices):
         PAID = 'PAID', _('Paid')
         UNPAID = 'UNPAID', _('Unpaid')
+        PARTIALLY_PAID = 'PARTIALLY_PAID', _('Partially Paid')
         REFUNDED = 'REFUNDED', _('Refunded')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -57,10 +60,21 @@ class Order(models.Model):
     laundry = models.ForeignKey('laundries.Laundry', on_delete=models.CASCADE, related_name='orders')
     service_type = models.ForeignKey('laundries.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(max_length=25, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
     
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # New Pricing Fields
+    pricing_method = models.CharField(
+        max_length=20, 
+        choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')],
+        default='PER_ITEM'
+    )
+    estimated_weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    actual_weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    price_per_kg_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    estimated_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    final_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     coupon = models.ForeignKey(
         'ordering.Coupon', 
         on_delete=models.SET_NULL, 
