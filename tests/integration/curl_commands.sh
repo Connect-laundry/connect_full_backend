@@ -44,7 +44,7 @@ curl -X POST "https://connect-full-backend.onrender.com/api/v1/auth/token/refres
 # Get Service Types (Catalog)
 curl -X GET "https://connect-full-backend.onrender.com/api/v1/booking/services/" -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json"
 
-# Get Catalog Items
+# Get Catalog Items                              
 curl -X GET "https://connect-full-backend.onrender.com/api/v1/booking/items/" -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json"
 
 # Schedule Without laundry_id
