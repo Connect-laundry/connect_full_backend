@@ -22,7 +22,7 @@ class ReferralApplyView(views.APIView):
             # Check if user already has a referrer
             if request.user.referred_by:
                 return Response(
-                    {"status": "error", "message": "You have already been referred."},
+                    {"success": False, "status": "error", "message": "You have already been referred."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
@@ -31,14 +31,14 @@ class ReferralApplyView(views.APIView):
                 referrer = User.objects.get(referral_code=code)
             except User.DoesNotExist:
                 return Response(
-                    {"status": "error", "message": "Invalid referral code."},
+                    {"success": False, "status": "error", "message": "Invalid referral code."},
                     status=status.HTTP_404_NOT_FOUND
                 )
                 
             # Prevent self-referral
             if referrer == request.user:
                 return Response(
-                    {"status": "error", "message": "You cannot refer yourself."},
+                    {"success": False, "status": "error", "message": "You cannot refer yourself."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -48,7 +48,7 @@ class ReferralApplyView(views.APIView):
                 request.user.save()
                 
             return Response({
-                "status": "success",
+                "success": True,
                 "message": f"Referral code applied. You were referred by {referrer.get_full_name() or referrer.email}."
             })
             
@@ -62,7 +62,7 @@ class ReferralStatsView(views.APIView):
         # Potential future expansion: Earnings from referrals
         
         return Response({
-            "status": "success",
+            "success": True,
             "data": {
                 "referral_code": request.user.referral_code,
                 "total_referrals": referrals,

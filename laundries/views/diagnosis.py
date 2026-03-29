@@ -98,7 +98,7 @@ class DiagnosisView(APIView):
                 spatial_search_status = f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
 
         return Response({
-            "status": "success",
+            "success": True,
             "diagnosis_version": "v1.8-SpatialFix",
             "message": "Use POST to trigger migrations and Location sync.",
             "data": {
@@ -145,13 +145,13 @@ class DiagnosisView(APIView):
                         sync_count += 1
             
             return Response({
-                "status": "success",
+                "success": True,
                 "message": f"Tasks completed. Synced {sync_count} laundries.",
                 "output": migration_result
             })
         except Exception as e:
             return Response({
-                "status": "error",
+                "success": False,
                 "message": f"Tasks failed: {str(e)}",
                 "output": out.getvalue()
             }, status=500)

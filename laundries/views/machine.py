@@ -44,7 +44,7 @@ class MachineViewSet(viewsets.ModelViewSet):
         laundry = self._get_laundry(request)
         if not laundry:
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "You must create a laundry first."
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -55,7 +55,7 @@ class MachineViewSet(viewsets.ModelViewSet):
         logger.info(f"Machine '{serializer.data.get('name')}' registered by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Machine registered successfully.",
             "data": serializer.data
         }, status=status.HTTP_201_CREATED)
@@ -73,7 +73,7 @@ class MachineViewSet(viewsets.ModelViewSet):
         logger.info(f"Machine {machine.id} status → {machine.status} by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"Machine status updated to {machine.get_status_display()}.",
             "data": MachineSerializer(machine).data
         })

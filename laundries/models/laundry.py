@@ -133,14 +133,10 @@ class Laundry(models.Model):
 
     def clean(self):
         super().clean()
-        # Validation: If PER_ITEM is enabled, laundry must have items in catalog
-        if self.PricingMethod.PER_ITEM in self.pricing_methods:
-            # We check if there are any LaundryService records for this laundry
-            if not self.laundry_services.exists():
-                from django.core.exceptions import ValidationError
-                raise ValidationError({
-                    'pricing_methods': _("At least one item/service must be added to the catalog before enabling Per Item pricing.")
-                })
+        # Enforce validation only when active
+        if self.is_active:
+            from ..services.laundry_validation import validate_laundry_ready_for_business
+            validate_laundry_ready_for_business(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()

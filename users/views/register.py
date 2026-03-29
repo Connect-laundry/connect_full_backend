@@ -28,18 +28,22 @@ class RegisterView(APIView):
             tokens = service.get_tokens_for_user(user)
             
             return Response({
-                "accessToken": tokens['access'],
-                "refreshToken": tokens['refresh'],
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "fullName": user.get_full_name(),
-                    "role": user.role
+                "success": True,
+                "message": "User registered successfully",
+                "data": {
+                    "accessToken": tokens['access'],
+                    "refreshToken": tokens['refresh'],
+                    "user": {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "fullName": user.get_full_name(),
+                        "role": user.role
+                    }
                 }
             }, status=status.HTTP_201_CREATED)
             
         return Response({
-            "status": "error",
+            "success": False,
             "message": "Validation failed.",
             "data": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)

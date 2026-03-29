@@ -198,14 +198,14 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
             serializer = self.get_serializer(queryset, many=True)
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Featured laundries retrieved successfully.",
                 "data": serializer.data
             })
         except Exception as e:
             logger.error(f"Critical error in featured laundries endpoint: {e}", exc_info=True)
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "An error occurred while fetching featured laundries.",
                 "data": {}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -218,12 +218,12 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         if not created:
             favorite.delete()
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Removed from favorites."
             }, status=status.HTTP_200_OK)
             
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Added to favorites."
         }, status=status.HTTP_201_CREATED)
     @action(detail=True, methods=['patch'], permission_classes=[permissions.IsAuthenticated])
@@ -233,7 +233,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         # Check permissions: Admin or Owner
         if not request.user.is_staff and laundry.owner != request.user:
             return Response(
-                {"status": "error", "message": "You do not have permission to deactivate this laundry."},
+                {"success": False, "status": "error", "message": "You do not have permission to deactivate this laundry."},
                 status=status.HTTP_403_FORBIDDEN
             )
             
@@ -241,7 +241,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         
         if not laundry.is_active:
             return Response(
-                {"status": "error", "message": "Laundry is already inactive"},
+                {"success": False, "status": "error", "message": "Laundry is already inactive"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -253,7 +253,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         logger.info(f"Laundry {laundry.id} deactivated by {request.user.email}. Reason: {reason}")
         
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"Laundry {laundry.name} has been deactivated.",
             "data": {
                 "id": laundry.id,
@@ -285,7 +285,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 
             serializer = LaundryServiceSerializer(qs, many=True, context={'request': request})
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Laundry services retrieved successfully.",
                 "data": serializer.data
             })
@@ -294,7 +294,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             # Check Owner/Admin Permission
             if not request.user.is_staff and laundry.owner != request.user:
                 return Response(
-                    {"status": "error", "message": "You do not have permission to manage services for this laundry."},
+                    {"success": False, "status": "error", "message": "You do not have permission to manage services for this laundry."},
                     status=status.HTTP_403_FORBIDDEN
                 )
                 
@@ -307,7 +307,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             
             if not all([item_id, service_type_id, price]):
                 return Response(
-                    {"status": "error", "message": "item_id, service_type_id, and price are required."},
+                    {"success": False, "status": "error", "message": "item_id, service_type_id, and price are required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
@@ -324,7 +324,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             
             serializer = LaundryServiceSerializer(laundry_service, context={'request': request})
             return Response({
-                "status": "success",
+                "success": True,
                 "message": f"Service pricing {'created' if created else 'updated'} successfully.",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

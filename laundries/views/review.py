@@ -21,7 +21,7 @@ class ReviewCreateView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Review submitted successfully.",
             "data": serializer.data
         }, status=status.HTTP_201_CREATED)

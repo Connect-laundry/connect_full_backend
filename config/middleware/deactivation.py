@@ -16,6 +16,7 @@ class DeactivationMiddleware(MiddlewareMixin):
         # 1. Block inactive users
         if not request.user.is_active:
             return JsonResponse({
+                "success": False,
                 "status": "error",
                 "message": "Your account has been deactivated. Please contact support.",
                 "data": {

@@ -21,7 +21,7 @@ class UserDeactivateView(views.APIView):
         
         if not user.is_active:
             return Response(
-                {"status": "error", "message": "User is already inactive"},
+                {"success": False, "status": "error", "message": "User is already inactive"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -33,7 +33,7 @@ class UserDeactivateView(views.APIView):
         # Revoke tokens (optional logic depending on JWT blacklist setup)
         
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"User {user.email} has been deactivated",
             "data": {
                 "id": user.id,

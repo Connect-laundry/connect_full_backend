@@ -47,6 +47,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         
         if not success:
             return Response({
+                "success": False,
                 "status": "error",
                 "message": "Invalid state transition",
                 "data": {
@@ -58,7 +59,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         logger.info(f"Order {order.order_no} transitioned to {to_status} by {request.user.email}")
         
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"Order marked as {to_status}",
             "data": {
                 "id": updated_order.id,
@@ -114,7 +115,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         serializer = OrderStatusHistorySerializer(history, many=True)
         
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Order timeline fetched",
             "data": serializer.data
         })

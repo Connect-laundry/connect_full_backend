@@ -1,0 +1,56 @@
+{
+  "info": {
+    "name": "Connect Laundry API Q/A",
+    "description": "Standardized and verified API Endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{BASE_URL}}/../health/",
+          "host": ["{{BASE_URL}}"],
+          "path": ["..", "health", ""]
+        }
+      }
+    },
+    {
+      "name": "Onboarding (Owner)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{BASE_URL}}/laundries/dashboard/my-laundry/",
+          "host": ["{{BASE_URL}}"],
+          "path": ["laundries", "dashboard", "my-laundry", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\":\"Test Laundry\", \"pricing_methods\":[\"PER_KG\"], \"price_per_kg\": 15.00}"
+        }
+      }
+    },
+    {
+      "name": "Order Estimate (Per Item)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{BASE_URL}}/booking/estimate/",
+          "host": ["{{BASE_URL}}"],
+          "path": ["booking", "estimate", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"laundry\": \"uuid\", \"items\": []}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:8000/api/v1"
+    }
+  ]
+}

@@ -16,11 +16,12 @@ class LegalDocumentView(views.APIView):
             try:
                 doc = LegalDocument.objects.get(document_type=type.upper(), is_active=True)
                 return Response({
-                    "status": "success",
+                    "success": True,
                     "data": LegalDocumentSerializer(doc).data
                 })
             except LegalDocument.DoesNotExist:
                 return Response({
+                    "success": False,
                     "status": "error",
                     "message": "Document not found."
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -28,6 +29,6 @@ class LegalDocumentView(views.APIView):
             # List all documents
             docs = LegalDocument.objects.filter(is_active=True)
             return Response({
-                "status": "success",
+                "success": True,
                 "data": LegalDocumentSerializer(docs, many=True).data
             })

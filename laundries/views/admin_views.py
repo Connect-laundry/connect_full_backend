@@ -1,5 +1,5 @@
-# pyre-ignore[missing-module]
-from rest_framework import viewsets, permissions, status, decorators, mixins
+from rest_framework import viewsets, permissions, status, decorators, mixins, serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
@@ -37,18 +37,36 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
 
     @decorators.action(detail=True, methods=['patch'])
     def approve(self, request, pk=None):
-        """Approve a laundry business and make it active."""
+        """Approve a laundry business. Activation is still required by the owner."""
         laundry = self.get_object()
         
-        with transaction.atomic():
-            laundry.status = Laundry.ApprovalStatus.APPROVED
-            laundry.is_active = True
-            laundry.approved_at = timezone.now()
-            laundry.save()
-            
-            logger.info(f"Laundry {laundry.id} approved by admin {request.user.email}")
+        try:
+            with transaction.atomic():
+                laundry.status = Laundry.ApprovalStatus.APPROVED
+                # We do NOT set is_active=True here anymore. 
+                # Owner must configure hours/services and call activate.
+                laundry.approved_at = timezone.now()
+                laundry.save()
+                
+                logger.info(f"Laundry {laundry.id} approved by admin {request.user.email}")
+        except DjangoValidationError as e:
+            return Response({
+                "success": False,
+                "status": "error",
+                "message": "Approval failed due to configuration errors.",
+                "data": {"errors": e.message_dict if hasattr(e, 'message_dict') else str(e)}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Approval failed for laundry {laundry.id}: {str(e)}")
+            return Response({
+                "success": False,
+                "status": "error",
+                "message": f"An error occurred: {str(e)}",
+                "data": {}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         return Response({
+            "success": True,
             "status": "success",
             "message": f"Laundry {laundry.name} has been approved and is now active.",
             "data": self.get_serializer(laundry).data
@@ -69,6 +87,7 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
             logger.info(f"Laundry {laundry.id} rejected by admin {request.user.email}. Reason: {reason}")
             
         return Response({
+            "success": True,
             "status": "success",
             "message": f"Laundry {laundry.name} has been rejected.",
             "data": self.get_serializer(laundry).data
@@ -100,6 +119,7 @@ class AdminServiceViewSet(mixins.CreateModelMixin,
             logger.info(f"LaundryService {service.id} approved by admin {request.user.email}")
         
         return Response({
+            "success": True,
             "status": "success",
             "message": f"Service {service.item.name} for {service.laundry.name} has been approved.",
             "data": {
