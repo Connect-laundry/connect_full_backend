@@ -39,12 +39,12 @@ curl -X GET "https://connect-full-backend.onrender.com/api/v1/auth/me/" -H "Auth
 curl -X GET "https://connect-full-backend.onrender.com/api/v1/auth/me/" -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json"
 
 # Token Refresh
-curl -X POST "https://connect-full-backend.onrender.com/api/v1/auth/token/refresh/" -H 'Content-Type: application/json' -d '{"refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc4MzM3MzIyOCwiaWF0IjoxNzc0NzMzMjI4LCJqdGkiOiIwN2JkMjg1NDk3MTA0ZDZjYWQwNDU0OTU2MDBkNmI3NiIsInVzZXJfaWQiOiJhNzhkMzcwNy0wNjQ0LTQ3YTEtYTgwZC01MmQ0ZjgyMDc3ZDYiLCJlbWFpbCI6InFhX293bmVyXzJiOGNjY0B0ZXN0LmNvbSIsInJvbGUiOiJPV05FUiJ9.BOCyejwoNKkSz0xms-_MzPqpO0OG1sGgzVY5AYyQ6q0"}'
+curl -X POST "https://connect-full-backend.onrender.com/api/v1/auth/token/refresh/" -H 'Content-Type: application/json' -d '{"refresh": "<REFRESH_TOKEN>"}'
 
 # Get Service Types (Catalog)
 curl -X GET "https://connect-full-backend.onrender.com/api/v1/booking/services/" -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json"
 
-# Get Catalog Items
+# Get Catalog Items                              
 curl -X GET "https://connect-full-backend.onrender.com/api/v1/booking/items/" -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json"
 
 # Schedule Without laundry_id
