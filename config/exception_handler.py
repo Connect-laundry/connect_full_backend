@@ -22,6 +22,7 @@ def custom_exception_handler(exc, context):
         logger.error(f"DRF Exception at {context['request'].path}: {str(exc)}", exc_info=True)
 
         data = {
+            "success": False,
             "status": "error",
             "message": "An internal server error occurred.",
             "data": {}
@@ -33,6 +34,7 @@ def custom_exception_handler(exc, context):
         # If it's a throttle exception, customize the message
         if isinstance(exc, Throttled):
             custom_data = {
+                "success": False,
                 "status": "error",
                 "message": f"Too many requests. Please try again in {exc.wait} seconds.",
                 "data": {}
@@ -40,12 +42,13 @@ def custom_exception_handler(exc, context):
             response.data = custom_data
         else:
             # Handle other errors to fit the envelope if they don't already
-            if not ('status' in response.data and 'message' in response.data):
+            if not ('success' in response.data and 'message' in response.data):
                 message = "An error occurred."
                 if 'detail' in response.data:
                     message = response.data['detail']
                 
                 response.data = {
+                    "success": False,
                     "status": "error",
                     "message": message,
                     "data": response.data

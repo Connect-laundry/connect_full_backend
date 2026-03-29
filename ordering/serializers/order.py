@@ -92,7 +92,20 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if laundry and (laundry.status != 'APPROVED' or not laundry.is_active):
             raise serializers.ValidationError("This laundry is not approved or is currently inactive.")
             
-        # Pricing Method Validation
+        # 1.b Deeper Business Logic Validation
+        from laundries.services.laundry_validation import validate_laundry_ready_for_business
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            validate_laundry_ready_for_business(laundry)
+        except DjangoValidationError as e:
+            # We catch it and raise DRF ValidationError to ensure we don't allow orders 
+            # for misconfigured laundries
+            error_data = e.message_dict if hasattr(e, 'message_dict') else str(e)
+            raise serializers.ValidationError({
+                "laundry": f"This laundry is not correctly configured: {error_data}"
+            })
+            
+        # 2. Pricing Method Validation
         if pricing_method == 'PER_KG':
             if not laundry.price_per_kg:
                 raise serializers.ValidationError(f"{laundry.name} does not support weight-based pricing.")

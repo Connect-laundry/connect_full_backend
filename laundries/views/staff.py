@@ -39,7 +39,7 @@ class StaffViewSet(viewsets.ModelViewSet):
         laundry = self._get_laundry(request)
         if not laundry:
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "You must create a laundry first."
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -51,7 +51,7 @@ class StaffViewSet(viewsets.ModelViewSet):
             laundry=laundry, email=serializer.validated_data['email']
         ).exists():
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "This person has already been invited."
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -67,7 +67,7 @@ class StaffViewSet(viewsets.ModelViewSet):
         logger.info(f"Staff invite sent to {staff.email} for laundry {laundry.id} by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"Invitation sent to {staff.email}.",
             "data": LaundryStaffSerializer(staff).data
         }, status=status.HTTP_201_CREATED)
@@ -85,7 +85,7 @@ class StaffViewSet(viewsets.ModelViewSet):
         logger.info(f"Staff {staff.id} role → {staff.role} by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"{staff.name}'s role updated to {staff.get_role_display()}.",
             "data": LaundryStaffSerializer(staff).data
         })

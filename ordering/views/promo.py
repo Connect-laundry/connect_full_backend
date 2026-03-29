@@ -50,12 +50,14 @@ class CouponViewSet(viewsets.GenericViewSet):
 
                 if not is_valid:
                     return Response({
+                        "success": False,
                         "status": "error",
                         "message": message,
                         "data": {}
                     }, status=status.HTTP_400_BAD_REQUEST)
 
                 return Response({
+                    "success": True,
                     "status": "success",
                     "message": "Coupon valid",
                     "data": {
@@ -68,7 +70,8 @@ class CouponViewSet(viewsets.GenericViewSet):
 
         except Coupon.DoesNotExist:
             return Response({
-                "status": "error",
+                "success": False,
+                        "status": "error",
                 "message": "Invalid coupon code",
                 "data": {}
             }, status=status.HTTP_400_BAD_REQUEST)

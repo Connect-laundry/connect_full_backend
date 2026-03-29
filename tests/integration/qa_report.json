@@ -1,0 +1,185 @@
+{
+  "timestamp": "2026-03-28T21:28:07.536079",
+  "base_url": "https://connect-full-backend.onrender.com",
+  "summary": {
+    "total": 33,
+    "passed": 30,
+    "failed": 1,
+    "skipped": 2,
+    "pass_rate": "96.8%"
+  },
+  "bugs": [
+    {
+      "test": "Add Service to Catalog",
+      "detail": "Got None"
+    }
+  ],
+  "results": [
+    {
+      "status": "PASS",
+      "test": "Health Check",
+      "detail": "Response: {\"status\": \"healthy\", \"components\": {\"database\": \"up\", \"cache\": \"up\", \"celery\": \"up (eager)\"}}"
+    },
+    {
+      "status": "PASS",
+      "test": "Swagger UI Accessible",
+      "detail": ""
+    },
+    {
+      "status": "PASS",
+      "test": "Register Owner",
+      "detail": "Token received, user_id=a78d3707-0644-47a1-a80d-52d4f82077d6"
+    },
+    {
+      "status": "PASS",
+      "test": "Register Customer",
+      "detail": "Token received, user_id=5f4a9400-3607-41cf-adec-ca8771f92a06"
+    },
+    {
+      "status": "PASS",
+      "test": "Register Mismatched Passwords",
+      "detail": "Correctly rejected"
+    },
+    {
+      "status": "PASS",
+      "test": "Register Invalid Role",
+      "detail": "Correctly rejected RIDER self-registration"
+    },
+    {
+      "status": "PASS",
+      "test": "Register Duplicate Email",
+      "detail": "Correctly rejected"
+    },
+    {
+      "status": "PASS",
+      "test": "Login Owner",
+      "detail": "Fresh token obtained"
+    },
+    {
+      "status": "PASS",
+      "test": "Access Protected Route (Valid Token)",
+      "detail": "Profile returned"
+    },
+    {
+      "status": "PASS",
+      "test": "Token Refresh",
+      "detail": "New access token received"
+    },
+    {
+      "status": "PASS",
+      "test": "Get Service Types",
+      "detail": "Found 9 service types. Selected: d3c889e9-c875-4490-a3b5-029c3d9d3d44"
+    },
+    {
+      "status": "PASS",
+      "test": "Get Catalog Items",
+      "detail": "Found 6 items. Selected: 1de4017c-62f2-45fb-82cb-63f9258a6647"
+    },
+    {
+      "status": "PASS",
+      "test": "Bypassing validation bug (Create PER_KG first, then add item, then enable PER_ITEM)",
+      "detail": ""
+    },
+    {
+      "status": "PASS",
+      "test": "Create Laundry (Initial)",
+      "detail": "id=6b900bc3-06c2-47ba-a513-39b78b5a290b"
+    },
+    {
+      "status": "FAIL",
+      "test": "Add Service to Catalog",
+      "detail": "Got None"
+    },
+    {
+      "status": "PASS",
+      "test": "List Owner Laundries",
+      "detail": "Found 1 laundry(ies)"
+    },
+    {
+      "status": "PASS",
+      "test": "Get Laundry Detail",
+      "detail": "All pricing fields present"
+    },
+    {
+      "status": "PASS",
+      "test": "Update Laundry Pricing",
+      "detail": "price_per_kg updated to 20.00"
+    },
+    {
+      "status": "PASS",
+      "test": "Get Opening Hours",
+      "detail": "7 days returned"
+    },
+    {
+      "status": "PASS",
+      "test": "Public Laundry Listing",
+      "detail": "Found 10 laundries"
+    },
+    {
+      "status": "PASS",
+      "test": "Public Listing - Pricing Fields",
+      "detail": "Present: ['pricingMethods', 'pricePerKg', 'minWeight']"
+    },
+    {
+      "status": "PASS",
+      "test": "Featured Laundries",
+      "detail": "Endpoint accessible"
+    },
+    {
+      "status": "PASS",
+      "test": "Search Laundries",
+      "detail": "Search endpoint works"
+    },
+    {
+      "status": "PASS",
+      "test": "List Customer Orders",
+      "detail": "Found 0 orders"
+    },
+    {
+      "status": "PASS",
+      "test": "List Active Orders",
+      "detail": "Count: 0"
+    },
+    {
+      "status": "SKIP",
+      "test": "Update Weight Tests",
+      "detail": "Need order_id and owner_token"
+    },
+    {
+      "status": "SKIP",
+      "test": "Lifecycle Tests",
+      "detail": "Need order_id and owner_token"
+    },
+    {
+      "status": "PASS",
+      "test": "Response Format: Profile",
+      "detail": "Valid JSON, type=dict"
+    },
+    {
+      "status": "PASS",
+      "test": "Response Format: Laundry Listing",
+      "detail": "Valid JSON, type=dict"
+    },
+    {
+      "status": "PASS",
+      "test": "Response Format: Catalog Services",
+      "detail": "Valid JSON, type=list"
+    },
+    {
+      "status": "PASS",
+      "test": "Performance: Health Check",
+      "detail": "Avg 1114ms (acceptable, but > 500ms)"
+    },
+    {
+      "status": "PASS",
+      "test": "Performance: Laundry Listing",
+      "detail": "Avg 1364ms (acceptable, but > 500ms)"
+    },
+    {
+      "status": "PASS",
+      "test": "Performance: Catalog Services",
+      "detail": "Avg 1275ms (acceptable, but > 500ms)"
+    }
+  ],
+  "readiness": "CONDITIONAL"
+}

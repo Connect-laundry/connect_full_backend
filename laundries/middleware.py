@@ -28,6 +28,7 @@ class JSONErrorMiddleware:
             message = f"Server Error: {str(exception)}"
             
         data = {
+            "success": False,
             "status": "error",
             "message": message,
             "data": {}

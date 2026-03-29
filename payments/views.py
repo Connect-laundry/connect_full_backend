@@ -33,6 +33,7 @@ class PaymentInitializeView(APIView):
         # 2. Reject if status is invalid for payment
         if order.status not in [Order.Status.PENDING, Order.Status.WEIGHED]:
             return Response({
+                "success": False,
                 "status": "error",
                 "message": f"Cannot pay for order in {order.status} status.",
                 "data": {}
@@ -46,6 +47,7 @@ class PaymentInitializeView(APIView):
         # 4. Reject if successful payment for this amount already exists (simple check)
         if Payment.objects.filter(order=order, status=Payment.Status.SUCCESS, amount=amount).exists():
              return Response({
+                "success": False,
                 "status": "error",
                 "message": "This payment has already been completed.",
                 "data": {}
@@ -85,7 +87,7 @@ class PaymentInitializeView(APIView):
                 )
             
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Payment initialized successfully",
                 "data": {
                     "authorization_url": response['data']['authorization_url'],
@@ -94,7 +96,8 @@ class PaymentInitializeView(APIView):
             }, status=status.HTTP_200_OK)
             
         return Response({
-            "status": "error",
+            "success": False,
+                "status": "error",
             "message": response.get('message', 'Payment initialization failed.'),
             "data": {}
         }, status=status.HTTP_400_BAD_REQUEST)
@@ -117,7 +120,8 @@ class PaymentVerifyView(APIView):
                 
                 if not payment:
                     return Response({
-                        "status": "error", 
+                        "success": False,
+                "status": "error", 
                         "message": "Payment record not found.",
                         "data": {}
                     }, status=status.HTTP_404_NOT_FOUND)
@@ -146,7 +150,7 @@ class PaymentVerifyView(APIView):
                     order.save()
             
             return Response({
-                "status": "success", 
+                "success": True, 
                 "message": f"Payment verified. Order status is now {order.status}.",
                 "data": {
                     "payment_status": payment.status,
@@ -155,7 +159,8 @@ class PaymentVerifyView(APIView):
             }, status=status.HTTP_200_OK)
             
         return Response({
-            "status": "error", 
+            "success": False,
+                "status": "error", 
             "message": verify_data.get('message', "Payment verification failed."),
             "data": {}
         }, status=status.HTTP_400_BAD_REQUEST)

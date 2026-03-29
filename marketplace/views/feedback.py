@@ -13,12 +13,13 @@ class FeedbackView(views.APIView):
             # Automatically attach the authenticated user
             serializer.save(user=request.user)
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Feedback submitted successfully.",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
             
         return Response({
+            "success": False,
             "status": "error",
             "message": "Validation failed.",
             "data": serializer.errors

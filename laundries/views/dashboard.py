@@ -77,7 +77,7 @@ class DashboardStatsView(views.APIView, DashboardBaseView):
         serializer = DashboardStatsSerializer(stats)
         
         return Response({
-            "status": "success",
+            "success": True,
             "data": serializer.data
         })
 
@@ -130,7 +130,7 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
         sentiment_score = round((positive_reviews / total_reviews) * 100, 1) if total_reviews > 0 else None
 
         return Response({
-            "status": "success",
+            "success": True,
             "data": {
                 **earnings,
                 "time_series": time_series,

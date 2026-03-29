@@ -1,0 +1,62 @@
+{
+  "total_tests": 11,
+  "passed": 11,
+  "failed": 0,
+  "tests": [
+    {
+      "test": "1.1 Admin Authentication",
+      "status": "PASS",
+      "details": "Expected 200, got 200. Response: {\"success\":true,\"message\":\"Login successful\",\"data\":{\"accessToken\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0ODA2NjYxLCJpYXQiOjE3NzQ4MDMwNjEsImp0aSI6IjM3NzNkYmN"
+    },
+    {
+      "test": "2.1 Owner Registration",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"message\":\"User registered successfully\",\"data\":{\"accessToken\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0ODA2NjY5LCJpYXQiOjE3NzQ4MDMwNjksImp0aSI"
+    },
+    {
+      "test": "2.2 Customer Registration",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"message\":\"User registered successfully\",\"data\":{\"accessToken\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0ODA2Njc1LCJpYXQiOjE3NzQ4MDMwNzUsImp0aSI"
+    },
+    {
+      "test": "3.1 Laundry Profile Creation",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"message\":\"Laundry storefront created successfully. It is now pending admin approval.\",\"data\":{\"id\":\"c526e22a-864b-47e6-862b-17a96298345f\",\"name\":\"QA_Cert_5d1b\",\"description\":\"\",\"image"
+    },
+    {
+      "test": "3.2 Admin Approval",
+      "status": "PASS",
+      "details": "Expected 200, got 200. Response: {\"success\":true,\"status\":\"success\",\"message\":\"Laundry QA_Cert_5d1b has been approved and is now active.\",\"data\":{\"id\":\"c526e22a-864b-47e6-862b-17a96298345f\",\"name\":\"QA_Cert_5d1b\",\"status\":\"APPROVED\",\""
+    },
+    {
+      "test": "4.1 Set Operating Hours",
+      "status": "PASS",
+      "details": "Expected 200, got 200. Response: {\"success\":true,\"message\":\"Opening hours updated successfully.\",\"data\":[{\"id\":\"019cd10d-b0ad-4642-8796-6ca167bfaee4\",\"day\":1,\"dayDisplay\":\"Monday\",\"opening_time\":\"08:00:00\",\"closing_time\":\"18:00:00\",\""
+    },
+    {
+      "test": "4.2 Added Service Pricing (PER_ITEM)",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"message\":\"Service pricing created successfully.\",\"data\":{\"id\":\"0e7987d9-4ab3-415a-a1c5-fb1d5667eaf5\",\"itemName\":\"Shirt\",\"itemId\":\"6164ce16-1a7f-4a9e-9abf-372b83d4b5c6\",\"serviceType\":\""
+    },
+    {
+      "test": "5.1 Successful Activation",
+      "status": "PASS",
+      "details": "Expected 200, got 200. Response: {\"success\":true,\"message\":\"Laundry activated successfully. Customers can now place orders.\",\"data\":{\"id\":\"c526e22a-864b-47e6-862b-17a96298345f\",\"is_active\":true},\"status\":\"success\"}"
+    },
+    {
+      "test": "6.1 Place Order (PER_KG)",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"status\":\"success\",\"message\":\"Operation successful.\",\"data\":{\"id\":\"2e497913-9578-4f6c-82d4-11a6936dca54\",\"order_no\":\"CN-BF8DFC4A\",\"laundryName\":\"QA_Cert_5d1b\",\"status\":\"PENDING\",\"payme"
+    },
+    {
+      "test": "7.1 Place Order (PER_ITEM)",
+      "status": "PASS",
+      "details": "Expected 201, got 201. Response: {\"success\":true,\"status\":\"success\",\"message\":\"Operation successful.\",\"data\":{\"id\":\"fe119629-7e02-429d-adca-84ae50275b9e\",\"order_no\":\"CN-46A623F8\",\"laundryName\":\"QA_Cert_5d1b\",\"status\":\"PENDING\",\"payme"
+    },
+    {
+      "test": "8.1 Security: Customer Cannot Update Weight",
+      "status": "PASS",
+      "details": "Expected 403, got 403. Response: {\"success\":false,\"status\":\"error\",\"message\":\"You do not have permission to update weight for this order.\"}"
+    }
+  ]
+}

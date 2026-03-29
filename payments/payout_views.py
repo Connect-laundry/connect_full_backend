@@ -59,7 +59,7 @@ class BankAccountView(views.APIView):
         accounts = BankAccount.objects.filter(owner=request.user)
         serializer = BankAccountSerializer(accounts, many=True)
         return Response({
-            "status": "success",
+            "success": True,
             "data": serializer.data
         })
 
@@ -71,7 +71,7 @@ class BankAccountView(views.APIView):
         logger.info(f"Bank account linked by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Bank account linked successfully.",
             "data": serializer.data
         }, status=status.HTTP_201_CREATED)
@@ -96,6 +96,7 @@ class PayoutRequestView(views.APIView):
             bank_account = BankAccount.objects.get(id=bank_account_id, owner=request.user)
         except BankAccount.DoesNotExist:
             return Response({
+                "success": False,
                 "status": "error",
                 "message": "Bank account not found."
             }, status=status.HTTP_404_NOT_FOUND)
@@ -105,6 +106,7 @@ class PayoutRequestView(views.APIView):
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
             return Response({
+                "success": False,
                 "status": "error",
                 "message": "No laundry found."
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -121,6 +123,7 @@ class PayoutRequestView(views.APIView):
 
         if amount > available_balance:
             return Response({
+                "success": False,
                 "status": "error",
                 "message": f"Insufficient balance. Available: {available_balance}"
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -136,7 +139,7 @@ class PayoutRequestView(views.APIView):
         logger.info(f"Payout requested: {payout.reference} for {amount} by {request.user.email}")
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Payout request submitted.",
             "data": PayoutRequestSerializer(payout).data
         }, status=status.HTTP_201_CREATED)
@@ -152,6 +155,6 @@ class PayoutHistoryView(views.APIView):
         payouts = PayoutRequest.objects.filter(owner=request.user)
         serializer = PayoutRequestSerializer(payouts, many=True)
         return Response({
-            "status": "success",
+            "success": True,
             "data": serializer.data
         })

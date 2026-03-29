@@ -64,7 +64,7 @@ class BookingViewSet(viewsets.GenericViewSet):
         slots = BookingSlot.objects.filter(laundry_id=laundry_id, is_available=True)
         serializer = BookingSlotSerializer(slots, many=True)
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Available slots fetched successfully.",
             "data": serializer.data
         })
@@ -80,7 +80,7 @@ class BookingViewSet(viewsets.GenericViewSet):
         
         if not laundry_id or not items_data:
             return Response(
-                {"status": "error", "message": "laundry and items are required for estimation."},
+                {"success": False, "status": "error", "message": "laundry and items are required for estimation."},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -89,7 +89,7 @@ class BookingViewSet(viewsets.GenericViewSet):
             from laundries.models.laundry import Laundry
             laundry = Laundry.objects.get(id=laundry_id)
         except Laundry.DoesNotExist:
-            return Response({"status": "error", "message": "Laundry not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"success": False, "status": "error", "message": "Laundry not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # 2. Extract specific prices from LaundryService
         from laundries.models.service import LaundryService
@@ -113,7 +113,7 @@ class BookingViewSet(viewsets.GenericViewSet):
                 
         if errors:
             return Response(
-                {"status": "error", "message": "Invalid item or service type IDs.", "data": {"errors": errors}},
+                {"success": False, "status": "error", "message": "Invalid item or service type IDs.", "data": {"errors": errors}},
                 status=status.HTTP_400_BAD_REQUEST
             )
                 
@@ -204,7 +204,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Price breakdown fetched (cached)",
                 "data": cached_data
             })
@@ -213,7 +213,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         # Security: Only owner or laundry owner
         if order.user != request.user and order.laundry.owner != request.user and not request.user.is_staff:
-             return Response({"status": "error", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+             return Response({"success": False, "status": "error", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         # Use centralized finance service
         breakdown = FinanceService.calculate_price_breakdown(order, coupon=order.coupon)
@@ -221,7 +221,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         cache.set(cache_key, breakdown, 300)
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": "Price breakdown fetched",
             "data": breakdown
         })
@@ -240,7 +240,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset().filter(status__in=active_statuses)
         serializer = self.get_serializer(queryset, many=True)
         return Response({
-            "status": "success",
+            "success": True,
             "count": len(serializer.data),
             "data": serializer.data
         })
@@ -256,20 +256,20 @@ class OrderViewSet(viewsets.ModelViewSet):
         # 1. Authorization: Only Laundry Owner or Staff
         if order.laundry.owner != request.user and not request.user.is_staff:
             return Response(
-                {"status": "error", "message": "You do not have permission to update weight for this order."},
+                {"success": False, "status": "error", "message": "You do not have permission to update weight for this order."},
                 status=status.HTTP_403_FORBIDDEN
             )
             
         if order.pricing_method != 'PER_KG':
             return Response(
-                {"status": "error", "message": "This order is not a weight-based order."},
+                {"success": False, "status": "error", "message": "This order is not a weight-based order."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         actual_weight = request.data.get('actual_weight')
         if not actual_weight:
             return Response(
-                {"status": "error", "message": "actual_weight is required."},
+                {"success": False, "status": "error", "message": "actual_weight is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -297,13 +297,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
             
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Order weighed. Waiting for user to confirm final price.",
                 "data": OrderDetailSerializer(order).data
             })
             
         except (ValueError, TypeError, Exception) as e:
-             return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+             return Response({"success": False, "status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class CouponViewSet(viewsets.GenericViewSet):
     """Viewset for validating and listing available coupons."""
@@ -332,7 +332,7 @@ class CouponViewSet(viewsets.GenericViewSet):
             
             if not is_valid:
                 return Response({
-                    "status": "error",
+                    "success": False,
                     "message": error,
                     "valid": False
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -346,7 +346,7 @@ class CouponViewSet(viewsets.GenericViewSet):
             discount = min(discount, Decimal(str(items_total)))
             
             return Response({
-                "status": "success",
+                "success": True,
                 "message": "Coupon is valid",
                 "valid": True,
                 "data": {
@@ -359,7 +359,7 @@ class CouponViewSet(viewsets.GenericViewSet):
             
         except Coupon.DoesNotExist:
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "Invalid coupon code.",
                 "valid": False
             }, status=status.HTTP_404_NOT_FOUND)

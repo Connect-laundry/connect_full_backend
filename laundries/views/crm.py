@@ -27,7 +27,7 @@ class CustomerListView(views.APIView):
     def get(self, request):
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
-            return Response({"status": "error", "message": "Laundry not found"}, status=404)
+            return Response({"success": False, "status": "error", "message": "Laundry not found"}, status=404)
 
         customers = (
             Order.objects.filter(laundry=laundry)
@@ -57,7 +57,7 @@ class CustomerListView(views.APIView):
         serializer = CustomerSummarySerializer(data, many=True)
 
         return Response({
-            "status": "success",
+            "success": True,
             "message": f"{len(data)} customer(s) found.",
             "data": serializer.data
         })
@@ -73,7 +73,7 @@ class CustomerProfileView(views.APIView):
     def get(self, request, user_id):
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
-            return Response({"status": "error", "message": "Laundry not found"}, status=404)
+            return Response({"success": False, "status": "error", "message": "Laundry not found"}, status=404)
 
         orders = Order.objects.filter(
             laundry=laundry, user_id=user_id
@@ -81,7 +81,7 @@ class CustomerProfileView(views.APIView):
 
         if not orders.exists():
             return Response({
-                "status": "error",
+                "success": False,
                 "message": "No orders found for this customer at your laundry."
             }, status=status.HTTP_404_NOT_FOUND)
 
@@ -115,6 +115,6 @@ class CustomerProfileView(views.APIView):
         serializer = CustomerProfileSerializer(profile_data)
 
         return Response({
-            "status": "success",
+            "success": True,
             "data": serializer.data
         })
