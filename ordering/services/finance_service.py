@@ -1,8 +1,11 @@
 from decimal import Decimal
+
 # pyre-ignore[missing-module]
 from django.conf import settings
+
 # pyre-ignore[missing-module]
 from django.db.models import Sum, F
+
 
 class FinanceService:
     """
@@ -17,23 +20,23 @@ class FinanceService:
             tax_rate = Decimal(str(settings.TAX_RATE))
         else:
             tax_rate = Decimal(str(tax_rate))
-            
-        return (Decimal(str(amount)) * tax_rate).quantize(Decimal('0.01'))
+
+        return (Decimal(str(amount)) * tax_rate).quantize(Decimal("0.01"))
 
     @staticmethod
     def calculate_delivery_fee(order):
         """Calculates the delivery fee for an order."""
         # Use laundry's specific delivery fee, fallback to global base
-        laundry_fee = getattr(order.laundry, 'delivery_fee', None)
+        laundry_fee = getattr(order.laundry, "delivery_fee", None)
         if laundry_fee is not None:
             return Decimal(str(laundry_fee))
-            
+
         return Decimal(str(settings.DELIVERY_FEE_BASE))
 
     @staticmethod
     def calculate_pickup_fee(order):
         """Calculates the pickup fee for an order."""
-        return Decimal(str(getattr(order.laundry, 'pickup_fee', 0.00)))
+        return Decimal(str(getattr(order.laundry, "pickup_fee", 0.00)))
 
     @staticmethod
     def calculate_price_breakdown(order, coupon=None):
@@ -42,58 +45,56 @@ class FinanceService:
         Returns dict with: items_total, delivery_fee, pickup_fee, discount, tax, platform_fee, total
         """
         # 1. Calculate base items total based on pricing method
-        if order.pricing_method == 'PER_KG':
-            weight = order.actual_weight or order.estimated_weight or Decimal('0.00')
-            price_per_kg = order.price_per_kg_snapshot or Decimal('0.00')
+        if order.pricing_method == "PER_KG":
+            weight = order.actual_weight or order.estimated_weight or Decimal("0.00")
+            price_per_kg = order.price_per_kg_snapshot or Decimal("0.00")
             # Use min_weight constraint if weight is low
-            min_weight = getattr(order.laundry, 'min_weight', Decimal('1.00'))
+            min_weight = getattr(order.laundry, "min_weight", Decimal("1.00"))
             effective_weight = max(weight, min_weight)
             items_total = effective_weight * price_per_kg
         else:
-            items_total = order.items.aggregate(
-                total=Sum(F('quantity') * F('price'))
-            )['total'] or Decimal('0.00')
-        
+            items_total = order.items.aggregate(total=Sum(F("quantity") * F("price")))[
+                "total"
+            ] or Decimal("0.00")
+
         # 2. Fees
         delivery_fee = FinanceService.calculate_delivery_fee(order)
         pickup_fee = FinanceService.calculate_pickup_fee(order)
-        
+
         # 3. Discount
-        discount = Decimal('0.00')
+        discount = Decimal("0.00")
         if coupon:
             is_valid, error = coupon.is_valid(
-                user=order.user, 
-                laundry_id=order.laundry_id, 
-                order_value=items_total
+                user=order.user, laundry_id=order.laundry_id, order_value=items_total
             )
-            
+
             if is_valid:
-                if coupon.discount_type == 'FIXED':
+                if coupon.discount_type == "FIXED":
                     discount = Decimal(str(coupon.discount_value))
                 else:
-                    discount = (items_total * (Decimal(str(coupon.discount_value)) / 100))
-                
+                    discount = items_total * (Decimal(str(coupon.discount_value)) / 100)
+
                 # Ensure discount doesn't exceed items_total
                 discount = min(discount, items_total)
-        
+
         # 4. Tax (Calculated on items_total - discount)
-        taxable_amount = max(Decimal('0.00'), items_total - discount)
+        taxable_amount = max(Decimal("0.00"), items_total - discount)
         tax = FinanceService.calculate_tax_amount(taxable_amount)
-        
+
         # 5. Platform Fee
         platform_fee_rate = Decimal(str(settings.PLATFORM_FEE_RATE))
-        platform_fee = (taxable_amount * platform_fee_rate).quantize(Decimal('0.01'))
-        
+        platform_fee = (taxable_amount * platform_fee_rate).quantize(Decimal("0.01"))
+
         # 6. Final Total
         total = taxable_amount + delivery_fee + pickup_fee + tax + platform_fee
-        
+
         return {
-            "items_total": str(items_total.quantize(Decimal('0.01'))),
-            "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
-            "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
-            "discount": str(discount.quantize(Decimal('0.01'))),
-            "tax": str(tax.quantize(Decimal('0.01'))),
-            "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
-            "total": str(total.quantize(Decimal('0.01'))),
-            "currency": getattr(settings, 'CURRENCY', 'GHS')
+            "items_total": str(items_total.quantize(Decimal("0.01"))),
+            "delivery_fee": str(delivery_fee.quantize(Decimal("0.01"))),
+            "pickup_fee": str(pickup_fee.quantize(Decimal("0.01"))),
+            "discount": str(discount.quantize(Decimal("0.01"))),
+            "tax": str(tax.quantize(Decimal("0.01"))),
+            "platform_fee": str(platform_fee.quantize(Decimal("0.01"))),
+            "total": str(total.quantize(Decimal("0.01"))),
+            "currency": getattr(settings, "CURRENCY", "GHS"),
         }

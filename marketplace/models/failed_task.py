@@ -1,9 +1,12 @@
-#pyre-ignore
+# pyre-ignore
 import uuid
+
 # pyre-ignore[missing-module]
 from django.db import models
+
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
+
 
 class FailedTask(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -17,9 +20,9 @@ class FailedTask(models.Model):
     failed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = _('Failed Task')
-        verbose_name_plural = _('Failed Tasks')
-        ordering = ['-failed_at']
+        verbose_name = _("Failed Task")
+        verbose_name_plural = _("Failed Tasks")
+        ordering = ["-failed_at"]
 
     def __str__(self):
         return f"{self.task_name} ({self.task_id})"

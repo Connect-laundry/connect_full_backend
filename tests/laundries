@@ -19,7 +19,13 @@ class DashboardTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.com", password="password", role='OWNER')
         self.customer = User.objects.create_user(email="cust@example.com", password="password", role='CUSTOMER')
-        self.laundry = Laundry.objects.create(name="Store 1", owner=self.owner, address="Addr")
+        self.laundry = Laundry.objects.create(
+            name="Store 1",
+            owner=self.owner,
+            address="Addr",
+            latitude=5.603700,
+            longitude=-0.187000
+        )
         
         # Create some orders
         Order.objects.create(user=self.customer, laundry=self.laundry, status='PENDING', pickup_date=timezone.now(), total_amount=50.0)

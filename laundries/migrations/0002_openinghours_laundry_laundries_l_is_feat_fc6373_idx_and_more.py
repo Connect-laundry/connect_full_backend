@@ -9,49 +9,81 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0001_initial'),
+        ("laundries", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='OpeningHours',
+            name="OpeningHours",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('day', models.IntegerField(choices=[(1, 'Monday'), (2, 'Tuesday'), (3, 'Wednesday'), (4, 'Thursday'), (5, 'Friday'), (6, 'Saturday'), (7, 'Sunday')])),
-                ('opening_time', models.TimeField()),
-                ('closing_time', models.TimeField()),
-                ('is_closed', models.BooleanField(default=False)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "day",
+                    models.IntegerField(
+                        choices=[
+                            (1, "Monday"),
+                            (2, "Tuesday"),
+                            (3, "Wednesday"),
+                            (4, "Thursday"),
+                            (5, "Friday"),
+                            (6, "Saturday"),
+                            (7, "Sunday"),
+                        ]
+                    ),
+                ),
+                ("opening_time", models.TimeField()),
+                ("closing_time", models.TimeField()),
+                ("is_closed", models.BooleanField(default=False)),
             ],
             options={
-                'verbose_name': 'Opening Hours',
-                'verbose_name_plural': 'Opening Hours',
-                'ordering': ['day', 'opening_time'],
+                "verbose_name": "Opening Hours",
+                "verbose_name_plural": "Opening Hours",
+                "ordering": ["day", "opening_time"],
             },
         ),
         migrations.AddIndex(
-            model_name='laundry',
-            index=models.Index(fields=['is_featured', 'is_active'], name='laundries_l_is_feat_fc6373_idx'),
+            model_name="laundry",
+            index=models.Index(
+                fields=["is_featured", "is_active"],
+                name="laundries_l_is_feat_fc6373_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='laundry',
-            index=models.Index(fields=['price_range'], name='laundries_l_price_r_68d8b0_idx'),
+            model_name="laundry",
+            index=models.Index(
+                fields=["price_range"], name="laundries_l_price_r_68d8b0_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='laundry',
-            index=models.Index(fields=['name'], name='laundries_l_name_f453aa_idx'),
+            model_name="laundry",
+            index=models.Index(fields=["name"], name="laundries_l_name_f453aa_idx"),
         ),
         migrations.AddIndex(
-            model_name='review',
-            index=models.Index(fields=['laundry', 'rating'], name='laundries_r_laundry_b52e63_idx'),
+            model_name="review",
+            index=models.Index(
+                fields=["laundry", "rating"], name="laundries_r_laundry_b52e63_idx"
+            ),
         ),
         migrations.AddField(
-            model_name='openinghours',
-            name='laundry',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='opening_hours', to='laundries.laundry'),
+            model_name="openinghours",
+            name="laundry",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="opening_hours",
+                to="laundries.laundry",
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='openinghours',
-            unique_together={('laundry', 'day')},
+            name="openinghours",
+            unique_together={("laundry", "day")},
         ),
     ]

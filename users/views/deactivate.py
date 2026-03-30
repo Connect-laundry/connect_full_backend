@@ -1,28 +1,38 @@
 # pyre-ignore[missing-module]
 from rest_framework import views, permissions, status
+
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+
 # pyre-ignore[missing-module]
 from django.shortcuts import get_object_or_404
+
 # pyre-ignore[missing-module]
 from django.utils import timezone
+
 # pyre-ignore[missing-module]
 from ..models import User
+
 
 class UserDeactivateView(views.APIView):
     """
     API endpoint for admins to deactivate a user account (Soft-Delete).
     """
+
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def patch(self, request, pk=None):
         user = get_object_or_404(User, pk=pk)
-        reason = request.data.get('reason', 'No reason provided')
-        
+        reason = request.data.get("reason", "No reason provided")
+
         if not user.is_active:
             return Response(
-                {"success": False, "status": "error", "message": "User is already inactive"},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "status": "error",
+                    "message": "User is already inactive",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         user.is_active = False
@@ -31,14 +41,16 @@ class UserDeactivateView(views.APIView):
         user.save()
 
         # Revoke tokens (optional logic depending on JWT blacklist setup)
-        
-        return Response({
-            "success": True,
-            "message": f"User {user.email} has been deactivated",
-            "data": {
-                "id": user.id,
-                "email": user.email,
-                "deactivated_at": user.deactivated_at,
-                "reason": user.deactivation_reason
+
+        return Response(
+            {
+                "success": True,
+                "message": f"User {user.email} has been deactivated",
+                "data": {
+                    "id": user.id,
+                    "email": user.email,
+                    "deactivated_at": user.deactivated_at,
+                    "reason": user.deactivation_reason,
+                },
             }
-        })
+        )

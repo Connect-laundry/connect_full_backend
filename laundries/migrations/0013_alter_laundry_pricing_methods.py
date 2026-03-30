@@ -7,13 +7,21 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0012_alter_laundry_pricing_methods'),
+        ("laundries", "0012_alter_laundry_pricing_methods"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='laundry',
-            name='pricing_methods',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')], max_length=20), blank=True, default=list, help_text="List of supported methods: ['PER_ITEM', 'PER_KG']"),
+            model_name="laundry",
+            name="pricing_methods",
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(
+                    choices=[("PER_ITEM", "Per Item"), ("PER_KG", "Per Kg")],
+                    max_length=20,
+                ),
+                blank=True,
+                default=list,
+                help_text="List of supported methods: ['PER_ITEM', 'PER_KG']",
+            ),
         ),
     ]

@@ -1,0 +1,76 @@
+[flake8]
+max-line-length = 120
+max-complexity = 12
+exclude =
+    venv,
+    .git,
+    __pycache__,
+    */migrations/*,
+    *.pyc,
+    *.txt,
+    *.json,
+    *.yml,
+    *.md
+per-file-ignores =
+    # Django settings: late imports for sentry, long config lines
+    config/settings.py:E402,E501
+    # Django URL conf: conditional imports
+    config/urls.py:E402
+    # Exception handler: complex error handling
+    config/exception_handler.py:F401
+    # Logging formatters: stdlib imports used dynamically
+    config/logging_formatters.py:F401
+    # Middleware: late imports common in Django
+    config/middleware/idempotency.py:F401
+    # Apps with signal imports (Django pattern)
+    marketplace/apps.py:F401
+    ordering/apps.py:F401
+    # Complex views (Django patterns)
+    laundries/views/diagnosis.py:C901
+    laundries/views/laundry.py:C901,E402
+    payments/webhooks.py:C901,E402,F811
+    # Dashboard views: conditional imports
+    laundries/views/dashboard.py:E402,F401
+    # Admin views
+    laundries/views/admin_views.py:F401,F811
+    # Serializer files with dynamic imports
+    laundries/serializers/laundry_detail.py:F401
+    laundries/serializers/laundry_list.py:F401
+    laundries/serializers/owner.py:F401
+    ordering/serializers/coupons.py:F401
+    ordering/views/__init__.py:F401
+    ordering/views/lifecycle.py:F401
+    ordering/views/order_views.py:F401,E402
+    ordering/views/promo.py:F401
+    ordering/permissions.py:F401
+    # Config __init__ imports
+    config/__init__.py:F401
+    # Payment views
+    payments/views.py:F401
+    payments/payout_views.py:F401
+    payments/services/paystack.py:F401
+    # Admin modules
+    payments/admin.py:F401
+    logistics/admin.py:F401
+    logistics/tests.py:F401
+    # Service files with dynamic imports
+    ordering/services/payment_service.py:F401
+    laundries/services/delivery_estimator.py:F401
+    laundries/models/laundry.py:F401
+    # User views: late imports for Django
+    users/views/password_reset.py:E402
+    users/services/auth_service.py:F401
+    users/views/media.py:F401
+    # Debug/dev scripts: relaxed standards
+    debug_500.py:F401,F811,E402
+    check_db.py:E501
+    conftest.py:F401,F811
+    scripts/*:F401,F841,E402,E501
+    tests/*:F401,F541,F811,F841,E402,E501,E701,E712,E722,E741,C901
+    laundries/tests/*:F401
+    laundries/management/commands/seed_laundries.py:F401
+    laundries/middleware.py:F401
+    marketplace/views/faq.py:F401
+    marketplace/views/feedback.py:F401
+    marketplace/views/notifications.py:F401
+    payments/tests.py:F401

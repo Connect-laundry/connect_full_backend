@@ -22,7 +22,13 @@ class NotificationTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="test@example.com", password="password", role='CUSTOMER')
         self.owner = User.objects.create_user(email="owner@example.com", password="password", role='OWNER')
-        self.laundry = Laundry.objects.create(name="Test Laundry", owner=self.owner, address="Test Address")
+        self.laundry = Laundry.objects.create(
+            name="Test Laundry",
+            owner=self.owner,
+            address="Test Address",
+            latitude=5.603700,
+            longitude=-0.187000
+        )
         self.client.force_authenticate(user=self.user)
 
     @patch('marketplace.tasks.create_notification.delay')

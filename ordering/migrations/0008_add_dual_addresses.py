@@ -6,23 +6,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0007_orderitem_service_type_alter_order_service_type'),
+        ("ordering", "0007_orderitem_service_type_alter_order_service_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='order',
-            name='delivery_address',
+            model_name="order",
+            name="delivery_address",
             field=models.TextField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='order',
-            name='pickup_address',
+            model_name="order",
+            name="pickup_address",
             field=models.TextField(blank=True, null=True),
         ),
         migrations.AlterField(
-            model_name='order',
-            name='address',
+            model_name="order",
+            name="address",
             field=models.TextField(blank=True, null=True),
         ),
     ]

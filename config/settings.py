@@ -10,17 +10,22 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 import os
+
 # pyre-ignore[import]
 import dj_database_url
 
 # pyre-ignore[import]
 import sentry_sdk
+
 # pyre-ignore[import]
 from sentry_sdk.integrations.django import DjangoIntegration
+
 # pyre-ignore[import]
 from sentry_sdk.integrations.celery import CeleryIntegration
+
 # pyre-ignore[missing-module]
 from dotenv import load_dotenv
 
@@ -33,110 +38,111 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 #
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL = "users.User"
 
 
 # Application definition
 
 # Check if PostGIS should be enabled (for production)
-USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+USE_POSTGIS = os.getenv("USE_POSTGIS", "False") == "True"
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'cloudinary_storage',
-   
-    'rest_framework',
-    'drf_spectacular',
-    'corsheaders',
-    'cloudinary',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "cloudinary_storage",
+    "rest_framework",
+    "drf_spectacular",
+    "corsheaders",
+    "cloudinary",
 ]
 
 # Add GIS support only if USE_POSTGIS is enabled
 if USE_POSTGIS:
-    INSTALLED_APPS.append('django.contrib.gis')
+    INSTALLED_APPS.append("django.contrib.gis")
 
 INSTALLED_APPS += [
-    'users',
-    'marketplace',
-    'ordering',
-    'logistics',
-    'payments',
-    'laundries',
-    'django_celery_results',
-    'rest_framework_simplejwt.token_blacklist',
-    'axes',
+    "users",
+    "marketplace",
+    "ordering",
+    "logistics",
+    "payments",
+    "laundries",
+    "django_celery_results",
+    "rest_framework_simplejwt.token_blacklist",
+    "axes",
 ]
 
 MIDDLEWARE = [
-    'laundries.middleware.JSONErrorMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.middleware.gzip.GZipMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'config.middleware.security.SecurityHeadersMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'config.middleware.idempotency.IdempotencyMiddleware',
-    'config.middleware.deactivation.DeactivationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'config.middleware.request_id.RequestIDMiddleware',
-    'csp.middleware.CSPMiddleware',
-    'axes.middleware.AxesMiddleware',
+    "laundries.middleware.JSONErrorMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "config.middleware.security.SecurityHeadersMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.idempotency.IdempotencyMiddleware",
+    "config.middleware.deactivation.DeactivationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.middleware.request_id.RequestIDMiddleware",
+    "csp.middleware.CSPMiddleware",
+    "axes.middleware.AxesMiddleware",
 ]
 
 # Security Settings
 
-if not DEBUG:    
+if not DEBUG:
     # SSL/HTTPS
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
     # HSTS
-    SECURE_HSTS_SECONDS = 31536000 # 1 year
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    
+
     # Misc
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
 
     # Sentry Configuration
-    SENTRY_DSN = os.getenv('SENTRY_DSN')
+    SENTRY_DSN = os.getenv("SENTRY_DSN")
     if SENTRY_DSN:
         sentry_sdk.init(
             dsn=SENTRY_DSN,
             integrations=[DjangoIntegration(), CeleryIntegration()],
             traces_sample_rate=1.0,
-            send_default_pii=True
+            send_default_pii=True,
         )
 
 # Data limits
-DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
 
 # CORS configuration
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in dev mode
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
     if origin.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -144,57 +150,70 @@ CORS_ALLOW_CREDENTIALS = True
 # CSRF Trusted Origins (required for Django 4.0+)
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+    for origin in os.getenv(
+        "CSRF_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
     if origin.strip()
 ]
 
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = "config.wsgi.application"
 
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 # Determine database scheme based on USE_POSTGIS
-db_scheme = 'postgis' if USE_POSTGIS else 'postgres'
-default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'connect_db')}"
+db_scheme = "postgis" if USE_POSTGIS else "postgres"
+default_db_url = f"{db_scheme}://{os.getenv('DB_USER',
+                                            'postgres')}:{os.getenv('DB_PASSWORD',
+                                                                    'postgres')}@{os.getenv('DB_HOST',
+                                                                                            'localhost')}:{os.getenv('DB_PORT',
+                                                                                                                     '5432')}/{os.getenv('DB_NAME',
+                                                                                                                                         'connect_db')}"
 
 # Determine if SSL is required for the database
 # By default, SSL is required if DEBUG is False (production)
 # Use DATABASE_SSL_REQUIRE environmental variable to override (e.g., in CI)
-DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', str(not DEBUG)).lower() == 'true'
+DATABASE_SSL_REQUIRE = (
+    os.getenv("DATABASE_SSL_REQUIRE", str(not DEBUG)).lower() == "true"
+)
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL', default_db_url),
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL", default_db_url),
         conn_max_age=600,
-        ssl_require=DATABASE_SSL_REQUIRE
+        ssl_require=DATABASE_SSL_REQUIRE,
     )
 }
 
-# Set the appropriate database engine to PostGIS only if we're using PostgreSQL and POSTGIS is enabled
-if USE_POSTGIS and DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
-    DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+# Set the appropriate database engine to PostGIS only if we're using
+# PostgreSQL and POSTGIS is enabled
+if USE_POSTGIS and DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 
 # Add postgres support only if we are not using SQLite
-if 'sqlite' not in DATABASES['default']['ENGINE'] and 'django.contrib.postgres' not in INSTALLED_APPS:
-    INSTALLED_APPS.append('django.contrib.postgres')
+if (
+    "sqlite" not in DATABASES["default"]["ENGINE"]
+    and "django.contrib.postgres" not in INSTALLED_APPS
+):
+    INSTALLED_APPS.append("django.contrib.postgres")
 
 
 # Password validation
@@ -202,16 +221,16 @@ if 'sqlite' not in DATABASES['default']['ENGINE'] and 'django.contrib.postgres' 
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -219,9 +238,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -231,17 +250,17 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-MEDIA_URL = '/media/'
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # Cloudinary Configuration
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
+    "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
 }
 
 # Django 4.2+ Storage Configuration
@@ -255,94 +274,93 @@ STORAGES = {
 }
 
 # Use Cloudinary in production or if credentials are found
-if not DEBUG or os.getenv('CLOUDINARY_CLOUD_NAME'):
+if not DEBUG or os.getenv("CLOUDINARY_CLOUD_NAME"):
     STORAGES["default"] = {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     }
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_RENDERER_CLASSES": (
+        "laundries.renderers.StandardResponseRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
     ),
-    'DEFAULT_RENDERER_CLASSES': (
-        'laundries.renderers.StandardResponseRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
-    ),
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
-    'DEFAULT_THROTTLE_CLASSES': [
-        'config.throttling.BurstUserThrottle',
-        'config.throttling.SustainedUserThrottle',
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "config.throttling.BurstUserThrottle",
+        "config.throttling.SustainedUserThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'burst_user': os.getenv('THROTTLE_BURST_USER', '60/minute'),
-        'sustained_user': os.getenv('THROTTLE_SUSTAINED_USER', '1000/day'),
-        'auth': os.getenv('THROTTLE_AUTH', '5/minute'),
-        'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
-        'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
-        'anon': os.getenv('THROTTLE_ANON', '100/day'),
-        'password_reset': os.getenv('THROTTLE_PASSWORD_RESET', '3/hour'),
+    "DEFAULT_THROTTLE_RATES": {
+        "burst_user": os.getenv("THROTTLE_BURST_USER", "60/minute"),
+        "sustained_user": os.getenv("THROTTLE_SUSTAINED_USER", "1000/day"),
+        "auth": os.getenv("THROTTLE_AUTH", "5/minute"),
+        "review": os.getenv("THROTTLE_REVIEW", "5/hour"),
+        "feedback": os.getenv("THROTTLE_FEEDBACK", "3/hour"),
+        "anon": os.getenv("THROTTLE_ANON", "100/day"),
+        "password_reset": os.getenv("THROTTLE_PASSWORD_RESET", "3/hour"),
     },
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Connect Laundry API',
-    'DESCRIPTION': 'API documentation for Connect Laundry marketplace.',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_PATCH': True,
-    'COMPONENT_SPLIT_REQUEST': True,
+    "TITLE": "Connect Laundry API",
+    "DESCRIPTION": "API documentation for Connect Laundry marketplace.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_PATCH": True,
+    "COMPONENT_SPLIT_REQUEST": True,
 }
-
 
 
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'django_cache_table',
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache_table",
     },
-    'clerk-jwks-cache': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'clerk-jwks-cache',
-    }
+    "clerk-jwks-cache": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "clerk-jwks-cache",
+    },
 }
 
-from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=100),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=100),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
 
 # Celery Configuration
 # Switch to Eager mode (no broker needed) for Postgres-only setup
 CELERY_TASK_ALWAYS_EAGER = True
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'memory://')
-CELERY_RESULT_BACKEND = 'django-db'
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "memory://")
+CELERY_RESULT_BACKEND = "django-db"
 
 
 # Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 
 # Password Reset Settings
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f"Connect Laundry <{os.getenv('EMAIL_HOST_USER')}>")
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"Connect Laundry <{
+        os.getenv('EMAIL_HOST_USER')}>")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(
+    os.getenv("PASSWORD_RESET_TOKEN_EXPIRY_HOURS", 1)
+)
 
 
 # DEBUG = False
@@ -350,10 +368,10 @@ PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_H
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# --- Observability ---    
+# --- Observability ---
 
-SENTRY_DSN = os.getenv('SENTRY_DSN')
-if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTRY_DSN:
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN and SENTRY_DSN.startswith("http") and "your_real_dsn" not in SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
@@ -361,78 +379,94 @@ if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTR
             CeleryIntegration(),
         ],
         traces_sample_rate=1.0,
-        send_default_pii=True
+        send_default_pii=True,
     )
 
-LOGGING_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'INFO')
+LOGGING_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO")
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'json': {
-            '()': 'config.logging_formatters.CustomJsonFormatter',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": "config.logging_formatters.CustomJsonFormatter",
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'json',
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
         },
     },
-    'loggers': {
-        '': { # Root logger
-            'handlers': ['console'],
-            'level': LOGGING_LEVEL,            
+    "loggers": {
+        "": {  # Root logger
+            "handlers": ["console"],
+            "level": LOGGING_LEVEL,
         },
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'DEBUG', # Used for slow query detection via DB instrumentation
-            'propagate': False,
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "DEBUG",  # Used for slow query detection via DB instrumentation
+            "propagate": False,
         },
     },
 }
 
 # Database Slow Query Tracking (Free tool: Native logging)
 # Requires SQL_DEBUG_THRESHOLD env var (e.g. 0.2 for 200ms)
-SQL_DEBUG_THRESHOLD = float(os.getenv('SQL_DEBUG_THRESHOLD', '0.2'))
+SQL_DEBUG_THRESHOLD = float(os.getenv("SQL_DEBUG_THRESHOLD", "0.2"))
 
 # Celery Reliability
-CELERY_MAX_RETRIES = int(os.getenv('CELERY_MAX_RETRIES', 5))
-CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))
+CELERY_MAX_RETRIES = int(os.getenv("CELERY_MAX_RETRIES", 5))
+CELERY_RETRY_DELAY = int(os.getenv("CELERY_RETRY_DELAY", 10))
 
 # Paystack Configuration
-PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
-PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
-PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
+PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY")
+PAYSTACK_CALLBACK_URL = os.getenv("PAYSTACK_CALLBACK_URL")
 
 # Financial Settings
-TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
-DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
-PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
+TAX_RATE = float(os.getenv("TAX_RATE", "0.07"))  # Default 7%
+DELIVERY_FEE_BASE = float(os.getenv("DELIVERY_FEE_BASE", "10.00"))  # Default 10 GHS
+PLATFORM_FEE_RATE = float(
+    os.getenv("PLATFORM_FEE_RATE", "0.05")
+)  # Default 5% commission
 
 # Currency Settings
-CURRENCY = os.getenv('CURRENCY', 'GHS')
-CURRENCY_SYMBOL = os.getenv('CURRENCY_SYMBOL', '₵')
+CURRENCY = os.getenv("CURRENCY", "GHS")
+CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "₵")
 
 # --- Security: Brute Force Protection (Axes) ---
-AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', 5))
-AXES_COOLOFF_TIME = timedelta(minutes=int(os.getenv('AXES_COOLOFF_MINUTES', 15)))
+AXES_FAILURE_LIMIT = int(os.getenv("AXES_FAILURE_LIMIT", 5))
+AXES_COOLOFF_TIME = timedelta(minutes=int(os.getenv("AXES_COOLOFF_MINUTES", 15)))
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_TEMPLATE = None # Use default or custom
-AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
+AXES_LOCKOUT_TEMPLATE = None  # Use default or custom
+AXES_HANDLER = "axes.handlers.database.AxesDatabaseHandler"
 AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesBackend',
-    'django.contrib.auth.backends.ModelBackend',
+    "axes.backends.AxesBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 # --- Security: Content Security Policy (CSP) ---
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net")
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net")
-CSP_IMG_SRC = ("'self'", "data:", "https://res.cloudinary.com", "https://cdn.jsdelivr.net")
+CSP_STYLE_SRC = (
+    "'self'",
+    "'unsafe-inline'",
+    "https://fonts.googleapis.com",
+    "https://cdn.jsdelivr.net",
+)
+CSP_SCRIPT_SRC = (
+    "'self'",
+    "'unsafe-inline'",
+    "'unsafe-eval'",
+    "https://cdn.jsdelivr.net",
+)
+CSP_IMG_SRC = (
+    "'self'",
+    "data:",
+    "https://res.cloudinary.com",
+    "https://cdn.jsdelivr.net",
+)
 CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
 CSP_CONNECT_SRC = ("'self'", "https://sentry.io")
 CSP_FRAME_ANCESTORS = ("'none'",)
-CSP_REPORT_ONLY = DEBUG # Only report during dev, enforce in prod
-
+CSP_REPORT_ONLY = DEBUG  # Only report during dev, enforce in prod

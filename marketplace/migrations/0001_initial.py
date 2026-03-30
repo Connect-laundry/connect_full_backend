@@ -16,35 +16,59 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='FAQ',
+            name="FAQ",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('question', models.CharField(max_length=255)),
-                ('answer', models.TextField()),
-                ('is_active', models.BooleanField(default=True)),
-                ('order', models.PositiveIntegerField(default=0)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("question", models.CharField(max_length=255)),
+                ("answer", models.TextField()),
+                ("is_active", models.BooleanField(default=True)),
+                ("order", models.PositiveIntegerField(default=0)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'FAQ',
-                'verbose_name_plural': 'FAQs',
-                'ordering': ['order', '-created_at'],
+                "verbose_name": "FAQ",
+                "verbose_name_plural": "FAQs",
+                "ordering": ["order", "-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='Feedback',
+            name="Feedback",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('subject', models.CharField(max_length=150)),
-                ('message', models.TextField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='feedbacks', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("subject", models.CharField(max_length=150)),
+                ("message", models.TextField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="feedbacks",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Feedback',
-                'verbose_name_plural': 'Feedbacks',
-                'ordering': ['-created_at'],
+                "verbose_name": "Feedback",
+                "verbose_name_plural": "Feedbacks",
+                "ordering": ["-created_at"],
             },
         ),
     ]

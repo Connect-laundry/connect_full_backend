@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from django.db import migrations
+
 # pyre-ignore[missing-module]
 import os
 
@@ -7,7 +8,7 @@ import os
 def add_postgis_location(apps, schema_editor):
     """Add PostGIS location column if running on PostgreSQL with PostGIS."""
     connection = schema_editor.connection
-    if connection.vendor != 'postgresql':
+    if connection.vendor != "postgresql":
         # Skip on SQLite and other non-PostgreSQL backends
         return
 
@@ -38,19 +39,17 @@ def add_postgis_location(apps, schema_editor):
 def remove_postgis_location(apps, schema_editor):
     """Remove location column (reverse migration)."""
     connection = schema_editor.connection
-    if connection.vendor != 'postgresql':
+    if connection.vendor != "postgresql":
         return
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            "ALTER TABLE laundries_laundry DROP COLUMN IF EXISTS location"
-        )
+        cursor.execute("ALTER TABLE laundries_laundry DROP COLUMN IF EXISTS location")
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0006_remove_laundry_laundries_l_latitud_13d2ca_idx_and_more'),
+        ("laundries", "0006_remove_laundry_laundries_l_latitud_13d2ca_idx_and_more"),
     ]
 
     operations = [
