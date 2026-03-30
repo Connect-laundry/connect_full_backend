@@ -45,7 +45,7 @@ The dashboard is Kofi’s high-level command center, delivering live updates fro
 
 ---
 
-## 3. Storefront Meta-Data & Config
+## 3. Storefront Metadata & Config
 
 Kofi fine-tunes his digital shop to ensure high conversion and operational clarity:
 

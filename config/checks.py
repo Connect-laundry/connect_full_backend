@@ -4,11 +4,10 @@ from django.core.checks import Error, register
 @register()
 def check_production_env_vars(app_configs, **kwargs):
     errors = []
-    
+
     import sys
     from django.conf import settings        
-             
-                      
+
     # Skip checks if running tests, makemigrations, or if DEBUG is explicitly True
     IS_TESTING = 'test' in sys.argv or 'pytest' in sys.argv[0]
     IS_MANAGEMENT_TASK = any(arg in sys.argv for arg in ['makemigrations', 'migrate', 'check'])

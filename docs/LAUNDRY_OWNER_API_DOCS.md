@@ -7,6 +7,7 @@ This documentation is the **Source of Truth** and **Technical Contract** between
 ## 🚀 1. GLOBAL INTEGRATION STANDARDS
 
 - **Base URL**: `https://connect-full-backend.onrender.com/api/v1/`
+- All endpoints below are **relative to this Base URL** (do not repeat `/api/v1/` in requests).
 - **Authentication**: Bearer JWT (`Authorization: Bearer <accessToken>`).
 - **Standard Response Envelope**:
   ```json
@@ -120,52 +121,52 @@ This documentation is the **Source of Truth** and **Technical Contract** between
   ```
 
 ### 4.2 Order Detail & Status Audit
-- **Endpoint**: `GET /api/v1/orders/{id}/`
+- **Endpoint**: `GET /orders/{id}/`
 - **Frontend Logic**: This contains the `status_history` array (Audit Trail) and the detailed `price_breakdown`.
 
 ### 4.3 The Weighing Pivot (Per-Kg Mode)
 For orders where `pricing_method == 'PER_KG'`, the frontend **must** prompt the owner to enter the `actual_weight` before moving the order to `IN_PROCESS`.
-- **Endpoint**: `PATCH /api/v1/orders/{id}/weigh/`
+- **Endpoint**: `PATCH /orders/{id}/weigh/`
 - **Payload**: `{"actual_weight": 5.5}`
 - **Behavior**: Updates the `final_price` and notifies the customer to pay the balance.
 
 ### 4.4 Lifecycle State Transitions
 Use these `POST` endpoints to push the order through the pipeline.
-- **Accept**: `POST /api/v1/lifecycle/{id}/accept/`
-- **Reject**: `POST /api/v1/lifecycle/{id}/reject/` (Payload: `{"reason": "..."}`)
-- **Mark Picked Up**: `POST /api/v1/lifecycle/{id}/mark-picked-up/` (Usually by Driver)
-- **Start Processing**: `POST /api/v1/lifecycle/{id}/mark-washed/`
-- **Out for Delivery**: `POST /api/v1/lifecycle/{id}/mark-out-for-delivery/` (Payload: `{"driver_id": "uuid"}`)
-- **Delivered**: `POST /api/v1/lifecycle/{id}/mark-delivered/`
-- **Complete**: `POST /api/v1/lifecycle/{id}/complete/`
+- **Accept**: `POST /lifecycle/{id}/accept/`
+- **Reject**: `POST /lifecycle/{id}/reject/` (Payload: `{"reason": "..."}`)
+- **Mark Picked Up**: `POST /lifecycle/{id}/mark-picked-up/` (Usually by Driver)
+- **Start Processing**: `POST /lifecycle/{id}/mark-washed/`
+- **Out for Delivery**: `POST /lifecycle/{id}/mark-out-for-delivery/` (Payload: `{"driver_id": "uuid"}`)
+- **Delivered**: `POST /lifecycle/{id}/mark-delivered/`
+- **Complete**: `POST /lifecycle/{id}/complete/`
 
 ---
 
 ## 💰 5. FINANCIALS & PAYOUTS
 
 ### 5.1 Dashboard Stats (Liquidity)
-- **Stats**: `GET /api/v1/dashboard/stats/` (Pending vs Completed order volume).
-- **Earnings**: `GET /api/v1/dashboard/earnings/`
+- **Stats**: `GET /dashboard/stats/` (Pending vs Completed order volume).
+- **Earnings**: `GET /dashboard/earnings/`
   - **Data**: `{"today": "550.00", "week": "3500.00", "payout_account": "..."}`
 
 ### 5.2 Bank Account Management
 Owners must link a bank for settlements.
-- **Link Bank**: `POST /api/v1/payments/payouts/bank-account/`
+- **Link Bank**: `POST /payments/payouts/bank-account/`
   - **Payload**: `{"bank_name": "...", "account_number": "...", "bank_code": "..."}`
-- **List Banks**: `GET /api/v1/payments/payouts/bank-account/`
+- **List Banks**: `GET /payments/payouts/bank-account/`
 
 ### 5.3 Payout Requests
 Move shop funds to the linked bank account.
-- **Create Request**: `POST /api/v1/payments/payouts/request/`
+- **Create Request**: `POST /payments/payouts/request/`
   - **Payload**: `{"amount": 1000.00, "bank_account_id": "uuid"}`
-- **Status Check**: `GET /api/v1/payments/payouts/history/`
+- **Status Check**: `GET /payments/payouts/history/`
 
 ---
 
 ## 🚛 6. WORKFORCE & LOGISTICS
 
 ### 6.1 Driver Assignment
-Owners can manually assign orders to drivers for pick-up and delivery.
+Owners can manually assign orders to drivers for pickup and delivery.
 - **Endpoint**: `POST /logistics/assignments/`
 - **Payload**:
   ```json
@@ -182,12 +183,12 @@ Owners can manually assign orders to drivers for pick-up and delivery.
 ## 🙋‍♂️ 7. MARKETPLACE & SUPPORT
 
 ### 7.1 Real-Time Notifications
-- **Inbox**: `GET /api/v1/support/notifications/`
-- **Mark Read**: `PATCH /api/v1/support/notifications/{id}/mark-read/`
+- **Inbox**: `GET /support/notifications/`
+- **Mark Read**: `PATCH /support/notifications/{id}/mark-read/`
 
 ### 7.2 FAQ & Reference
-- **Retrieve Support Docs**: `GET /api/v1/support/faqs/`
-- **Submit Feedback**: `POST /api/v1/support/help/feedback/` (`subject`, `message`).
+- **Retrieve Support Docs**: `GET /support/faqs/`
+- **Submit Feedback**: `POST /support/help/feedback/` (`subject`, `message`).
 
 ---
 
