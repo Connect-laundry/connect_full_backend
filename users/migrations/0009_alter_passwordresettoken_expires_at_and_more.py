@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0008_passwordresettoken'),
+        ("users", "0008_passwordresettoken"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='passwordresettoken',
-            name='expires_at',
+            model_name="passwordresettoken",
+            name="expires_at",
             field=models.DateTimeField(),
         ),
         migrations.AlterField(
-            model_name='passwordresettoken',
-            name='token_hash',
+            model_name="passwordresettoken",
+            name="token_hash",
             field=models.CharField(db_index=True, max_length=64, unique=True),
         ),
     ]

@@ -1,9 +1,12 @@
 # pyre-ignore[missing-module]
 from celery import shared_task
+
 # pyre-ignore[missing-module]
 import logging
+
 # pyre-ignore[missing-module]
 from django.contrib.auth import get_user_model
+
 # pyre-ignore[missing-module]
 from marketplace.models import Notification
 
@@ -16,15 +19,11 @@ logger = logging.getLogger(__name__)
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
-    retry_kwargs={'max_retries': 5}
+    retry_kwargs={"max_retries": 5},
 )
 def create_notification(
-        self,
-        user_id,
-        title,
-        body,
-        notification_type='SYSTEM',
-        related_order_id=None):
+    self, user_id, title, body, notification_type="SYSTEM", related_order_id=None
+):
     """
     Asynchronously creates a notification record in the database.
     This can be extended to trigger real push notifications (FCM/OneSignal).
@@ -36,7 +35,7 @@ def create_notification(
             title=title,
             body=body,
             type=notification_type,
-            related_order_id=related_order_id
+            related_order_id=related_order_id,
         )
 
         # Placeholder for real Push Service integration
@@ -45,8 +44,7 @@ def create_notification(
         logger.info(f"Notification created for user {user.email}: {title}")
         return str(notification.id)
     except User.DoesNotExist:
-        logger.error(
-            f"Failed to create notification: User {user_id} not found.")
+        logger.error(f"Failed to create notification: User {user_id} not found.")
     except Exception as e:
         logger.error(f"Error creating notification: {e}")
     return None
@@ -57,7 +55,7 @@ def create_notification(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
-    retry_kwargs={'max_retries': 7}
+    retry_kwargs={"max_retries": 7},
 )
 def send_real_push(self, notification_id):
     """

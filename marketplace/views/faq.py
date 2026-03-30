@@ -5,6 +5,7 @@ from marketplace.models import FAQ
 
 class FAQView(views.APIView):
     """Retrieve FAQ or help documentation from the database."""
+
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -18,8 +19,10 @@ class FAQView(views.APIView):
             }
             for f in faqs
         ]
-        return Response({
-            "status": "success",
-            "message": "FAQs retrieved successfully.",
-            "data": data
-        })
+        return Response(
+            {
+                "status": "success",
+                "message": "FAQs retrieved successfully.",
+                "data": data,
+            }
+        )

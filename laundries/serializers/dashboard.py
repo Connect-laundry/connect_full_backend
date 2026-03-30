@@ -1,7 +1,9 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+
 # pyre-ignore[missing-module]
 from ordering.models import Order
+
 # pyre-ignore[missing-module]
 from laundries.models.service import LaundryService
 
@@ -9,17 +11,22 @@ from .review import ReviewSerializer
 
 
 class DashboardOrderSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(
-        source='user.get_full_name', read_only=True)
-    status_display = serializers.CharField(
-        source='get_status_display', read_only=True)
+    customer_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_no', 'customer_name', 'status',
-            'status_display', 'estimated_price', 'final_price', 'created_at',
-            'pickup_date', 'delivery_date'
+            "id",
+            "order_no",
+            "customer_name",
+            "status",
+            "status_display",
+            "estimated_price",
+            "final_price",
+            "created_at",
+            "pickup_date",
+            "delivery_date",
         ]
 
 
@@ -43,4 +50,4 @@ class DashboardEarningsSerializer(serializers.Serializer):
 class ServiceStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaundryService
-        fields = ['is_available']
+        fields = ["is_available"]

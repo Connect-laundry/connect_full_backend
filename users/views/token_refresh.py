@@ -1,7 +1,9 @@
 # pyre-ignore[missing-module]
 from rest_framework_simplejwt.views import TokenRefreshView
+
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+
 # pyre-ignore[missing-module]
 from rest_framework import status
 
@@ -18,9 +20,11 @@ class CustomTokenRefreshView(TokenRefreshView):
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
-            return Response({"detail": str(e)},
-                            status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
-        return Response({
-            "accessToken": serializer.validated_data.get('access'),
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "accessToken": serializer.validated_data.get("access"),
+            },
+            status=status.HTTP_200_OK,
+        )

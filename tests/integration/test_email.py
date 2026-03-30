@@ -9,7 +9,7 @@ sys.path.append(os.getcwd())
 
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 
@@ -23,8 +23,8 @@ def test_email():
 
     try:
         send_mail(
-            'Connect Laundry - Test Email',
-            'This is a test email from the diagnostic script.',
+            "Connect Laundry - Test Email",
+            "This is a test email from the diagnostic script.",
             settings.DEFAULT_FROM_EMAIL,
             [settings.EMAIL_HOST_USER],  # Send to self
             fail_silently=False,

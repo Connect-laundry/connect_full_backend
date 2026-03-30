@@ -1,8 +1,10 @@
 import logging
 import time
 import functools
+
 # pyre-ignore[missing-module]
 from django.db import transaction
+
 # pyre-ignore[missing-module]
 from sentry_sdk import capture_exception, push_scope
 
@@ -17,6 +19,7 @@ def hardened_task(max_retries=3, base_delay=5):
     - Sentry integration
     - Persistence of permanent failures
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -26,19 +29,17 @@ def hardened_task(max_retries=3, base_delay=5):
             retry_count = self.request.retries
 
             log_extra = {
-                'task_id': task_id,
-                'task_name': task_name,
-                'retry_count': retry_count
+                "task_id": task_id,
+                "task_name": task_name,
+                "retry_count": retry_count,
             }
 
             try:
                 result = func(self, *args, **kwargs)
 
                 execution_time = time.time() - start_time
-                log_extra['execution_time'] = execution_time
-                logger.info(
-                    f"Task {task_name} completed successfully",
-                    extra=log_extra)
+                log_extra["execution_time"] = execution_time
+                logger.info(f"Task {task_name} completed successfully", extra=log_extra)
 
                 return result
 
@@ -53,17 +54,19 @@ def hardened_task(max_retries=3, base_delay=5):
 
                 if retry_count < max_retries:
                     # Exponential backoff: base_delay * (2 ^ retry_count)
-                    countdown = base_delay * (2 ** retry_count)
+                    countdown = base_delay * (2**retry_count)
                     logger.warning(
                         f"Task {task_name} failed. Retrying in {countdown}s...",
-                        extra=log_extra)
+                        extra=log_extra,
+                    )
                     raise self.retry(exc=exc, countdown=countdown)
 
                 # Permanent failure - persist to DB
                 logger.error(
                     f"Task {task_name} failed permanently after {max_retries} retries",
                     extra=log_extra,
-                    exc_info=True)
+                    exc_info=True,
+                )
 
                 # Import here to avoid circular dependencies
                 # pyre-ignore[import]
@@ -79,7 +82,7 @@ def hardened_task(max_retries=3, base_delay=5):
                             kwargs=kwargs,
                             exception=str(exc),
                             stack_trace=traceback.format_exc(),
-                            retry_count=retry_count
+                            retry_count=retry_count,
                         )
                 except Exception as db_err:
                     logger.critical(f"Could not persist FailedTask: {db_err}")
@@ -87,4 +90,5 @@ def hardened_task(max_retries=3, base_delay=5):
                 raise exc
 
         return wrapper
+
     return decorator

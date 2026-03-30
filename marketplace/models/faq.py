@@ -1,7 +1,9 @@
 # pyre-ignore[missing-module]
 import uuid
+
 # pyre-ignore[missing-module]
 from django.db import models
+
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
@@ -17,9 +19,9 @@ class FAQ(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('FAQ')
-        verbose_name_plural = _('FAQs')
-        ordering = ['order', '-created_at']
+        verbose_name = _("FAQ")
+        verbose_name_plural = _("FAQs")
+        ordering = ["order", "-created_at"]
 
     def __str__(self):
         return self.question

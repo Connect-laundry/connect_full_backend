@@ -1,7 +1,9 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+
 # pyre-ignore[missing-module]
 from django.contrib.auth.password_validation import validate_password
+
 # pyre-ignore[missing-module]
 from django.core.exceptions import ValidationError as DjangoValidationError
 
@@ -16,15 +18,15 @@ class ResetPasswordSerializer(serializers.Serializer):
     confirm_password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['confirm_password']:
+        if attrs["new_password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
-                {"confirm_password": "Passwords do not match."})  # nosec B105
+                {"confirm_password": "Passwords do not match."}
+            )  # nosec B105
 
         # Run Django's built-in password validators
         try:
-            validate_password(attrs['new_password'])
+            validate_password(attrs["new_password"])
         except DjangoValidationError as e:
-            raise serializers.ValidationError(
-                {"new_password": list(e.messages)})
+            raise serializers.ValidationError({"new_password": list(e.messages)})
 
         return attrs

@@ -6,24 +6,24 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0007_laundry_location'),
+        ("laundries", "0007_laundry_location"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='category',
-            name='type',
+            model_name="category",
+            name="type",
             field=models.CharField(
                 blank=True,
                 choices=[
-                    ('SERVICE_TYPE',
-                     'Service Type'),
-                    ('ITEM_CATEGORY',
-                     'Item Category')],
+                    ("SERVICE_TYPE", "Service Type"),
+                    ("ITEM_CATEGORY", "Item Category"),
+                ],
                 db_index=True,
-                default='SERVICE_TYPE',
+                default="SERVICE_TYPE",
                 max_length=20,
                 null=True,
-                verbose_name='type'),
+                verbose_name="type",
+            ),
         ),
     ]

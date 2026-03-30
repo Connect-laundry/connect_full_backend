@@ -6,21 +6,19 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0005_laundry_min_order'),
+        ("laundries", "0005_laundry_min_order"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='laundry',
-            name='laundries_l_latitud_13d2ca_idx',
+            model_name="laundry",
+            name="laundries_l_latitud_13d2ca_idx",
         ),
         migrations.AddField(
-            model_name='laundry',
-            name='city',
+            model_name="laundry",
+            name="city",
             field=models.CharField(
-                db_index=True,
-                default='Accra',
-                max_length=100,
-                verbose_name='city'),
+                db_index=True, default="Accra", max_length=100, verbose_name="city"
+            ),
         ),
     ]

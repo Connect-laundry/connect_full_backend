@@ -7,28 +7,30 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0009_laundry_pickup_fee_alter_category_type_and_more'),
-        ('ordering', '0006_remove_launderableitem_base_price_and_more'),
+        ("laundries", "0009_laundry_pickup_fee_alter_category_type_and_more"),
+        ("ordering", "0006_remove_launderableitem_base_price_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='orderitem',
-            name='service_type',
+            model_name="orderitem",
+            name="service_type",
             field=models.ForeignKey(
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
-                related_name='order_items',
-                to='laundries.category'),
+                related_name="order_items",
+                to="laundries.category",
+            ),
         ),
         migrations.AlterField(
-            model_name='order',
-            name='service_type',
+            model_name="order",
+            name="service_type",
             field=models.ForeignKey(
                 blank=True,
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
-                related_name='orders',
-                to='laundries.category'),
+                related_name="orders",
+                to="laundries.category",
+            ),
         ),
     ]

@@ -1,9 +1,12 @@
 # pyre-ignore[missing-module]
 import uuid
+
 # pyre-ignore[missing-module]
 from django.db import models
+
 # pyre-ignore[missing-module]
 from django.conf import settings
+
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
@@ -14,7 +17,8 @@ class Feedback(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='feedbacks')
+        related_name="feedbacks",
+    )
 
     subject = models.CharField(max_length=150)
     message = models.TextField()
@@ -22,9 +26,9 @@ class Feedback(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = _('Feedback')
-        verbose_name_plural = _('Feedbacks')
-        ordering = ['-created_at']
+        verbose_name = _("Feedback")
+        verbose_name_plural = _("Feedbacks")
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.subject} - {self.user.email if self.user else 'Anonymous'}"

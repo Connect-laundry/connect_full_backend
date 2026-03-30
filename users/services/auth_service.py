@@ -1,13 +1,18 @@
 # pyre-ignore[missing-module]
 from django.contrib.auth import authenticate
+
 # pyre-ignore[missing-module]
 from rest_framework_simplejwt.tokens import RefreshToken
+
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+
 # pyre-ignore[missing-module]
 from django.conf import settings
+
 # pyre-ignore[missing-module]
 from django.core.cache import cache
+
 # pyre-ignore[missing-module]
 from ..models import User
 
@@ -18,17 +23,17 @@ class AuthService:
         refresh = RefreshToken.for_user(user)
 
         # Custom claims
-        refresh['email'] = user.email
-        refresh['role'] = user.role
+        refresh["email"] = user.email
+        refresh["role"] = user.role
 
         return {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
         }
 
     def register_user(self, validated_data):
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
+        validated_data.pop("password_confirm")
+        password = validated_data.pop("password")
 
         user = User.objects.create_user(**validated_data)
         user.set_password(password)

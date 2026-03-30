@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from django.db import models
+
 # pyre-ignore[missing-module]
 from django.utils import timezone
 

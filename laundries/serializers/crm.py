@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 class CustomerSummarySerializer(serializers.Serializer):
     """Aggregated customer stats for the CRM view."""
+
     user_id = serializers.UUIDField()
     email = serializers.EmailField()
     first_name = serializers.CharField()
@@ -15,6 +16,7 @@ class CustomerSummarySerializer(serializers.Serializer):
 
 class CustomerProfileSerializer(serializers.Serializer):
     """Detailed customer profile with order history."""
+
     user_id = serializers.UUIDField()
     email = serializers.EmailField()
     first_name = serializers.CharField()

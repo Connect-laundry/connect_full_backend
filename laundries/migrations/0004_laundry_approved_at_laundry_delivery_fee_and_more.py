@@ -6,66 +6,61 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries',
-         '0003_laundry_deactivated_at_laundry_deactivation_reason_and_more'),
+        (
+            "laundries",
+            "0003_laundry_deactivated_at_laundry_deactivation_reason_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='laundry',
-            name='approved_at',
-            field=models.DateTimeField(
-                blank=True,
-                null=True),
+            model_name="laundry",
+            name="approved_at",
+            field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='laundry',
-            name='delivery_fee',
+            model_name="laundry",
+            name="delivery_fee",
             field=models.DecimalField(
                 decimal_places=2,
                 default=0.0,
                 max_digits=10,
-                verbose_name='delivery fee'),
+                verbose_name="delivery fee",
+            ),
         ),
         migrations.AddField(
-            model_name='laundry',
-            name='rejected_at',
-            field=models.DateTimeField(
-                blank=True,
-                null=True),
+            model_name="laundry",
+            name="rejected_at",
+            field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='laundry',
-            name='status',
+            model_name="laundry",
+            name="status",
             field=models.CharField(
                 choices=[
-                    ('PENDING',
-                     'Pending'),
-                    ('APPROVED',
-                     'Approved'),
-                    ('REJECTED',
-                     'Rejected'),
-                    ('SUSPENDED',
-                     'Suspended')],
+                    ("PENDING", "Pending"),
+                    ("APPROVED", "Approved"),
+                    ("REJECTED", "Rejected"),
+                    ("SUSPENDED", "Suspended"),
+                ],
                 db_index=True,
-                default='PENDING',
+                default="PENDING",
                 max_length=20,
-                verbose_name='approval status'),
+                verbose_name="approval status",
+            ),
         ),
         migrations.AddField(
-            model_name='service',
-            name='is_approved',
+            model_name="service",
+            name="is_approved",
             field=models.BooleanField(
-                db_index=True,
-                default=False,
-                verbose_name='is approved'),
+                db_index=True, default=False, verbose_name="is approved"
+            ),
         ),
         migrations.AlterField(
-            model_name='laundry',
-            name='is_active',
+            model_name="laundry",
+            name="is_active",
             field=models.BooleanField(
-                db_index=True,
-                default=False,
-                verbose_name='is active'),
+                db_index=True, default=False, verbose_name="is active"
+            ),
         ),
     ]

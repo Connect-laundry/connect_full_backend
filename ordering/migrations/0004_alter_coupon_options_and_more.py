@@ -6,36 +6,32 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0003_sync_coupons'),
+        ("ordering", "0003_sync_coupons"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='coupon',
-            options={
-                'ordering': ['-created_at']},
+            name="coupon",
+            options={"ordering": ["-created_at"]},
         ),
         migrations.RemoveIndex(
-            model_name='coupon',
-            name='ordering_co_code_7105a9_idx',
+            model_name="coupon",
+            name="ordering_co_code_7105a9_idx",
         ),
         migrations.RemoveIndex(
-            model_name='coupon',
-            name='ordering_co_is_acti_f554d0_idx',
+            model_name="coupon",
+            name="ordering_co_is_acti_f554d0_idx",
         ),
         migrations.AlterField(
-            model_name='coupon',
-            name='max_usage',
+            model_name="coupon",
+            name="max_usage",
             field=models.PositiveIntegerField(
-                blank=True,
-                help_text='Total times this coupon can be used.',
-                null=True),
+                blank=True, help_text="Total times this coupon can be used.", null=True
+            ),
         ),
         migrations.AlterField(
-            model_name='coupon',
-            name='valid_to',
-            field=models.DateTimeField(
-                blank=True,
-                null=True),
+            model_name="coupon",
+            name="valid_to",
+            field=models.DateTimeField(blank=True, null=True),
         ),
     ]

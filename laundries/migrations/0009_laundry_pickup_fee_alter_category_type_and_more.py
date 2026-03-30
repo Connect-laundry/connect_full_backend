@@ -8,42 +8,96 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0008_category_type'),
-        ('ordering', '0006_remove_launderableitem_base_price_and_more'),
+        ("laundries", "0008_category_type"),
+        ("ordering", "0006_remove_launderableitem_base_price_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='laundry',
-            name='pickup_fee',
-            field=models.DecimalField(decimal_places=2, default=0.0, max_digits=10, verbose_name='pickup fee'),
+            model_name="laundry",
+            name="pickup_fee",
+            field=models.DecimalField(
+                decimal_places=2, default=0.0, max_digits=10, verbose_name="pickup fee"
+            ),
         ),
         migrations.AlterField(
-            model_name='category',
-            name='type',
-            field=models.CharField(choices=[('SERVICE_TYPE', 'Service Type'), ('ITEM_CATEGORY', 'Item Category')], db_index=True, default='SERVICE_TYPE', max_length=20, verbose_name='type'),
+            model_name="category",
+            name="type",
+            field=models.CharField(
+                choices=[
+                    ("SERVICE_TYPE", "Service Type"),
+                    ("ITEM_CATEGORY", "Item Category"),
+                ],
+                db_index=True,
+                default="SERVICE_TYPE",
+                max_length=20,
+                verbose_name="type",
+            ),
         ),
         migrations.CreateModel(
-            name='LaundryService',
+            name="LaundryService",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('price', models.DecimalField(decimal_places=2, max_digits=10, verbose_name='price')),
-                ('estimated_duration', models.CharField(blank=True, max_length=50, verbose_name='estimated duration')),
-                ('is_available', models.BooleanField(default=True, verbose_name='is available')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('item', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='laundry_services', to='ordering.launderableitem')),
-                ('laundry', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='laundry_services', to='laundries.laundry')),
-                ('service_type', models.ForeignKey(limit_choices_to={'type': 'SERVICE_TYPE'}, on_delete=django.db.models.deletion.CASCADE, related_name='laundry_services', to='laundries.category')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "price",
+                    models.DecimalField(
+                        decimal_places=2, max_digits=10, verbose_name="price"
+                    ),
+                ),
+                (
+                    "estimated_duration",
+                    models.CharField(
+                        blank=True, max_length=50, verbose_name="estimated duration"
+                    ),
+                ),
+                (
+                    "is_available",
+                    models.BooleanField(default=True, verbose_name="is available"),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "item",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="laundry_services",
+                        to="ordering.launderableitem",
+                    ),
+                ),
+                (
+                    "laundry",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="laundry_services",
+                        to="laundries.laundry",
+                    ),
+                ),
+                (
+                    "service_type",
+                    models.ForeignKey(
+                        limit_choices_to={"type": "SERVICE_TYPE"},
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="laundry_services",
+                        to="laundries.category",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Laundry Service',
-                'verbose_name_plural': 'Laundry Services',
-                'ordering': ['laundry', 'item__name'],
-                'unique_together': {('laundry', 'item', 'service_type')},
+                "verbose_name": "Laundry Service",
+                "verbose_name_plural": "Laundry Services",
+                "ordering": ["laundry", "item__name"],
+                "unique_together": {("laundry", "item", "service_type")},
             },
         ),
         migrations.DeleteModel(
-            name='Service',
+            name="Service",
         ),
     ]

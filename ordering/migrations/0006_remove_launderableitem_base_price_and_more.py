@@ -6,16 +6,16 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0005_remove_launderableitem_category_and_more'),
+        ("ordering", "0005_remove_launderableitem_category_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='launderableitem',
-            name='base_price',
+            model_name="launderableitem",
+            name="base_price",
         ),
         migrations.RemoveField(
-            model_name='launderableitem',
-            name='supported_services',
+            model_name="launderableitem",
+            name="supported_services",
         ),
     ]

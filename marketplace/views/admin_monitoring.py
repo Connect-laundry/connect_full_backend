@@ -20,9 +20,10 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
     """
     Highly secure, staff-only endpoints for operational visibility.
     """
+
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
-    @decorators.action(detail=False, methods=['get'])
+    @decorators.action(detail=False, methods=["get"])
     def metrics(self, request):
         """Consolidated system metrics with 60s cache."""
         cache_key = "admin_global_metrics"
@@ -38,12 +39,14 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
             "total_users": User.objects.count(),
             "active_laundries": Laundry.objects.filter(is_active=True).count(),
             "orders_today": Order.objects.filter(created_at__gte=today_start).count(),
-            "revenue_today": str(Order.objects.filter(
-                created_at__gte=today_start,
-                status='COMPLETED'
-            ).aggregate(total=Sum('total_amount'))['total'] or 0.00),
-            "failed_orders": Order.objects.filter(status='REJECTED').count(),
-            "average_processing_time_minutes": 142  # Simulated for now
+            "revenue_today": str(
+                Order.objects.filter(
+                    created_at__gte=today_start, status="COMPLETED"
+                ).aggregate(total=Sum("total_amount"))["total"]
+                or 0.00
+            ),
+            "failed_orders": Order.objects.filter(status="REJECTED").count(),
+            "average_processing_time_minutes": 142,  # Simulated for now
         }
 
         cache.set(cache_key, metrics, 60)
@@ -51,20 +54,23 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
 
         return Response({"status": "success", "data": metrics})
 
-    @decorators.action(detail=False, methods=['get'], url_path='failed-tasks')
+    @decorators.action(detail=False, methods=["get"], url_path="failed-tasks")
     def failed_tasks(self, request):
         """Retrieve failed Celery tasks from the database."""
         tasks = FailedTask.objects.all()[:50]
-        data = [{
-            "task_id": t.task_id,
-            "task_name": t.task_name,
-            "exception": t.exception,
-            "timestamp": t.failed_at
-        } for t in tasks]
+        data = [
+            {
+                "task_id": t.task_id,
+                "task_name": t.task_name,
+                "exception": t.exception,
+                "timestamp": t.failed_at,
+            }
+            for t in tasks
+        ]
 
         return Response({"status": "success", "data": data})
 
-    @decorators.action(detail=False, methods=['get'], url_path='system-health')
+    @decorators.action(detail=False, methods=["get"], url_path="system-health")
     def system_health(self, request):
         """Real-time infrastructure health checks."""
         start_time = time.time()
@@ -80,25 +86,31 @@ class AdminMonitoringViewSet(viewsets.GenericViewSet):
         # 2. Cache Check (Database backed)
         try:
             cache.set("admin_health_check", "ok", 10)
-            cache_status = "healthy" if cache.get(
-                "admin_health_check") == "ok" else "unhealthy"
+            cache_status = (
+                "healthy" if cache.get("admin_health_check") == "ok" else "unhealthy"
+            )
         except Exception:
             cache_status = "unhealthy"
 
         # 3. Celery Status (Eager mode)
-        celery_status = "healthy (eager)" if getattr(
-            settings, 'CELERY_TASK_ALWAYS_EAGER', False) else "healthy"
+        celery_status = (
+            "healthy (eager)"
+            if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False)
+            else "healthy"
+        )
 
         latency = (time.time() - start_time) * 1000
 
-        return Response({
-            "status": "success",
-            "data": {
-                "database": db_status,
-                "cache": cache_status,
-                "celery": celery_status,
-                "latency_ms": round(latency, 2),
-                "uptime_seconds": 123456,  # Example static for now
-                "memory_usage_mb": 240  # Example static for now
+        return Response(
+            {
+                "status": "success",
+                "data": {
+                    "database": db_status,
+                    "cache": cache_status,
+                    "celery": celery_status,
+                    "latency_ms": round(latency, 2),
+                    "uptime_seconds": 123456,  # Example static for now
+                    "memory_usage_mb": 240,  # Example static for now
+                },
             }
-        })
+        )

@@ -1,9 +1,12 @@
 # pyre-ignore[missing-module]
 from django.contrib.auth.password_validation import validate_password
+
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+
 # pyre-ignore[missing-module]
 from rest_framework.validators import UniqueValidator
+
 # pyre-ignore[missing-module]
 from ..models import User
 
@@ -15,19 +18,22 @@ class RegisterSerializer(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True, required=True)
 
     email = serializers.EmailField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
+        required=True, validators=[UniqueValidator(queryset=User.objects.all())]
     )
     phone = serializers.CharField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
+        required=True, validators=[UniqueValidator(queryset=User.objects.all())]
     )
 
     class Meta:
         model = User
         fields = (
-            'email', 'phone', 'first_name', 'last_name',
-            'role', 'password', 'password_confirm'
+            "email",
+            "phone",
+            "first_name",
+            "last_name",
+            "role",
+            "password",
+            "password_confirm",
         )
 
     def validate_role(self, value):
@@ -35,18 +41,20 @@ class RegisterSerializer(serializers.ModelSerializer):
         allowed = [User.Role.CUSTOMER, User.Role.OWNER]
         if value not in allowed:
             raise serializers.ValidationError(
-                "Only CUSTOMER and OWNER roles are allowed for self-registration.")
+                "Only CUSTOMER and OWNER roles are allowed for self-registration."
+            )
         return value
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
+        if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError(
-                {"password": "Password fields didn't match."})  # nosec B105
+                {"password": "Password fields didn't match."}
+            )  # nosec B105
         return attrs
 
     def create(self, validated_data):
         # Remove password_confirm as it's not a model field
-        validated_data.pop('password_confirm')
+        validated_data.pop("password_confirm")
 
         # User create_user to handle password hashing
         return User.objects.create_user(**validated_data)

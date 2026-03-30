@@ -14,52 +14,58 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 # pyre-ignore[missing-module]
 from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib import admin
+
 # pyre-ignore[missing-module]
 from django.urls import path, include
+
 # pyre-ignore[missing-module]
 from django.views.generic import RedirectView
+
 # pyre-ignore[missing-module]
 from config.views.health import health_check
+
 # pyre-ignore[missing-module]
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 
 urlpatterns = [
     path(
-        '',
-        RedirectView.as_view(
-            url='/api/schema/swagger-ui/',
-            permanent=False),
-        name='root'),
-    path('health/', health_check, name='health_check'),
-    path('admin/', admin.site.urls),
-    path('api/v1/', include('users.urls')),
-    path('api/v1/support/', include('marketplace.urls')),
-    path('api/v1/laundries/', include('laundries.urls')),
-    path('api/v1/booking/', include('ordering.urls')),
-    path('api/v1/orders/', include('ordering.urls')),
-    path('api/v1/logistics/', include('logistics.urls')),
-    path('api/v1/payments/', include('payments.urls')),
-
+        "",
+        RedirectView.as_view(url="/api/schema/swagger-ui/", permanent=False),
+        name="root",
+    ),
+    path("health/", health_check, name="health_check"),
+    path("admin/", admin.site.urls),
+    path("api/v1/", include("users.urls")),
+    path("api/v1/support/", include("marketplace.urls")),
+    path("api/v1/laundries/", include("laundries.urls")),
+    path("api/v1/booking/", include("ordering.urls")),
+    path("api/v1/orders/", include("ordering.urls")),
+    path("api/v1/logistics/", include("logistics.urls")),
+    path("api/v1/payments/", include("payments.urls")),
     # OpenAPI Documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
-        'api/schema/swagger-ui/',
-        SpectacularSwaggerView.as_view(
-            url_name='schema'),
-        name='swagger-ui'),
+        "api/schema/swagger-ui/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
     path(
-        'api/schema/redoc/',
-        SpectacularRedocView.as_view(
-            url_name='schema'),
-        name='redoc'),
+        "api/schema/redoc/",
+        SpectacularRedocView.as_view(url_name="schema"),
+        name="redoc",
+    ),
 ]
 
 # Serve media files in development
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL,
-                          document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -12,7 +12,8 @@ OWNER_USER = {
     "role": "OWNER",
     "phone": "+2335550001",
     "first_name": "QA",
-    "last_name": "Owner"}
+    "last_name": "Owner",
+}
 CUSTOMER_USER = {
     "email": "customer_qa@example.com",
     "password": "QA_Connect_Pass_123!",
@@ -20,7 +21,8 @@ CUSTOMER_USER = {
     "role": "CUSTOMER",
     "phone": "+2335550002",
     "first_name": "QA",
-    "last_name": "Customer"}
+    "last_name": "Customer",
+}
 
 
 class QAValidationSuite:
@@ -35,14 +37,17 @@ class QAValidationSuite:
         detail = ""
         if response:
             detail = f" | Resp: {response.text[:200]}"
-        self.results.append({
-            "area": area,
-            "test_name": test_name,
-            "status": "PASS" if status else "FAIL",
-            "message": f"{message}{detail}"
-        })
+        self.results.append(
+            {
+                "area": area,
+                "test_name": test_name,
+                "status": "PASS" if status else "FAIL",
+                "message": f"{message}{detail}",
+            }
+        )
         print(
-            f"[{area}] {test_name}: {'PASS' if status else 'FAIL'} - {message}{detail}")
+            f"[{area}] {test_name}: {'PASS' if status else 'FAIL'} - {message}{detail}"
+        )
 
     def run_tests(self):
         print("Starting Pre-Deployment QA Validation Suite\n")
@@ -90,55 +95,38 @@ class QAValidationSuite:
                 "Owner Registration",
                 True,
                 "User registered or already exists",
-                resp)
+                resp,
+            )
         else:
-            self.log_result(
-                "AUTH",
-                "Owner Registration",
-                False,
-                f"Status: {
-                    resp.status_code}",
-                resp)
+            self.log_result("AUTH", "Owner Registration", False, f"Status: {
+                    resp.status_code}", resp)
 
         # Register Customer
-        resp = self.session.post(
-            f"{BASE_URL}/auth/register/",
-            json=CUSTOMER_USER)
+        resp = self.session.post(f"{BASE_URL}/auth/register/", json=CUSTOMER_USER)
         if resp.status_code in [201, 400]:
             self.log_result(
                 "AUTH",
                 "Customer Registration",
                 True,
                 "User registered or already exists",
-                resp)
+                resp,
+            )
         else:
-            self.log_result(
-                "AUTH",
-                "Customer Registration",
-                False,
-                f"Status: {
-                    resp.status_code}",
-                resp)
+            self.log_result("AUTH", "Customer Registration", False, f"Status: {
+                    resp.status_code}", resp)
 
     def test_login(self):
         # Login Owner
         resp = self.session.post(
             f"{BASE_URL}/auth/login/",
-            json={
-                "email": OWNER_USER["email"],
-                "password": OWNER_USER["password"]})
+            json={"email": OWNER_USER["email"], "password": OWNER_USER["password"]},
+        )
         if resp.status_code == 200:
             data = resp.json()
             self.owner_token = data.get("data", {}).get("accessToken")
-            self.log_result(
-                "AUTH",
-                "Owner Login",
-                True,
-                "JWT Token obtained",
-                resp)
+            self.log_result("AUTH", "Owner Login", True, "JWT Token obtained", resp)
         else:
-            self.log_result(
-                "AUTH", "Owner Login", False, f"Status: {
+            self.log_result("AUTH", "Owner Login", False, f"Status: {
                     resp.status_code}", resp)
 
         # Login Customer
@@ -146,19 +134,15 @@ class QAValidationSuite:
             f"{BASE_URL}/auth/login/",
             json={
                 "email": CUSTOMER_USER["email"],
-                "password": CUSTOMER_USER["password"]})
+                "password": CUSTOMER_USER["password"],
+            },
+        )
         if resp.status_code == 200:
             data = resp.json()
             self.customer_token = data.get("data", {}).get("accessToken")
-            self.log_result(
-                "AUTH",
-                "Customer Login",
-                True,
-                "JWT Token obtained",
-                resp)
+            self.log_result("AUTH", "Customer Login", True, "JWT Token obtained", resp)
         else:
-            self.log_result(
-                "AUTH", "Customer Login", False, f"Status: {
+            self.log_result("AUTH", "Customer Login", False, f"Status: {
                     resp.status_code}", resp)
 
     def test_laundry_onboarding(self):
@@ -166,8 +150,8 @@ class QAValidationSuite:
 
         # Clean up existing if any (simplified for QA)
         get_resp = self.session.get(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/",
-            headers=headers)
+            f"{BASE_URL}/laundries/dashboard/my-laundry/", headers=headers
+        )
         if get_resp.status_code == 200:
             data = get_resp.json().get("data", [])
             if data:
@@ -177,7 +161,8 @@ class QAValidationSuite:
                     "Laundry Shell Check",
                     True,
                     f"Using existing laundry {
-                        self.laundry_id}")
+                        self.laundry_id}",
+                )
                 return
 
         # Create Shell with PER_ITEM (No items yet) - SHOULD PASS now
@@ -188,25 +173,21 @@ class QAValidationSuite:
             "phone_number": "+2335550001",
             "latitude": 5.6037,
             "longitude": -0.1870,
-            "pricing_methods": ["PER_ITEM", "PER_KG"]
+            "pricing_methods": ["PER_ITEM", "PER_KG"],
         }
         resp = self.session.post(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/",
-            json=payload,
-            headers=headers)
+            f"{BASE_URL}/laundries/dashboard/my-laundry/", json=payload, headers=headers
+        )
         if resp.status_code == 201:
             self.laundry_id = resp.json()["data"]["id"]
             self.log_result(
                 "ONBOARDING",
                 "Create Shell (No Items)",
                 True,
-                "Successfully created laundry shell without items")
+                "Successfully created laundry shell without items",
+            )
         else:
-            self.log_result(
-                "ONBOARDING",
-                "Create Shell (No Items)",
-                False,
-                f"Failed: {
+            self.log_result("ONBOARDING", "Create Shell (No Items)", False, f"Failed: {
                     resp.text}")
 
     def test_catalog_management(self):
@@ -216,11 +197,11 @@ class QAValidationSuite:
 
         # 1. Get Service Types & Global Items
         items_resp = self.session.get(
-            f"{BASE_URL}/ordering/catalog/items/",
-            headers=headers)
+            f"{BASE_URL}/ordering/catalog/items/", headers=headers
+        )
         st_resp = self.session.get(
-            f"{BASE_URL}/ordering/catalog/services/",
-            headers=headers)
+            f"{BASE_URL}/ordering/catalog/services/", headers=headers
+        )
 
         if items_resp.status_code == 200 and st_resp.status_code == 200:
             item_id = items_resp.json()[0]["id"]
@@ -231,38 +212,33 @@ class QAValidationSuite:
                 "item_id": item_id,
                 "service_type_id": st_id,
                 "price": "10.00",
-                "is_available": True}
-            resp = self.session.post(
-                f"{BASE_URL}/laundries/laundries/{
-                    self.laundry_id}/services/",
-                json=payload,
-                headers=headers)
+                "is_available": True,
+            }
+            resp = self.session.post(f"{BASE_URL}/laundries/laundries/{
+                    self.laundry_id}/services/", json=payload, headers=headers)
             self.log_result(
-                "CATALOG",
-                "Add Valid Item",
-                resp.status_code == 201,
-                f"Status: {
-                    resp.status_code}")
+                "CATALOG", "Add Valid Item", resp.status_code == 201, f"Status: {
+                    resp.status_code}"
+            )
 
             # 3. Add Invalid (Negative Price) - SHOULD FAIL
             payload["price"] = "-5.00"
-            resp = self.session.post(
-                f"{BASE_URL}/laundries/laundries/{
-                    self.laundry_id}/services/",
-                json=payload,
-                headers=headers)
+            resp = self.session.post(f"{BASE_URL}/laundries/laundries/{
+                    self.laundry_id}/services/", json=payload, headers=headers)
             self.log_result(
                 "CATALOG",
                 "Reject Negative Price",
                 resp.status_code == 400,
                 f"Correctly rejected: {
-                    resp.status_code}")
+                    resp.status_code}",
+            )
         else:
             self.log_result(
                 "CATALOG",
                 "Fetch Global Catalog",
                 False,
-                "Could not fetch items/services")
+                "Could not fetch items/services",
+            )
 
     def test_activation_flow(self):
         if not self.laundry_id:
@@ -273,74 +249,66 @@ class QAValidationSuite:
         self.session.patch(
             f"{BASE_URL}/laundries/dashboard/my-laundry/{
                 self.laundry_id}/",
-            json={
-                "price_per_kg": "0.00",
-                "pricing_methods": ["PER_KG"]},
-            headers=headers)
+            json={"price_per_kg": "0.00", "pricing_methods": ["PER_KG"]},
+            headers=headers,
+        )
 
         # 2. Activate with Price=0 -> SHOULD FAIL
         resp = self.session.patch(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/{self.laundry_id}/activate/", headers=headers)
-        self.log_result("ACTIVATION",
-                        "Reject 0 Price PER_KG",
-                        resp.status_code == 400,
-                        f"Rejected: {resp.text[:50]}...")
+            f"{BASE_URL}/laundries/dashboard/my-laundry/{self.laundry_id}/activate/",
+            headers=headers,
+        )
+        self.log_result(
+            "ACTIVATION",
+            "Reject 0 Price PER_KG",
+            resp.status_code == 400,
+            f"Rejected: {resp.text[:50]}...",
+        )
 
         # 3. Fix price and try activate -> SHOULD PASS
         self.session.patch(
             f"{BASE_URL}/laundries/dashboard/my-laundry/{
                 self.laundry_id}/",
-            json={
-                "price_per_kg": "15.00",
-                "pricing_methods": [
-                    "PER_KG",
-                    "PER_ITEM"]},
-            headers=headers)
+            json={"price_per_kg": "15.00", "pricing_methods": ["PER_KG", "PER_ITEM"]},
+            headers=headers,
+        )
         resp = self.session.patch(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/{self.laundry_id}/activate/", headers=headers)
+            f"{BASE_URL}/laundries/dashboard/my-laundry/{self.laundry_id}/activate/",
+            headers=headers,
+        )
 
         # WAIT: Need ADMIN approval to be "APPROVED" before activation works? No, currently activation requires status=APPROVED.
         # Let's check status. If PENDING, we bypass this for QA or use Admin to
         # approve.
-        l_status = self.session.get(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/{
-                self.laundry_id}/",
-            headers=headers).json()["data"]["status"]
+        l_status = self.session.get(f"{BASE_URL}/laundries/dashboard/my-laundry/{
+                self.laundry_id}/", headers=headers).json()["data"]["status"]
         if l_status == "PENDING":
             self.log_result(
                 "ACTIVATION",
                 "Status Check",
                 True,
-                "Laundry is PENDING. Activation test requires manual/admin approval Mock.")
+                "Laundry is PENDING. Activation test requires manual/admin approval Mock.",
+            )
             # Mock Admin Approval if possible or skip.
             # For this script to be fully automated, we assume the environment
             # allows status transitions or we use an existing approved one.
             pass
         else:
             self.log_result(
-                "ACTIVATION",
-                "Final Activation",
-                resp.status_code == 200,
-                f"Status: {
-                    resp.status_code}")
+                "ACTIVATION", "Final Activation", resp.status_code == 200, f"Status: {
+                    resp.status_code}"
+            )
 
     def test_customer_visibility(self):
         headers = {"Authorization": f"Bearer {self.customer_token}"}
-        resp = self.session.get(
-            f"{BASE_URL}/laundries/laundries/",
-            headers=headers)
+        resp = self.session.get(f"{BASE_URL}/laundries/laundries/", headers=headers)
         if resp.status_code == 200:
             data = resp.json().get("results", [])
             all_active = all(l["is_active"] for l in data)
-            self.log_result(
-                "VISIBILITY", "Active Only Filtering", all_active, f"Found {
+            self.log_result("VISIBILITY", "Active Only Filtering", all_active, f"Found {
                     len(data)} laundries, all active: {all_active}")
         else:
-            self.log_result(
-                "VISIBILITY",
-                "Public Listing",
-                False,
-                f"Status: {
+            self.log_result("VISIBILITY", "Public Listing", False, f"Status: {
                     resp.status_code}")
 
     def test_order_creation(self):
@@ -348,14 +316,12 @@ class QAValidationSuite:
         # Let's find one from the public list.
         headers = {"Authorization": f"Bearer {self.customer_token}"}
         list_resp = self.session.get(
-            f"{BASE_URL}/laundries/laundries/",
-            headers=headers)
+            f"{BASE_URL}/laundries/laundries/", headers=headers
+        )
         if list_resp.status_code != 200 or not list_resp.json().get("results"):
             self.log_result(
-                "ORDERS",
-                "Setup",
-                False,
-                "No active laundry found for order tests")
+                "ORDERS", "Setup", False, "No active laundry found for order tests"
+            )
             return
 
         l_id = list_resp.json()["results"][0]["id"]
@@ -363,11 +329,11 @@ class QAValidationSuite:
         # CASE A: PER_ITEM
         # Fetch an item from its catalog
         cat_resp = self.session.get(
-            f"{BASE_URL}/ordering/catalog/items/",
-            headers=headers)
+            f"{BASE_URL}/ordering/catalog/items/", headers=headers
+        )
         svc_resp = self.session.get(
-            f"{BASE_URL}/ordering/catalog/services/",
-            headers=headers)
+            f"{BASE_URL}/ordering/catalog/services/", headers=headers
+        )
         item_id = cat_resp.json()[0]["id"]
         st_id = svc_resp.json()[0]["id"]
 
@@ -375,60 +341,51 @@ class QAValidationSuite:
             "laundry": l_id,
             "pricing_method": "PER_ITEM",
             "items": [{"item": item_id, "service_type": st_id, "quantity": 2}],
-            "pickup_date": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "pickup_address": "Test Street"
+            "pickup_date": (datetime.now() + timedelta(days=1)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+            "pickup_address": "Test Street",
         }
         resp = self.session.post(
-            f"{BASE_URL}/ordering/booking/create/",
-            json=payload,
-            headers=headers)
+            f"{BASE_URL}/ordering/booking/create/", json=payload, headers=headers
+        )
         self.log_result(
-            "ORDERS",
-            "Create PER_ITEM Order",
-            resp.status_code == 201,
-            f"Status: {
-                resp.status_code}")
+            "ORDERS", "Create PER_ITEM Order", resp.status_code == 201, f"Status: {
+                resp.status_code}"
+        )
 
         # CASE B: PER_KG
         payload = {
             "laundry": l_id,
             "pricing_method": "PER_KG",
             "estimated_weight": 5.5,
-            "pickup_date": (
-                datetime.now() +
-                timedelta(
-                    days=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "pickup_address": "Test Street"}
+            "pickup_date": (datetime.now() + timedelta(days=2)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+            "pickup_address": "Test Street",
+        }
         resp = self.session.post(
-            f"{BASE_URL}/ordering/booking/create/",
-            json=payload,
-            headers=headers)
+            f"{BASE_URL}/ordering/booking/create/", json=payload, headers=headers
+        )
         if resp.status_code == 201:
             self.log_result(
-                "ORDERS",
-                "Create PER_KG Order",
-                True,
-                f"Status: 201, Snapshot: {
-                    resp.json().get('price_per_kg_snapshot')}")
+                "ORDERS", "Create PER_KG Order", True, f"Status: 201, Snapshot: {
+                    resp.json().get('price_per_kg_snapshot')}"
+            )
         else:
-            self.log_result(
-                "ORDERS",
-                "Create PER_KG Order",
-                False,
-                f"Status: {
+            self.log_result("ORDERS", "Create PER_KG Order", False, f"Status: {
                     resp.status_code}")
 
     def test_order_lifecycle(self):
         # We find an order that the owner can update
         headers = {"Authorization": f"Bearer {self.owner_token}"}
         orders_resp = self.session.get(
-            f"{BASE_URL}/ordering/ordering/", headers=headers)
+            f"{BASE_URL}/ordering/ordering/", headers=headers
+        )
         if orders_resp.status_code != 200 or not orders_resp.json().get("data"):
             self.log_result(
-                "LIFECYCLE",
-                "Setup",
-                False,
-                "No orders found to test lifecycle")
+                "LIFECYCLE", "Setup", False, "No orders found to test lifecycle"
+            )
             return
 
         order = orders_resp.json()["data"][0]
@@ -437,7 +394,8 @@ class QAValidationSuite:
                 "LIFECYCLE",
                 "Filter",
                 True,
-                "Order is PER_ITEM, skipping weight update test")
+                "Order is PER_ITEM, skipping weight update test",
+            )
             return
 
         # Update Weight
@@ -446,19 +404,14 @@ class QAValidationSuite:
         # update-weight currently works if not weighed.
         resp = self.session.patch(
             f"{BASE_URL}/ordering/ordering/{o_id}/update-weight/",
-            json={
-                "actual_weight": 6.2},
-            headers=headers)
+            json={"actual_weight": 6.2},
+            headers=headers,
+        )
         if resp.status_code == 200:
-            self.log_result(
-                "LIFECYCLE", "Update Weight", True, f"New Price: {
+            self.log_result("LIFECYCLE", "Update Weight", True, f"New Price: {
                     resp.json()['data']['final_price']}")
         else:
-            self.log_result(
-                "LIFECYCLE",
-                "Update Weight",
-                False,
-                f"Status: {
+            self.log_result("LIFECYCLE", "Update Weight", False, f"Status: {
                     resp.status_code}, Text: {
                     resp.text}")
 
@@ -466,18 +419,15 @@ class QAValidationSuite:
         headers_cust = {"Authorization": f"Bearer {self.customer_token}"}
 
         # Customer trying to activate laundry -> SHOULD FAIL
-        resp = self.session.patch(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/{
-                self.laundry_id}/activate/",
-            headers=headers_cust)
+        resp = self.session.patch(f"{BASE_URL}/laundries/dashboard/my-laundry/{
+                self.laundry_id}/activate/", headers=headers_cust)
         self.log_result(
             "PERMISSIONS",
             "Customer Reject Activation",
-            resp.status_code in [
-                403,
-                404],
+            resp.status_code in [403, 404],
             f"Status: {
-                resp.status_code}")
+                resp.status_code}",
+        )
 
     def test_edge_cases(self):
         headers = {"Authorization": f"Bearer {self.owner_token}"}
@@ -485,13 +435,12 @@ class QAValidationSuite:
         resp = self.session.post(
             f"{BASE_URL}/laundries/dashboard/my-laundry/",
             data="INVALID JSON",
-            headers=headers)
+            headers=headers,
+        )
         self.log_result(
-            "EDGE",
-            "Invalid JSON Check",
-            resp.status_code == 400,
-            f"Status: {
-                resp.status_code}")
+            "EDGE", "Invalid JSON Check", resp.status_code == 400, f"Status: {
+                resp.status_code}"
+        )
 
     def generate_report(self):
         print("\n" + "=" * 50)

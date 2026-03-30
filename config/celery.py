@@ -1,22 +1,23 @@
 import os
+
 # pyre-ignore[missing-module]
 from celery import Celery
 
 # Set the default Django settings module for the 'celery' program.
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-app = Celery('config')
+app = Celery("config")
 
 # Using a string here means the worker doesn't have to serialize
 # the configuration object to child processes.
 # - namespace='CELERY' means all celery-related configuration keys
 #   should have a `CELERY_` prefix.
-app.config_from_object('django.conf:settings', namespace='CELERY')
+app.config_from_object("django.conf:settings", namespace="CELERY")
 
 # Production Reliability Settings
 app.conf.update(
     # Redis visibility timeout (1 hour) to prevent premature task re-delivery
-    broker_transport_options={'visibility_timeout': 3600},
+    broker_transport_options={"visibility_timeout": 3600},
     # Ensure worker sends events for observability
     worker_send_task_events=True,
     task_send_sent_event=True,

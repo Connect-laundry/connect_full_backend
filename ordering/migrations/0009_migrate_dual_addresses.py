@@ -4,19 +4,19 @@ from django.db import migrations
 
 
 def migrate_addresses(apps, schema_editor):
-    Order = apps.get_model('ordering', 'Order')
+    Order = apps.get_model("ordering", "Order")
     # Copy the 'address' value to both pickup_address and delivery_address
     for order in Order.objects.all():
         if order.address:
             order.pickup_address = order.address
             order.delivery_address = order.address
-            order.save(update_fields=['pickup_address', 'delivery_address'])
+            order.save(update_fields=["pickup_address", "delivery_address"])
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0008_add_dual_addresses'),
+        ("ordering", "0008_add_dual_addresses"),
     ]
 
     operations = [

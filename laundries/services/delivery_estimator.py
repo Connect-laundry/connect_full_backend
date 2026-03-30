@@ -7,6 +7,7 @@ class DeliveryEstimator:
     """
     Service to calculate dynamic delivery time estimates.
     """
+
     @staticmethod
     def calculate_haversine_distance(lat1, lon1, lat2, lon2):
         """
@@ -24,18 +25,17 @@ class DeliveryEstimator:
         # Haversine formula
         dlon = lon2 - lon1
         dlat = lat2 - lat1
-        a = math.sin(dlat / 2)**2 + math.cos(lat1) * \
-            math.cos(lat2) * math.sin(dlon / 2)**2
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        )
         c = 2 * math.asin(math.sqrt(a))
         r = 6371  # Radius of earth in kilometers
         return c * r
 
     def get_estimated_delivery_time(
-            self,
-            laundry,
-            user_lat=None,
-            user_lng=None,
-            active_order_count=0):
+        self, laundry, user_lat=None, user_lng=None, active_order_count=0
+    ):
         """
         Main calculation logic for delivery estimation.
         - Base time = laundry.estimated_delivery_hours
@@ -45,6 +45,7 @@ class DeliveryEstimator:
         - Cap at 48 hours
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         try:
@@ -52,7 +53,7 @@ class DeliveryEstimator:
             total_minutes = base_hours * 60
 
             # 1. Queue Delay (+10 mins per active order)
-            total_minutes += (int(active_order_count or 0) * 10)
+            total_minutes += int(active_order_count or 0) * 10
 
             # 2. Distance Delay (+5 mins per 5 km)
             if user_lat is not None and user_lng is not None:
@@ -63,8 +64,7 @@ class DeliveryEstimator:
                     distance_delay = (distance / 5) * 5
                     total_minutes += distance_delay
                 except Exception as e:
-                    logger.warning(
-                        f"Distance calculation failed for laundry {
+                    logger.warning(f"Distance calculation failed for laundry {
                             laundry.id}: {e}")
 
             # 3. Peak Hour Surge (+15%)
@@ -84,8 +84,7 @@ class DeliveryEstimator:
 
             return self.format_duration(total_minutes)
         except Exception as e:
-            logger.error(
-                f"Error calculating delivery time for laundry {
+            logger.error(f"Error calculating delivery time for laundry {
                     laundry.id}: {e}", exc_info=True)
             return f"{laundry.estimated_delivery_hours or 24}h 0m"
 

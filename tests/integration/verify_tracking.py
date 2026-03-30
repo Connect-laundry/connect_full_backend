@@ -9,7 +9,7 @@ from decimal import Decimal
 
 # Setup Django
 sys.path.append(os.getcwd())
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 
@@ -45,7 +45,7 @@ def verify_tracking():
         order=order,
         status="OUT_FOR_DELIVERY",
         latitude=Decimal("5.6037"),
-        longitude=Decimal("-0.1870")
+        longitude=Decimal("-0.1870"),
     )
 
     serializer = OrderDetailSerializer(order)

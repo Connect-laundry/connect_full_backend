@@ -7,17 +7,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0012_rename_total_amount_order_final_price_and_more'),
-        ('payments', '0004_bankaccount_payoutrequest'),
+        ("ordering", "0012_rename_total_amount_order_final_price_and_more"),
+        ("payments", "0004_bankaccount_payoutrequest"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='payment',
-            name='order',
+            model_name="payment",
+            name="order",
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name='payments',
-                to='ordering.order'),
+                related_name="payments",
+                to="ordering.order",
+            ),
         ),
     ]

@@ -7,13 +7,14 @@ import os
 import django
 import logging
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 
 def debug_approve():
     try:
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
 
         laundry = Laundry.objects.last()  # Latest one from test
@@ -24,17 +25,18 @@ def debug_approve():
         print(f"Testing for Laundry ID: {laundry.id}")
 
         try:
-            admin_user = User.objects.get(email='testadmin100@example.com')
+            admin_user = User.objects.get(email="testadmin100@example.com")
         except User.DoesNotExist:
             print("Admin user not found")
             return
 
         factory = APIRequestFactory()
         request = factory.patch(
-            f'/api/v1/laundries/admin/laundries/{laundry.id}/approve/')
+            f"/api/v1/laundries/admin/laundries/{laundry.id}/approve/"
+        )
         force_authenticate(request, user=admin_user)
 
-        view = AdminLaundryViewSet.as_view({'patch': 'approve'})
+        view = AdminLaundryViewSet.as_view({"patch": "approve"})
         response = view(request, pk=str(laundry.id))
 
         print(f"Status: {response.status_code}")

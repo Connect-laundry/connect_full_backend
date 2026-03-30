@@ -1,9 +1,12 @@
 import hashlib
 import json
+
 # pyre-ignore[missing-module]
 from django.core.cache import cache
+
 # pyre-ignore[missing-module]
 from django.http import JsonResponse, HttpResponse
+
 # pyre-ignore[missing-module]
 from django.utils.decorators import decorator_from_middleware
 
@@ -53,13 +56,14 @@ class IdempotencyMiddleware:
             # We only cache the content and status code for now
             # To be fully production-ready, we might want to cache headers too
             data = {
-                "content": response.content.decode("utf-8") if isinstance(
-                    response.content,
-                    bytes) else response.content,
+                "content": (
+                    response.content.decode("utf-8")
+                    if isinstance(response.content, bytes)
+                    else response.content
+                ),
                 "status_code": response.status_code,
-                "content_type": response.get(
-                    "Content-Type",
-                    "application/json")}
+                "content_type": response.get("Content-Type", "application/json"),
+            }
             cache.set(cache_key, data, 86400)  # 24 hours
         except Exception:
             # If caching fails, don't break the request
@@ -70,7 +74,7 @@ class IdempotencyMiddleware:
         response = HttpResponse(
             content=cached_data["content"],
             status=cached_data["status_code"],
-            content_type=cached_data["content_type"]
+            content_type=cached_data["content_type"],
         )
         response["X-Idempotency-Cache"] = "HIT"
         return response

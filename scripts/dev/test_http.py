@@ -6,19 +6,18 @@ import json
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 
 def http_test():
-    user = User.objects.filter(role='CUSTOMER').first()
+    user = User.objects.filter(role="CUSTOMER").first()
     refresh = RefreshToken.for_user(user)
     access_token = str(refresh.access_token)
 
     laundry_service = LaundryService.objects.filter(
-        is_available=True,
-        laundry__is_active=True,
-        laundry__status='APPROVED').first()
+        is_available=True, laundry__is_active=True, laundry__status="APPROVED"
+    ).first()
 
     payload = {
         "laundry": str(laundry_service.laundry.id),
@@ -33,20 +32,20 @@ def http_test():
             {
                 "item": str(laundry_service.item.id),
                 "service_type": str(laundry_service.service_type.id),
-                "quantity": 3
+                "quantity": 3,
             }
         ],
         "special_instructions": "Test via HTTP",
-        "payment_method": "paystack"
+        "payment_method": "paystack",
     }
 
     print("Hitting http://localhost:8000/api/v1/booking/create/ ...")
     try:
         response = requests.post(
-            'http://localhost:8000/api/v1/booking/create/',
+            "http://localhost:8000/api/v1/booking/create/",
             json=payload,
-            headers={'Authorization': f'Bearer {access_token}'},
-            timeout=10
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
         )
         print(f"Status Code: {response.status_code}")
         print("Response:", response.text)

@@ -2,7 +2,7 @@ from django.db import migrations, models
 
 
 def migrate_order_total(apps, schema_editor):
-    Order = apps.get_model('ordering', 'Order')
+    Order = apps.get_model("ordering", "Order")
     # Copy final_price (the old total_amount) to estimated_price where missing
     for order in Order.objects.all():
         if not order.estimated_price and order.final_price:
@@ -13,7 +13,7 @@ def migrate_order_total(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ordering', '0012_rename_total_amount_order_final_price_and_more'),
+        ("ordering", "0012_rename_total_amount_order_final_price_and_more"),
     ]
 
     operations = [

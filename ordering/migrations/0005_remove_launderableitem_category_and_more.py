@@ -7,35 +7,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0008_category_type'),
-        ('ordering', '0004_alter_coupon_options_and_more'),
+        ("laundries", "0008_category_type"),
+        ("ordering", "0004_alter_coupon_options_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='launderableitem',
-            name='category',
+            model_name="launderableitem",
+            name="category",
         ),
         migrations.AddField(
-            model_name='launderableitem',
-            name='item_category',
+            model_name="launderableitem",
+            name="item_category",
             field=models.ForeignKey(
                 blank=True,
-                limit_choices_to={
-                    'type': 'ITEM_CATEGORY'},
+                limit_choices_to={"type": "ITEM_CATEGORY"},
                 null=True,
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name='launderable_items',
-                to='laundries.category'),
+                related_name="launderable_items",
+                to="laundries.category",
+            ),
         ),
         migrations.AddField(
-            model_name='launderableitem',
-            name='supported_services',
+            model_name="launderableitem",
+            name="supported_services",
             field=models.ManyToManyField(
                 blank=True,
-                limit_choices_to={
-                    'type': 'SERVICE_TYPE'},
-                related_name='launderable_items_services',
-                to='laundries.category'),
+                limit_choices_to={"type": "SERVICE_TYPE"},
+                related_name="launderable_items_services",
+                to="laundries.category",
+            ),
         ),
     ]

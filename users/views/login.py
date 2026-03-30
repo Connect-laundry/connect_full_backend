@@ -1,13 +1,18 @@
 # pyre-ignore[missing-module]
 from rest_framework import status
+
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+
 # pyre-ignore[missing-module]
 from rest_framework.views import APIView
+
 # pyre-ignore[missing-module]
 from rest_framework.permissions import AllowAny
+
 # pyre-ignore[missing-module]
 from ..serializers.login import LoginSerializer
+
 # pyre-ignore[missing-module]
 from ..services.auth_service import AuthService
 
@@ -21,31 +26,37 @@ class LoginView(APIView):
             service = AuthService()
             try:
                 user, tokens = service.login_user(
-                    email=serializer.validated_data['email'],
-                    password=serializer.validated_data['password'],
-                    request=request
+                    email=serializer.validated_data["email"],
+                    password=serializer.validated_data["password"],
+                    request=request,
                 )
-                return Response({
-                    "success": True,
-                    "message": "Login successful",
-                    "data": {
-                        "accessToken": tokens['access'],
-                        "refreshToken": tokens['refresh'],
-                        "user": {
-                            "id": str(user.id),
-                            "email": user.email,
-                            "fullName": user.get_full_name(),
-                            "role": user.role
-                        }
-                    }
-                }, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Login successful",
+                        "data": {
+                            "accessToken": tokens["access"],
+                            "refreshToken": tokens["refresh"],
+                            "user": {
+                                "id": str(user.id),
+                                "email": user.email,
+                                "fullName": user.get_full_name(),
+                                "role": user.role,
+                            },
+                        },
+                    },
+                    status=status.HTTP_200_OK,
+                )
             except Exception as e:
-                return Response({
-                    "success": False,
-                    "message": str(e)
-                }, status=status.HTTP_400_BAD_REQUEST)
-        return Response({
-            "success": False,
-            "message": "Validation failed",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"success": False, "message": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(
+            {
+                "success": False,
+                "message": "Validation failed",
+                "errors": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )

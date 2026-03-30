@@ -8,11 +8,12 @@ from .machine import Machine
 from .staff import LaundryStaff
 
 __all__ = [
-    'Laundry',
-    'Category',
-    'LaundryService',
-    'Review',
-    'Favorite',
-    'OpeningHours',
-    'Machine',
-    'LaundryStaff']
+    "Laundry",
+    "Category",
+    "LaundryService",
+    "Review",
+    "Favorite",
+    "OpeningHours",
+    "Machine",
+    "LaundryStaff",
+]

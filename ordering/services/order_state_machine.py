@@ -1,9 +1,12 @@
 # pyre-ignore[missing-module]
 from django.db import transaction
+
 # pyre-ignore[missing-module]
 from django.utils import timezone
+
 # pyre-ignore[missing-module]
 from django.dispatch import Signal
+
 # pyre-ignore[missing-module]
 from ..models.base import Order, OrderStatusHistory
 
@@ -21,24 +24,13 @@ class OrderStateMachine:
         Order.Status.PENDING: [
             Order.Status.CONFIRMED,
             Order.Status.REJECTED,
-            Order.Status.CANCELLED
+            Order.Status.CANCELLED,
         ],
-        Order.Status.CONFIRMED: [
-            Order.Status.PICKED_UP,
-            Order.Status.CANCELLED
-        ],
-        Order.Status.PICKED_UP: [
-            Order.Status.IN_PROCESS
-        ],
-        Order.Status.IN_PROCESS: [
-            Order.Status.OUT_FOR_DELIVERY
-        ],
-        Order.Status.OUT_FOR_DELIVERY: [
-            Order.Status.DELIVERED
-        ],
-        Order.Status.DELIVERED: [
-            Order.Status.COMPLETED
-        ],
+        Order.Status.CONFIRMED: [Order.Status.PICKED_UP, Order.Status.CANCELLED],
+        Order.Status.PICKED_UP: [Order.Status.IN_PROCESS],
+        Order.Status.IN_PROCESS: [Order.Status.OUT_FOR_DELIVERY],
+        Order.Status.OUT_FOR_DELIVERY: [Order.Status.DELIVERED],
+        Order.Status.DELIVERED: [Order.Status.COMPLETED],
         # Terminal states have no transitions out
         Order.Status.REJECTED: [],
         Order.Status.CANCELLED: [],
@@ -70,14 +62,14 @@ class OrderStateMachine:
         # update timestamps based on status
         now = timezone.now()
         timestamp_map = {
-            Order.Status.CONFIRMED: 'confirmed_at',
-            Order.Status.PICKED_UP: 'picked_up_at',
-            Order.Status.IN_PROCESS: 'processing_started_at',
-            Order.Status.OUT_FOR_DELIVERY: 'out_for_delivery_at',
-            Order.Status.DELIVERED: 'delivered_at',
-            Order.Status.COMPLETED: 'completed_at',
-            Order.Status.CANCELLED: 'cancelled_at',
-            Order.Status.REJECTED: 'rejected_at',
+            Order.Status.CONFIRMED: "confirmed_at",
+            Order.Status.PICKED_UP: "picked_up_at",
+            Order.Status.IN_PROCESS: "processing_started_at",
+            Order.Status.OUT_FOR_DELIVERY: "out_for_delivery_at",
+            Order.Status.DELIVERED: "delivered_at",
+            Order.Status.COMPLETED: "completed_at",
+            Order.Status.CANCELLED: "cancelled_at",
+            Order.Status.REJECTED: "rejected_at",
         }
 
         ts_field = timestamp_map.get(to_status)
@@ -100,7 +92,7 @@ class OrderStateMachine:
             previous_status=from_status,
             new_status=to_status,
             changed_by=user,
-            metadata=metadata
+            metadata=metadata,
         )
 
         # Emit signal (Notification hooks)
@@ -110,7 +102,7 @@ class OrderStateMachine:
             from_status=from_status,
             to_status=to_status,
             user=user,
-            metadata=metadata
+            metadata=metadata,
         )
 
         return order, True

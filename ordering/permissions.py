@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from rest_framework import permissions
+
 # pyre-ignore[missing-module]
 from .models.base import Order
 
@@ -11,9 +12,9 @@ class IsOrderParticipant(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return (
-            obj.user == request.user or
-            obj.laundry.owner == request.user or
-            request.user.is_staff
+            obj.user == request.user
+            or obj.laundry.owner == request.user
+            or request.user.is_staff
         )
 
 
@@ -30,15 +31,15 @@ class CanManageLifecycle(permissions.BasePermission):
             return True
 
         # Customer can only cancel
-        if user.role == 'CUSTOMER':
-            return view.action == 'cancel'
+        if user.role == "CUSTOMER":
+            return view.action == "cancel"
 
         # Laundry Owner can manage most stages
-        if user.role == 'OWNER' and obj.laundry.owner == user:
+        if user.role == "OWNER" and obj.laundry.owner == user:
             return True
 
         # Rider can mark picked up and delivered
-        if user.role == 'RIDER':
-            return view.action in ['mark_picked_up', 'mark_delivered']
+        if user.role == "RIDER":
+            return view.action in ["mark_picked_up", "mark_delivered"]
 
         return False

@@ -6,7 +6,7 @@ from ..models.legal import LegalDocument
 class LegalDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = LegalDocument
-        fields = ['document_type', 'title', 'content', 'version', 'updated_at']
+        fields = ["document_type", "title", "content", "version", "updated_at"]
 
 
 class LegalDocumentView(views.APIView):
@@ -17,21 +17,23 @@ class LegalDocumentView(views.APIView):
             # Get specific document
             try:
                 doc = LegalDocument.objects.get(
-                    document_type=type.upper(), is_active=True)
-                return Response({
-                    "success": True,
-                    "data": LegalDocumentSerializer(doc).data
-                })
+                    document_type=type.upper(), is_active=True
+                )
+                return Response(
+                    {"success": True, "data": LegalDocumentSerializer(doc).data}
+                )
             except LegalDocument.DoesNotExist:
-                return Response({
-                    "success": False,
-                    "status": "error",
-                    "message": "Document not found."
-                }, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {
+                        "success": False,
+                        "status": "error",
+                        "message": "Document not found.",
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
         else:
             # List all documents
             docs = LegalDocument.objects.filter(is_active=True)
-            return Response({
-                "success": True,
-                "data": LegalDocumentSerializer(docs, many=True).data
-            })
+            return Response(
+                {"success": True, "data": LegalDocumentSerializer(docs, many=True).data}
+            )

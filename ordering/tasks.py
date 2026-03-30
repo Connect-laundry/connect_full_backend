@@ -1,11 +1,15 @@
 # pyre-ignore[missing-module]
 import logging
+
 # pyre-ignore[missing-module]
 from celery import shared_task
+
 # pyre-ignore[missing-module]
 from django.db import transaction
+
 # pyre-ignore[missing-module]
 from config.celery_utils import hardened_task
+
 # pyre-ignore[missing-module]
 from .models.base import Order
 
@@ -33,8 +37,7 @@ def process_order_confirmation(self, order_id):
 
             # Idempotency check: if already processed, skip
             if order.status != Order.Status.PENDING:
-                logger.info(
-                    f"Order {order_id} already processed (Status: {
+                logger.info(f"Order {order_id} already processed (Status: {
                         order.status})")
                 return f"Order {order_id} already processed"
 

@@ -11,7 +11,7 @@ from datetime import timedelta
 
 # Setup Django
 sys.path.append(os.getcwd())
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 
@@ -25,8 +25,7 @@ def test_password_reset():
     token = PasswordResetToken.create_for_user(user)
     print(f"Token created for {user.email}: {token[:8]}...")
 
-    pr_token = PasswordResetToken.objects.filter(
-        user=user).latest('created_at')
+    pr_token = PasswordResetToken.objects.filter(user=user).latest("created_at")
     print(f"Token is valid: {pr_token.is_valid()}")
 
     # Simulate use
@@ -45,9 +44,7 @@ def test_order_tracking():
     # 1. Verify Status History exists and is serialized
     if not OrderStatusHistory.objects.filter(order=order).exists():
         OrderStatusHistory.objects.create(
-            order=order,
-            new_status=order.status,
-            timestamp=timezone.now()
+            order=order, new_status=order.status, timestamp=timezone.now()
         )
 
     serializer = OrderDetailSerializer(order)
@@ -55,8 +52,7 @@ def test_order_tracking():
 
     print(f"Order: {order.order_no}")
     print(f"Response has ID: {'id' in data}")
-    print(
-        f"Response has History: {'history' in data} (count: {len(data['history'])})")
+    print(f"Response has History: {'history' in data} (count: {len(data['history'])})")
 
     # 2. Test Live Coordinates
     original_status = order.status
@@ -66,10 +62,7 @@ def test_order_tracking():
     # Add a tracking log
     lat, lng = Decimal("5.6037"), Decimal("-0.1870")
     TrackingLog.objects.create(
-        order=order,
-        status="OUT_FOR_DELIVERY",
-        latitude=lat,
-        longitude=lng
+        order=order, status="OUT_FOR_DELIVERY", latitude=lat, longitude=lng
     )
 
     data = OrderDetailSerializer(order).data
