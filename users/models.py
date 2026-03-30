@@ -14,7 +14,7 @@ from django.utils import timezone
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
-        
+           
 class UserManager(BaseUserManager):
     """
     Custom manager for the User model where email is the unique identifier
