@@ -1,4 +1,10 @@
+import os
+import django
 from django.contrib.auth import get_user_model
+
+# Setup Django environment
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
 
 User = get_user_model()
 if not User.objects.filter(email="testadmin100@example.com").exists():
