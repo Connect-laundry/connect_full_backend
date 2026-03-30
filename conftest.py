@@ -116,6 +116,7 @@ def sample_payment(db, sample_order):
     from payments.models import Payment
 
     return Payment.objects.create(
+        user=sample_order.user,
         order=sample_order,
         amount=100.00,
         transaction_reference="REF_TEST_123",
