@@ -5,10 +5,12 @@ from django.http import JsonResponse
 # pyre-ignore[missing-module]
 from rest_framework import status
 
+
 class DeactivationMiddleware(MiddlewareMixin):
     """
     Middleware to block inactive users and handle global deactivation rules.
     """
+
     def process_request(self, request):
         if not request.user.is_authenticated:
             return None
@@ -27,5 +29,5 @@ class DeactivationMiddleware(MiddlewareMixin):
         # 2. Prevent inactive users from performing actions (extra layer)
         # This is already handled by is_active=False usually in Django's ModelBackend,
         # but for custom auth or specific app logic it's good to be explicit.
-        
+
         return None

@@ -10,8 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('ordering', '0002_order_cancellation_reason_order_cancelled_at_and_more'),
-    ]
+        ('ordering', '0002_order_cancellation_reason_order_cancelled_at_and_more'), ]
 
     operations = [
         migrations.CreateModel(

@@ -4,8 +4,10 @@ from ..models.staff import LaundryStaff
 
 class LaundryStaffSerializer(serializers.ModelSerializer):
     """Full serializer for staff member management."""
-    roleDisplay = serializers.CharField(source='get_role_display', read_only=True)
-    inviteStatusDisplay = serializers.CharField(source='get_invite_status_display', read_only=True)
+    roleDisplay = serializers.CharField(
+        source='get_role_display', read_only=True)
+    inviteStatusDisplay = serializers.CharField(
+        source='get_invite_status_display', read_only=True)
 
     class Meta:
         model = LaundryStaff
@@ -22,7 +24,11 @@ class StaffInviteSerializer(serializers.Serializer):
     """For inviting a new staff member."""
     name = serializers.CharField(max_length=150)
     email = serializers.EmailField()
-    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    phone = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        default='')
     role = serializers.ChoiceField(choices=LaundryStaff.StaffRole.choices)
 
 

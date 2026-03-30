@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 # pyre-ignore[missing-module]
 from django.utils import timezone
 
+
 class Notification(models.Model):
     class Type(models.TextChoices):
         ORDER = 'ORDER', _('Order Update')
@@ -17,25 +18,28 @@ class Notification(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.CASCADE, 
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
         related_name='notifications'
     )
     title = models.CharField(max_length=255)
     body = models.TextField(default='')
-    type = models.CharField(max_length=20, choices=Type.choices, default=Type.SYSTEM)
-    
+    type = models.CharField(
+        max_length=20,
+        choices=Type.choices,
+        default=Type.SYSTEM)
+
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
-    
+
     related_order = models.ForeignKey(
-        'ordering.Order', 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        'ordering.Order',
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         related_name='notifications'
     )
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -7,25 +7,27 @@ from django.db import transaction
 # pyre-ignore[missing-module]
 from ..models import User
 
+
 class ReferralApplySerializer(serializers.Serializer):
     referral_code = serializers.CharField(max_length=20)
 
+
 class ReferralApplyView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request):
         # pyre-ignore
         serializer = ReferralApplySerializer(data=request.data)
         if serializer.is_valid():
             code = serializer.validated_data['referral_code']
-            
+
             # Check if user already has a referrer
             if request.user.referred_by:
-                return Response(
-                    {"success": False, "status": "error", "message": "You have already been referred."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
+                return Response({"success": False,
+                                 "status": "error",
+                                 "message": "You have already been referred."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
             # Find referrer
             try:
                 referrer = User.objects.get(referral_code=code)
@@ -34,38 +36,40 @@ class ReferralApplyView(views.APIView):
                     {"success": False, "status": "error", "message": "Invalid referral code."},
                     status=status.HTTP_404_NOT_FOUND
                 )
-                
+
             # Prevent self-referral
             if referrer == request.user:
-                return Response(
-                    {"success": False, "status": "error", "message": "You cannot refer yourself."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"success": False,
+                                 "status": "error",
+                                 "message": "You cannot refer yourself."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             # Apply referral
             with transaction.atomic():
                 request.user.referred_by = referrer
                 request.user.save()
-                
-            return Response({
-                "success": True,
-                "message": f"Referral code applied. You were referred by {referrer.get_full_name() or referrer.email}."
-            })
-            
+
+            return Response(
+                {
+                    "success": True,
+                    "message": f"Referral code applied. You were referred by {
+                        referrer.get_full_name() or referrer.email}."})
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ReferralStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get(self, request):
         referrals = request.user.referrals.count()
         # Potential future expansion: Earnings from referrals
-        
+
         return Response({
             "success": True,
             "data": {
                 "referral_code": request.user.referral_code,
                 "total_referrals": referrals,
-                "earnings": "0.00" # Placeholder for future logic
+                "earnings": "0.00"  # Placeholder for future logic
             }
         })

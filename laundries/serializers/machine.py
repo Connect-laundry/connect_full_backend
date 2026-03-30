@@ -4,8 +4,10 @@ from ..models.machine import Machine
 
 class MachineSerializer(serializers.ModelSerializer):
     """Full CRUD serializer for laundry machines."""
-    typeDisplay = serializers.CharField(source='get_machine_type_display', read_only=True)
-    statusDisplay = serializers.CharField(source='get_status_display', read_only=True)
+    typeDisplay = serializers.CharField(
+        source='get_machine_type_display', read_only=True)
+    statusDisplay = serializers.CharField(
+        source='get_status_display', read_only=True)
 
     class Meta:
         model = Machine

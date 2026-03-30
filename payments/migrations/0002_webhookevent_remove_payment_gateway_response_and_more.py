@@ -16,9 +16,19 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='WebhookEvent',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('event_id', models.CharField(max_length=255, unique=True)),
-                ('processed_at', models.DateTimeField(auto_now_add=True)),
+                ('id',
+                 models.BigAutoField(
+                     auto_created=True,
+                     primary_key=True,
+                     serialize=False,
+                     verbose_name='ID')),
+                ('event_id',
+                 models.CharField(
+                     max_length=255,
+                     unique=True)),
+                ('processed_at',
+                 models.DateTimeField(
+                     auto_now_add=True)),
             ],
         ),
         migrations.RemoveField(
@@ -28,26 +38,58 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='payment',
             name='paystack_reference',
-            field=models.CharField(blank=True, max_length=100, null=True),
+            field=models.CharField(
+                blank=True,
+                max_length=100,
+                null=True),
         ),
         migrations.AddField(
             model_name='payment',
             name='raw_response',
-            field=models.JSONField(blank=True, null=True),
+            field=models.JSONField(
+                blank=True,
+                null=True),
         ),
         migrations.AddField(
             model_name='payment',
             name='user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='payments', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='payments',
+                to=settings.AUTH_USER_MODEL),
         ),
         migrations.AlterField(
             model_name='payment',
             name='payment_method',
-            field=models.CharField(choices=[('CARD', 'Card'), ('BANK_TRANSFER', 'Bank Transfer'), ('CASH', 'Cash on Delivery'), ('WALLET', 'Wallet Balance')], default='CARD', max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('CARD',
+                     'Card'),
+                    ('BANK_TRANSFER',
+                     'Bank Transfer'),
+                    ('CASH',
+                     'Cash on Delivery'),
+                    ('WALLET',
+                     'Wallet Balance')],
+                default='CARD',
+                max_length=20),
         ),
         migrations.AlterField(
             model_name='payment',
             name='status',
-            field=models.CharField(choices=[('PENDING', 'Pending'), ('SUCCESS', 'Successful'), ('FAILED', 'Failed'), ('EXPIRED', 'Expired')], default='PENDING', max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('PENDING',
+                     'Pending'),
+                    ('SUCCESS',
+                     'Successful'),
+                    ('FAILED',
+                     'Failed'),
+                    ('EXPIRED',
+                     'Expired')],
+                default='PENDING',
+                max_length=20),
         ),
     ]

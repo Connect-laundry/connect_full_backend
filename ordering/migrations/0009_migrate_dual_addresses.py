@@ -12,6 +12,7 @@ def migrate_addresses(apps, schema_editor):
             order.delivery_address = order.address
             order.save(update_fields=['pickup_address', 'delivery_address'])
 
+
 class Migration(migrations.Migration):
 
     dependencies = [

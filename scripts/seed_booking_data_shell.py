@@ -2,9 +2,10 @@ from laundries.models.category import Category
 from ordering.models import LaunderableItem
 from decimal import Decimal
 
+
 def seed_booking_data():
     print("--- Seeding Booking Data ---")
-    
+
     # 1. Create Service Types
     service_names = ["Wash Only", "Wash & Iron", "Dry Clean", "Ironing Only"]
     services = {}
@@ -81,14 +82,20 @@ def seed_booking_data():
                 "item_category": item_cats[item_info["category"]]
             }
         )
-        
+
         # Add supported services
         for s_name in item_info["services"]:
             item.supported_services.add(services[s_name])
-        
+
         item.save()
-        print(f"Item: {item.name} ({'Created' if created else 'Updated'}) linked to {len(item_info['services'])} services.")
+        print(
+            f"Item: {
+                item.name} ({
+                'Created' if created else 'Updated'}) linked to {
+                len(
+                    item_info['services'])} services.")
 
     print("\n[SUCCESS] Seeding complete!")
+
 
 seed_booking_data()

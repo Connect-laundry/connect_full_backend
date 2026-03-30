@@ -57,4 +57,7 @@ class LaundryStaff(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.name} ({self.get_role_display()}) at {self.laundry.name}"
+        return f"{
+            self.name} ({
+            self.get_role_display()}) at {
+            self.laundry.name}"

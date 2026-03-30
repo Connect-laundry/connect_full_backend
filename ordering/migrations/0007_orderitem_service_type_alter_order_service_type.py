@@ -15,11 +15,20 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='orderitem',
             name='service_type',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='order_items', to='laundries.category'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='order_items',
+                to='laundries.category'),
         ),
         migrations.AlterField(
             model_name='order',
             name='service_type',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='orders', to='laundries.category'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='orders',
+                to='laundries.category'),
         ),
     ]

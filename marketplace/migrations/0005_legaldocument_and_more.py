@@ -5,7 +5,8 @@ import uuid
 from django.conf import settings
 # pyre-ignore[missing-module]
 from django.db import migrations, models
-#Setting up for the migration
+# Setting up for the migration
+
 
 class Migration(migrations.Migration):
 
@@ -17,29 +18,20 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='LegalDocument',
-            fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('document_type', models.CharField(choices=[('TOS', 'Terms of Service'), ('PRIVACY', 'Privacy Policy'), ('ABOUT', 'About Us')], max_length=20, unique=True)),
-                ('title', models.CharField(max_length=255, verbose_name='title')),
-                ('content', models.TextField(verbose_name='content')),
-                ('version', models.CharField(default='1.0', max_length=20, verbose_name='version')),
-                ('is_active', models.BooleanField(default=True)),
-                ('published_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-            ],
-            options={
-                'verbose_name': 'Legal Document',
-                'verbose_name_plural': 'Legal Documents',
-            },
-        ),
-        migrations.AlterField(
-            model_name='notification',
-            name='body',
-            field=models.TextField(default=''),
-        ),
-        migrations.AddIndex(
-            model_name='notification',
-            index=models.Index(fields=['user', 'is_read', 'created_at'], name='marketplace_user_id_ac8ae1_idx'),
-        ),
-    ]
+            name='LegalDocument', fields=[
+                ('id', models.UUIDField(
+                    default=uuid.uuid4, editable=False, primary_key=True, serialize=False)), ('document_type', models.CharField(
+                        choices=[
+                            ('TOS', 'Terms of Service'), ('PRIVACY', 'Privacy Policy'), ('ABOUT', 'About Us')], max_length=20, unique=True)), ('title', models.CharField(
+                                max_length=255, verbose_name='title')), ('content', models.TextField(
+                                    verbose_name='content')), ('version', models.CharField(
+                                        default='1.0', max_length=20, verbose_name='version')), ('is_active', models.BooleanField(
+                                            default=True)), ('published_at', models.DateTimeField(
+                                                auto_now_add=True)), ('updated_at', models.DateTimeField(
+                                                    auto_now=True)), ], options={
+                'verbose_name': 'Legal Document', 'verbose_name_plural': 'Legal Documents', }, ), migrations.AlterField(
+            model_name='notification', name='body', field=models.TextField(
+                default=''), ), migrations.AddIndex(
+            model_name='notification', index=models.Index(
+                fields=[
+                    'user', 'is_read', 'created_at'], name='marketplace_user_id_ac8ae1_idx'), ), ]

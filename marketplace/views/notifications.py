@@ -9,6 +9,7 @@ from marketplace.models import Notification
 # pyre-ignore[missing-module]
 from ..serializers import NotificationSerializer
 
+
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for checking and managing user notifications.
@@ -25,8 +26,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        unread_count = Notification.objects.filter(user=request.user, is_read=False).count()
-        
+        unread_count = Notification.objects.filter(
+            user=request.user, is_read=False).count()
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -48,7 +50,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @decorators.action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         """Get the number of unread notifications."""
-        unread_count = Notification.objects.filter(user=request.user, is_read=False).count()
+        unread_count = Notification.objects.filter(
+            user=request.user, is_read=False).count()
         return Response({
             "status": "success",
             "unread_count": unread_count
@@ -66,11 +69,13 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             "data": serializer.data
         })
 
-    @decorators.action(detail=False, methods=['post'], url_path='mark-all-read')
+    @decorators.action(detail=False,
+                       methods=['post'],
+                       url_path='mark-all-read')
     def mark_all_read(self, request):
         """Mark all unread notifications as read for current user."""
         Notification.objects.filter(user=request.user, is_read=False).update(
-            is_read=True, 
+            is_read=True,
             read_at=timezone.now()
         )
         return Response({

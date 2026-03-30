@@ -1,8 +1,8 @@
 from .order import (
-    LaunderableItemSerializer, 
-    BookingSlotSerializer, 
-    OrderItemSerializer, 
-    OrderDetailSerializer, 
+    LaunderableItemSerializer,
+    BookingSlotSerializer,
+    OrderItemSerializer,
+    OrderDetailSerializer,
     OrderCreateSerializer
 )
 from .coupons import CouponSerializer, CouponValidationSerializer

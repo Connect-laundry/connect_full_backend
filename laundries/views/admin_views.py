@@ -13,21 +13,30 @@ from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
 from ..models.service import LaundryService
 # pyre-ignore[missing-module]
-from ..serializers.laundry_detail import LaundryDetailSerializer # Existing or create a specialized one
+# Existing or create a specialized one
+from ..serializers.laundry_detail import LaundryDetailSerializer
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
 logger = logging.getLogger(__name__)
 
+
 class AdminLaundryApprovalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Laundry
-        fields = ['id', 'name', 'status', 'is_active', 'approved_at', 'rejected_at']
+        fields = [
+            'id',
+            'name',
+            'status',
+            'is_active',
+            'approved_at',
+            'rejected_at']
         read_only_fields = ['id', 'name', 'approved_at', 'rejected_at']
 
-class AdminLaundryViewSet(mixins.ListModelMixin, 
-                        mixins.RetrieveModelMixin,
-                        viewsets.GenericViewSet):
+
+class AdminLaundryViewSet(mixins.ListModelMixin,
+                          mixins.RetrieveModelMixin,
+                          viewsets.GenericViewSet):
     """
     Platform administration endpoints for vetting laundry businesses.
     """
@@ -39,16 +48,19 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
     def approve(self, request, pk=None):
         """Approve a laundry business. Activation is still required by the owner."""
         laundry = self.get_object()
-        
+
         try:
             with transaction.atomic():
                 laundry.status = Laundry.ApprovalStatus.APPROVED
-                # We do NOT set is_active=True here anymore. 
+                # We do NOT set is_active=True here anymore.
                 # Owner must configure hours/services and call activate.
                 laundry.approved_at = timezone.now()
                 laundry.save()
-                
-                logger.info(f"Laundry {laundry.id} approved by admin {request.user.email}")
+
+                logger.info(
+                    f"Laundry {
+                        laundry.id} approved by admin {
+                        request.user.email}")
         except DjangoValidationError as e:
             return Response({
                 "success": False,
@@ -64,7 +76,7 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
                 "message": f"An error occurred: {str(e)}",
                 "data": {}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
         return Response({
             "success": True,
             "status": "success",
@@ -77,15 +89,18 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
         """Reject a laundry business."""
         laundry = self.get_object()
         reason = request.data.get('reason', 'No specific reason provided.')
-        
+
         with transaction.atomic():
             laundry.status = Laundry.ApprovalStatus.REJECTED
             laundry.is_active = False
             laundry.rejected_at = timezone.now()
             laundry.save()
-            
-            logger.info(f"Laundry {laundry.id} rejected by admin {request.user.email}. Reason: {reason}")
-            
+
+            logger.info(
+                f"Laundry {
+                    laundry.id} rejected by admin {
+                    request.user.email}. Reason: {reason}")
+
         return Response({
             "success": True,
             "status": "success",
@@ -93,14 +108,16 @@ class AdminLaundryViewSet(mixins.ListModelMixin,
             "data": self.get_serializer(laundry).data
         })
 
+
 class AdminServiceViewSet(mixins.CreateModelMixin,
-                        mixins.ListModelMixin,
-                        mixins.RetrieveModelMixin,
-                        viewsets.GenericViewSet):
+                          mixins.ListModelMixin,
+                          mixins.RetrieveModelMixin,
+                          viewsets.GenericViewSet):
     """
     Platform administration endpoints for vetting and creating services.
     """
-    queryset = LaundryService.objects.all().select_related('laundry', 'item', 'category')
+    queryset = LaundryService.objects.all().select_related(
+        'laundry', 'item', 'category')
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get_serializer_class(self):
@@ -111,13 +128,16 @@ class AdminServiceViewSet(mixins.CreateModelMixin,
     def approve(self, request, pk=None):
         """Approve a specific service and make it available."""
         service = self.get_object()
-        
+
         with transaction.atomic():
             service.is_available = True
             service.save()
-            
-            logger.info(f"LaundryService {service.id} approved by admin {request.user.email}")
-        
+
+            logger.info(
+                f"LaundryService {
+                    service.id} approved by admin {
+                    request.user.email}")
+
         return Response({
             "success": True,
             "status": "success",

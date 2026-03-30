@@ -1,4 +1,7 @@
 # pyre-ignore[missing-module]
+from .models import Payment, WebhookEvent
+from django.utils import timezone
+from django.db import transaction
 import hmac
 # pyre-ignore[missing-module]
 import hashlib
@@ -22,20 +25,14 @@ from ordering.models import Order
 logger = logging.getLogger(__name__)
 
 # pyre-ignore[missing-module]
-from django.db import transaction
 # pyre-ignore[missing-module]
-from django.utils import timezone
 # pyre-ignore[missing-module]
-from .models import Payment, WebhookEvent
 # pyre-ignore[missing-module]
-import hmac
 # pyre-ignore[missing-module]
-import hashlib
 # pyre-ignore[missing-module]
-import json
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 @csrf_exempt
 @require_POST
@@ -60,7 +57,7 @@ def paystack_webhook(request):
     ).hexdigest()
 
     if hash_computed != signature:
-        logger.warning(f"Invalid Paystack webhook signature detected.")
+        logger.warning("Invalid Paystack webhook signature detected.")
         return HttpResponse(status=401)
 
     # 2. Parse event data
@@ -71,51 +68,56 @@ def paystack_webhook(request):
 
     event_id = event_data.get('data', {}).get('id')
     event_type = event_data.get('event')
-    
+
     # 3. Webhook Replay Protection
     if event_id:
         if WebhookEvent.objects.filter(event_id=event_id).exists():
             logger.info(f"Duplicate webhook event ignored: {event_id}")
             return HttpResponse(status=200)
-        
+
         WebhookEvent.objects.create(event_id=event_id)
 
     # 4. Only handle charge.success
     if event_type == 'charge.success':
         data = event_data.get('data', {})
         reference = data.get('reference')
-        
+
         if not reference:
             return HttpResponse(status=400)
 
         # 5. Use transaction.atomic() and select_for_update()
         try:
             with transaction.atomic():
-                payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
-                
+                payment = Payment.objects.select_for_update().filter(
+                    transaction_reference=reference).first()
+
                 if not payment:
-                    logger.error(f"Payment record not found for webhook reference: {reference}")
-                    return HttpResponse(status=200) # Safe exit
+                    logger.error(
+                        f"Payment record not found for webhook reference: {reference}")
+                    return HttpResponse(status=200)  # Safe exit
 
                 # 6. Idempotency Check
                 if payment.status == Payment.Status.SUCCESS:
-                    logger.info(f"Payment {reference} already marked as SUCCESS. Skipping.")
+                    logger.info(
+                        f"Payment {reference} already marked as SUCCESS. Skipping.")
                     return HttpResponse(status=200)
 
                 # 7. Update Status
                 payment.status = Payment.Status.SUCCESS
-                payment.raw_response = event_data # Store raw payload
+                payment.raw_response = event_data  # Store raw payload
                 payment.paid_at = timezone.now()
                 payment.save()
-                
+
                 # Update order
                 order = payment.order
                 order.status = Order.Status.CONFIRMED
                 order.save()
-                
-                logger.info(f"Webhook Success: Reference {reference} confirmed.")
+
+                logger.info(
+                    f"Webhook Success: Reference {reference} confirmed.")
         except Exception as e:
-            logger.error(f"Error processing webhook for reference {reference}: {e}")
+            logger.error(
+                f"Error processing webhook for reference {reference}: {e}")
             # We return 500 to let Paystack retry if it's a transient failure
             return HttpResponse(status=500)
 

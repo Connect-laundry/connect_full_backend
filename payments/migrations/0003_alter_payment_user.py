@@ -8,14 +8,19 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payments', '0002_webhookevent_remove_payment_gateway_response_and_more'),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('payments',
+         '0002_webhookevent_remove_payment_gateway_response_and_more'),
+        migrations.swappable_dependency(
+            settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterField(
             model_name='payment',
             name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='payments',
+                to=settings.AUTH_USER_MODEL),
         ),
     ]

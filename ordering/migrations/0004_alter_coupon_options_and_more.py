@@ -12,7 +12,8 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AlterModelOptions(
             name='coupon',
-            options={'ordering': ['-created_at']},
+            options={
+                'ordering': ['-created_at']},
         ),
         migrations.RemoveIndex(
             model_name='coupon',
@@ -25,11 +26,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='coupon',
             name='max_usage',
-            field=models.PositiveIntegerField(blank=True, help_text='Total times this coupon can be used.', null=True),
+            field=models.PositiveIntegerField(
+                blank=True,
+                help_text='Total times this coupon can be used.',
+                null=True),
         ),
         migrations.AlterField(
             model_name='coupon',
             name='valid_to',
-            field=models.DateTimeField(blank=True, null=True),
+            field=models.DateTimeField(
+                blank=True,
+                null=True),
         ),
     ]

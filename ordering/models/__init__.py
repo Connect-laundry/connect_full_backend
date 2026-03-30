@@ -2,4 +2,11 @@ from .base import LaunderableItem, Order, OrderItem, BookingSlot, OrderStatusHis
 # pyre-ignore[missing-module]
 from .coupons import Coupon, CouponUsage
 
-__all__ = ['LaunderableItem', 'Order', 'OrderItem', 'BookingSlot', 'Coupon', 'CouponUsage', 'OrderStatusHistory']
+__all__ = [
+    'LaunderableItem',
+    'Order',
+    'OrderItem',
+    'BookingSlot',
+    'Coupon',
+    'CouponUsage',
+    'OrderStatusHistory']

@@ -34,8 +34,10 @@ class Machine(models.Model):
         _('status'), max_length=20,
         choices=MachineStatus.choices, default=MachineStatus.IDLE
     )
-    notes = models.TextField(_('notes'), blank=True,
-                             help_text="Maintenance notes or special instructions")
+    notes = models.TextField(
+        _('notes'),
+        blank=True,
+        help_text="Maintenance notes or special instructions")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -49,4 +51,7 @@ class Machine(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.name} ({self.get_machine_type_display()}) - {self.get_status_display()}"
+        return f"{
+            self.name} ({
+            self.get_machine_type_display()}) - {
+            self.get_status_display()}"

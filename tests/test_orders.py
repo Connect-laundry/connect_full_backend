@@ -11,9 +11,11 @@ from laundries.models import Laundry
 # pyre-ignore[missing-module]
 from users.models import User
 
+
 @pytest.mark.django_db
 class TestOrderStateTransitions:
-    def test_order_creation_to_confirmation(self, client, authenticated_user, sample_laundry):
+    def test_order_creation_to_confirmation(
+            self, client, authenticated_user, sample_laundry):
         # 1. Create Order
         url = reverse('order-list')
         data = {
@@ -29,13 +31,13 @@ class TestOrderStateTransitions:
             status='PENDING',
             order_no='ORD-123'
         )
-        
+
         assert order.status == 'PENDING'
-        
+
         # 2. Simulate Payment Confirmation (Functional logic test)
         order.status = 'CONFIRMED'
         order.save()
-        
+
         reloaded_order = Order.objects.get(id=order.id)
         assert reloaded_order.status == 'CONFIRMED'
 

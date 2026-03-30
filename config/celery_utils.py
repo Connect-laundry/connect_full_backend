@@ -8,6 +8,7 @@ from sentry_sdk import capture_exception, push_scope
 
 logger = logging.getLogger(__name__)
 
+
 def hardened_task(max_retries=3, base_delay=5):
     """
     Decorator for Celery tasks to provide:
@@ -32,11 +33,13 @@ def hardened_task(max_retries=3, base_delay=5):
 
             try:
                 result = func(self, *args, **kwargs)
-                
+
                 execution_time = time.time() - start_time
                 log_extra['execution_time'] = execution_time
-                logger.info(f"Task {task_name} completed successfully", extra=log_extra)
-                
+                logger.info(
+                    f"Task {task_name} completed successfully",
+                    extra=log_extra)
+
                 return result
 
             except Exception as exc:
@@ -53,22 +56,20 @@ def hardened_task(max_retries=3, base_delay=5):
                     countdown = base_delay * (2 ** retry_count)
                     logger.warning(
                         f"Task {task_name} failed. Retrying in {countdown}s...",
-                        extra=log_extra
-                    )
+                        extra=log_extra)
                     raise self.retry(exc=exc, countdown=countdown)
 
                 # Permanent failure - persist to DB
                 logger.error(
                     f"Task {task_name} failed permanently after {max_retries} retries",
                     extra=log_extra,
-                    exc_info=True
-                )
-                
+                    exc_info=True)
+
                 # Import here to avoid circular dependencies
                 # pyre-ignore[import]
                 from marketplace.models import FailedTask
                 import traceback
-                
+
                 try:
                     with transaction.atomic():
                         FailedTask.objects.create(
@@ -82,7 +83,7 @@ def hardened_task(max_retries=3, base_delay=5):
                         )
                 except Exception as db_err:
                     logger.critical(f"Could not persist FailedTask: {db_err}")
-                
+
                 raise exc
 
         return wrapper

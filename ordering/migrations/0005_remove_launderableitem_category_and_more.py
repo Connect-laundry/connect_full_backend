@@ -19,11 +19,23 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='launderableitem',
             name='item_category',
-            field=models.ForeignKey(blank=True, limit_choices_to={'type': 'ITEM_CATEGORY'}, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='launderable_items', to='laundries.category'),
+            field=models.ForeignKey(
+                blank=True,
+                limit_choices_to={
+                    'type': 'ITEM_CATEGORY'},
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='launderable_items',
+                to='laundries.category'),
         ),
         migrations.AddField(
             model_name='launderableitem',
             name='supported_services',
-            field=models.ManyToManyField(blank=True, limit_choices_to={'type': 'SERVICE_TYPE'}, related_name='launderable_items_services', to='laundries.category'),
+            field=models.ManyToManyField(
+                blank=True,
+                limit_choices_to={
+                    'type': 'SERVICE_TYPE'},
+                related_name='launderable_items_services',
+                to='laundries.category'),
         ),
     ]

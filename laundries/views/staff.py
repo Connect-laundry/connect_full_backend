@@ -64,7 +64,11 @@ class StaffViewSet(viewsets.ModelViewSet):
             invite_status=LaundryStaff.InviteStatus.PENDING,
         )
 
-        logger.info(f"Staff invite sent to {staff.email} for laundry {laundry.id} by {request.user.email}")
+        logger.info(
+            f"Staff invite sent to {
+                staff.email} for laundry {
+                laundry.id} by {
+                request.user.email}")
 
         return Response({
             "success": True,
@@ -82,7 +86,11 @@ class StaffViewSet(viewsets.ModelViewSet):
         staff.role = serializer.validated_data['role']
         staff.save(update_fields=['role', 'updated_at'])
 
-        logger.info(f"Staff {staff.id} role → {staff.role} by {request.user.email}")
+        logger.info(
+            f"Staff {
+                staff.id} role → {
+                staff.role} by {
+                request.user.email}")
 
         return Response({
             "success": True,

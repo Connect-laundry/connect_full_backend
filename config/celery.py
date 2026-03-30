@@ -23,8 +23,8 @@ app.conf.update(
     # Resource management
     task_soft_time_limit=30,
     task_time_limit=60,
-    worker_prefetch_multiplier=1, # Fair distribution
-    task_acks_late=True, # Ack after completion (requires idempotency)
+    worker_prefetch_multiplier=1,  # Fair distribution
+    task_acks_late=True,  # Ack after completion (requires idempotency)
     task_reject_on_worker_lost=True,
 )
 

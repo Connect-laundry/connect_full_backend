@@ -29,6 +29,7 @@ else:
     # For non-GIS mode, GistIndex won't be used, but we need a placeholder
     GistIndex = None
 
+
 class Laundry(models.Model):
     class PriceRange(models.TextChoices):
         LOW = '$', _('Low')
@@ -45,29 +46,60 @@ class Laundry(models.Model):
     name = models.CharField(_('name'), max_length=255, db_index=True)
     description = models.TextField(_('description'), blank=True)
     image = models.ImageField(
-        _('image'), 
-        upload_to='laundries/', 
-        blank=True, 
+        _('image'),
+        upload_to='laundries/',
+        blank=True,
         null=True,
         validators=[validate_file_upload]
     )
     address = models.TextField(_('address'))
-    city = models.CharField(_('city'), max_length=100, default='Accra', db_index=True)
-    
+    city = models.CharField(
+        _('city'),
+        max_length=100,
+        default='Accra',
+        db_index=True)
+
     # Geospatial Optimization
-    latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)
-    longitude = models.DecimalField(_('longitude'), max_digits=9, decimal_places=6, db_index=True)
+    latitude = models.DecimalField(
+        _('latitude'),
+        max_digits=9,
+        decimal_places=6,
+        db_index=True)
+    longitude = models.DecimalField(
+        _('longitude'),
+        max_digits=9,
+        decimal_places=6,
+        db_index=True)
 
     phone_number = models.CharField(_('phone number'), max_length=20)
-    price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
-    estimated_delivery_hours = models.IntegerField(_('estimated delivery hours'), default=24)
-    delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
-    pickup_fee = models.DecimalField(_('pickup fee'), max_digits=10, decimal_places=2, default=0.00)
-    min_order = models.DecimalField(_('minimum order value'), max_digits=10, decimal_places=2, default=0.00)
-    
-    is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
-    is_active = models.BooleanField(_('is active'), default=False, db_index=True)
-    
+    price_range = models.CharField(
+        _('price range'),
+        max_length=3,
+        choices=PriceRange.choices,
+        default=PriceRange.MEDIUM)
+    estimated_delivery_hours = models.IntegerField(
+        _('estimated delivery hours'), default=24)
+    delivery_fee = models.DecimalField(
+        _('delivery fee'),
+        max_digits=10,
+        decimal_places=2,
+        default=0.00)
+    pickup_fee = models.DecimalField(
+        _('pickup fee'),
+        max_digits=10,
+        decimal_places=2,
+        default=0.00)
+    min_order = models.DecimalField(
+        _('minimum order value'),
+        max_digits=10,
+        decimal_places=2,
+        default=0.00)
+
+    is_featured = models.BooleanField(
+        _('is featured'), default=False, db_index=True)
+    is_active = models.BooleanField(
+        _('is active'), default=False, db_index=True)
+
     status = models.CharField(
         _('approval status'),
         max_length=20,
@@ -75,7 +107,7 @@ class Laundry(models.Model):
         default=ApprovalStatus.PENDING,
         db_index=True
     )
-    
+
     # Approval Timestamps
     approved_at = models.DateTimeField(null=True, blank=True)
     rejected_at = models.DateTimeField(null=True, blank=True)
@@ -89,7 +121,7 @@ class Laundry(models.Model):
         related_name='owned_laundries',
         limit_choices_to={'role': 'OWNER'}
     )
-    
+
     class PricingMethod(models.TextChoices):
         PER_ITEM = "PER_ITEM", _("Per Item")
         PER_KG = "PER_KG", _("Per Kg")
@@ -102,15 +134,15 @@ class Laundry(models.Model):
         help_text=_("List of supported methods: ['PER_ITEM', 'PER_KG']")
     )
     price_per_kg = models.DecimalField(
-        _('price per kg'), 
-        max_digits=10, 
-        decimal_places=2, 
+        _('price per kg'),
+        max_digits=10,
+        decimal_places=2,
         default=0.00
     )
     min_weight = models.DecimalField(
-        _('minimum weight'), 
-        max_digits=5, 
-        decimal_places=2, 
+        _('minimum weight'),
+        max_digits=5,
+        decimal_places=2,
         default=1.00
     )
 
@@ -140,13 +172,17 @@ class Laundry(models.Model):
 
     def save(self, *args, **kwargs):
         self.full_clean()
-        # Sync PointField with latitude/longitude for backward compatibility (only if PostGIS is enabled)
+        # Sync PointField with latitude/longitude for backward compatibility
+        # (only if PostGIS is enabled)
         if USE_POSTGIS and self.latitude and self.longitude:
             try:
                 # pyre-ignore[missing-module]
                 from django.contrib.gis.geos import Point
-                self.location = Point(float(self.longitude), float(self.latitude))
-            except Exception: # nosec B110
+                self.location = Point(
+                    float(
+                        self.longitude), float(
+                        self.latitude))
+            except Exception:  # nosec B110
                 pass
         super().save(*args, **kwargs)
 
@@ -155,9 +191,10 @@ class Laundry(models.Model):
     location = None
     if USE_POSTGIS:
         try:
-             # pyre-ignore[missing-module]
-             from django.contrib.gis.db import models as gis_models
-             location = gis_models.PointField(_('location'), srid=4326, null=True, blank=True, db_index=True)
+            # pyre-ignore[missing-module]
+            from django.contrib.gis.db import models as gis_models
+            location = gis_models.PointField(
+                _('location'), srid=4326, null=True, blank=True, db_index=True)
         except Exception:
-             import logging
-             logging.error("GIS models not available for Laundry.location")
+            import logging
+            logging.error("GIS models not available for Laundry.location")

@@ -1,12 +1,14 @@
 import django.contrib.postgres.fields
 from django.db import migrations, models
 
+
 def migrate_json_to_array(apps, schema_editor):
     Laundry = apps.get_model('laundries', 'Laundry')
     for laundry in Laundry.objects.all():
         if isinstance(laundry.pricing_methods_old, list):
             laundry.pricing_methods = laundry.pricing_methods_old
             laundry.save()
+
 
 class Migration(migrations.Migration):
 
@@ -25,11 +27,11 @@ class Migration(migrations.Migration):
             name='pricing_methods',
             field=django.contrib.postgres.fields.ArrayField(
                 base_field=models.CharField(
-                    choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')], 
+                    choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')],
                     max_length=20
-                ), 
-                blank=True, 
-                default=list, 
+                ),
+                blank=True,
+                default=list,
                 size=None
             ),
         ),

@@ -8,13 +8,24 @@ from .views.legal import LegalDocumentView
 
 router = DefaultRouter()
 router.register(r'notifications', NotificationViewSet, basename='notification')
-router.register(r'home/special-offers', SpecialOfferViewSet, basename='special-offer')
+router.register(
+    r'home/special-offers',
+    SpecialOfferViewSet,
+    basename='special-offer')
 
 urlpatterns = [
-    path('faqs/', FAQView.as_view(), name='faq-list'),        # Canonical endpoint
-    path('help/faq/', FAQView.as_view(), name='faq'),         # Legacy alias (kept for compatibility)
+    path(
+        'faqs/',
+        FAQView.as_view(),
+        name='faq-list'),
+    # Canonical endpoint
+    # Legacy alias (kept for compatibility)
+    path('help/faq/', FAQView.as_view(), name='faq'),
     path('help/feedback/', FeedbackView.as_view(), name='feedback'),
     path('support/legal/', LegalDocumentView.as_view(), name='legal_list'),
-    path('support/legal/<str:type>/', LegalDocumentView.as_view(), name='legal_detail'),
+    path(
+        'support/legal/<str:type>/',
+        LegalDocumentView.as_view(),
+        name='legal_detail'),
     path('', include(router.urls)),
 ]

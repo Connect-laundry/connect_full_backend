@@ -3,10 +3,11 @@ from rest_framework.response import Response
 from marketplace.models import Feedback
 from marketplace.serializers import FeedbackSerializer
 
+
 class FeedbackView(views.APIView):
     """Collect user feedback and persist it to the database."""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
         if serializer.is_valid():
@@ -17,7 +18,7 @@ class FeedbackView(views.APIView):
                 "message": "Feedback submitted successfully.",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
-            
+
         return Response({
             "success": False,
             "status": "error",

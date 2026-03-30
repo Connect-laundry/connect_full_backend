@@ -1,5 +1,6 @@
 from django.db import migrations, models
 
+
 def migrate_order_total(apps, schema_editor):
     Order = apps.get_model('ordering', 'Order')
     # Copy final_price (the old total_amount) to estimated_price where missing
@@ -7,6 +8,7 @@ def migrate_order_total(apps, schema_editor):
         if not order.estimated_price and order.final_price:
             order.estimated_price = order.final_price
             order.save()
+
 
 class Migration(migrations.Migration):
 

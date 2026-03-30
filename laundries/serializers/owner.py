@@ -12,11 +12,18 @@ from .review import ReviewSerializer
 
 
 class OpeningHoursSerializer(serializers.ModelSerializer):
-    dayDisplay = serializers.CharField(source='get_day_display', read_only=True)
+    dayDisplay = serializers.CharField(
+        source='get_day_display', read_only=True)
 
     class Meta:
         model = OpeningHours
-        fields = ('id', 'day', 'dayDisplay', 'opening_time', 'closing_time', 'is_closed')
+        fields = (
+            'id',
+            'day',
+            'dayDisplay',
+            'opening_time',
+            'closing_time',
+            'is_closed')
         read_only_fields = ('id',)
 
 
@@ -27,7 +34,8 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
     """
     opening_hours = OpeningHoursSerializer(many=True, required=False)
     imageUrl = serializers.SerializerMethodField()
-    statusDisplay = serializers.CharField(source='get_status_display', read_only=True)
+    statusDisplay = serializers.CharField(
+        source='get_status_display', read_only=True)
 
     class Meta:
         model = Laundry
@@ -47,38 +55,41 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
         )
 
     pricing_methods = serializers.ListField(
-        child=serializers.CharField(), 
+        child=serializers.CharField(),
         required=False,
         help_text="['PER_ITEM', 'PER_KG']"
     )
 
     def validate(self, data):
         """
-        Layered validation: Ensure that updates to an active laundry 
+        Layered validation: Ensure that updates to an active laundry
         don't violate business rules.
         """
-        # If the laundry is already active, we must ensure the new data is valid
+        # If the laundry is already active, we must ensure the new data is
+        # valid
         instance = self.instance
         if instance and instance.is_active:
             # We create a temporary instance to validate without saving
-            # This is a bit tricky with ArrayFields, so we'll check fields directly
+            # This is a bit tricky with ArrayFields, so we'll check fields
+            # directly
             new_methods = data.get('pricing_methods', instance.pricing_methods)
             new_price = data.get('price_per_kg', instance.price_per_kg)
-            
+
             from ..services.laundry_validation import validate_laundry_ready_for_business
             # We can't easily pass the instance because it hasn't been updated yet.
             # However, Laundry.clean() is called in update() via instance.save().
             # For extra safety at the serializer level:
-            if "PER_KG" in new_methods and (new_price is None or new_price <= 0):
+            if "PER_KG" in new_methods and (
+                    new_price is None or new_price <= 0):
                 raise serializers.ValidationError({
                     "price_per_kg": "Price per kg must be greater than zero for active stores."
                 })
-            
+
             if "PER_ITEM" in new_methods and not instance.laundry_services.exists():
                 raise serializers.ValidationError({
                     "pricing_methods": "Cannot enable Per Item pricing without items in catalog."
                 })
-                
+
         return data
 
     def get_imageUrl(self, obj):
@@ -105,7 +116,8 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
 
             return laundry
         except Exception as e:
-            # Handle model level validation errors (raised in Laundry.save() -> full_clean())
+            # Handle model level validation errors (raised in Laundry.save() ->
+            # full_clean())
             from django.core.exceptions import ValidationError as DjangoValidationError
             if isinstance(e, DjangoValidationError):
                 raise serializers.ValidationError(e.message_dict)
@@ -119,8 +131,9 @@ class OwnerLaundrySerializer(serializers.ModelSerializer):
                 # Update laundry fields
                 for attr, value in validated_data.items():
                     setattr(instance, attr, value)
-                
-                # This will trigger Laundry.clean() via Laundry.save() -> full_clean()
+
+                # This will trigger Laundry.clean() via Laundry.save() ->
+                # full_clean()
                 instance.save()
 
                 # Replace opening hours if provided

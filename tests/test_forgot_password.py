@@ -31,7 +31,9 @@ class TestForgotPassword:
         )
         url = reverse('auth_forgot_password')
 
-        response = client.post(url, {"email": "test@example.com"}, content_type='application/json')
+        response = client.post(url,
+                               {"email": "test@example.com"},
+                               content_type='application/json')
 
         assert response.status_code == status.HTTP_200_OK
         assert "you will receive a password reset link shortly" in response.data['message']
@@ -43,7 +45,9 @@ class TestForgotPassword:
     def test_forgot_password_unknown_email_no_leak(self, client):
         """Unknown email still returns 200 — enumeration protection."""
         url = reverse('auth_forgot_password')
-        response = client.post(url, {"email": "ghost@example.com"}, content_type='application/json')
+        response = client.post(url,
+                               {"email": "ghost@example.com"},
+                               content_type='application/json')
 
         assert response.status_code == status.HTTP_200_OK
         assert "you will receive a password reset link shortly" in response.data['message']

@@ -4,6 +4,7 @@ from django.db import models
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
+
 class LaundryService(models.Model):
     """Bridge table mapping global items to specific laundries with custom pricing."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -25,9 +26,10 @@ class LaundryService(models.Model):
     )
     price = models.DecimalField(_('price'), max_digits=10, decimal_places=2)
     # E.g., '24 hours', '2 days'
-    estimated_duration = models.CharField(_('estimated duration'), max_length=50, blank=True)
+    estimated_duration = models.CharField(
+        _('estimated duration'), max_length=50, blank=True)
     is_available = models.BooleanField(_('is available'), default=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -39,4 +41,8 @@ class LaundryService(models.Model):
         ordering = ['laundry', 'item__name']
 
     def __str__(self):
-        return f"{self.item.name} ({self.service_type.name}) - {self.price} at {self.laundry.name}"
+        return f"{
+            self.item.name} ({
+            self.service_type.name}) - {
+            self.price} at {
+                self.laundry.name}"

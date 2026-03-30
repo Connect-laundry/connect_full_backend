@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.exceptions import Throttled
 from django.conf import settings
 
+
 def custom_exception_handler(exc, context):
     """
     Custom exception handler to ensure throttled requests and other errors
@@ -19,7 +20,11 @@ def custom_exception_handler(exc, context):
         import traceback
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"DRF Exception at {context['request'].path}: {str(exc)}", exc_info=True)
+        logger.error(
+            f"DRF Exception at {
+                context['request'].path}: {
+                str(exc)}",
+            exc_info=True)
 
         data = {
             "success": False,
@@ -36,9 +41,9 @@ def custom_exception_handler(exc, context):
             custom_data = {
                 "success": False,
                 "status": "error",
-                "message": f"Too many requests. Please try again in {exc.wait} seconds.",
-                "data": {}
-            }
+                "message": f"Too many requests. Please try again in {
+                    exc.wait} seconds.",
+                "data": {}}
             response.data = custom_data
         else:
             # Handle other errors to fit the envelope if they don't already
@@ -46,7 +51,7 @@ def custom_exception_handler(exc, context):
                 message = "An error occurred."
                 if 'detail' in response.data:
                     message = response.data['detail']
-                
+
                 response.data = {
                     "success": False,
                     "status": "error",

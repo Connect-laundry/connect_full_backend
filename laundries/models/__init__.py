@@ -7,4 +7,12 @@ from .opening_hours import OpeningHours
 from .machine import Machine
 from .staff import LaundryStaff
 
-__all__ = ['Laundry', 'Category', 'LaundryService', 'Review', 'Favorite', 'OpeningHours', 'Machine', 'LaundryStaff']
+__all__ = [
+    'Laundry',
+    'Category',
+    'LaundryService',
+    'Review',
+    'Favorite',
+    'OpeningHours',
+    'Machine',
+    'LaundryStaff']

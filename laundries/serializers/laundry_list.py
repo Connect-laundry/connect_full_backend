@@ -13,6 +13,7 @@ from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
 from ..models.opening_hours import OpeningHours
 
+
 class LaundryListSerializer(serializers.ModelSerializer):
     location = serializers.CharField(source='address')
     distance = serializers.SerializerMethodField()
@@ -21,11 +22,30 @@ class LaundryListSerializer(serializers.ModelSerializer):
     isOpen = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
     isFavorite = serializers.SerializerMethodField()
-    minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
-    deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
-    pricingMethods = serializers.ListField(child=serializers.CharField(), source='pricing_methods', read_only=True)
-    pricePerKg = serializers.DecimalField(source='price_per_kg', max_digits=10, decimal_places=2, read_only=True)
-    minWeight = serializers.DecimalField(source='min_weight', max_digits=5, decimal_places=2, read_only=True)
+    minOrder = serializers.DecimalField(
+        source='min_order',
+        max_digits=10,
+        decimal_places=2,
+        read_only=True)
+    deliveryFee = serializers.DecimalField(
+        source='delivery_fee',
+        max_digits=10,
+        decimal_places=2,
+        read_only=True)
+    pricingMethods = serializers.ListField(
+        child=serializers.CharField(),
+        source='pricing_methods',
+        read_only=True)
+    pricePerKg = serializers.DecimalField(
+        source='price_per_kg',
+        max_digits=10,
+        decimal_places=2,
+        read_only=True)
+    minWeight = serializers.DecimalField(
+        source='min_weight',
+        max_digits=5,
+        decimal_places=2,
+        read_only=True)
     estimatedDelivery = serializers.SerializerMethodField()
     imageUrl = serializers.SerializerMethodField()
     avgPrice = serializers.SerializerMethodField()
@@ -33,10 +53,24 @@ class LaundryListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Laundry
         fields = (
-            'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
-            'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice', 'pricingMethods', 'pricePerKg', 'minWeight'
-        )
+            'id',
+            'name',
+            'image',
+            'imageUrl',
+            'location',
+            'distance',
+            'rating',
+            'reviewsCount',
+            'isOpen',
+            'priceRange',
+            'isFavorite',
+            'estimatedDelivery',
+            'minOrder',
+            'deliveryFee',
+            'avgPrice',
+            'pricingMethods',
+            'pricePerKg',
+            'minWeight')
 
     def get_avgPrice(self, obj):
         avg = getattr(obj, 'avg_price', None)
@@ -68,38 +102,43 @@ class LaundryListSerializer(serializers.ModelSerializer):
     def get_isOpen(self, obj):
         cache_key = f"laundry_is_open_{obj.id}"
         is_open = cache.get(cache_key)
-        
+
         if is_open is not None:
             return is_open
-            
+
         now = timezone.localtime()
-        current_day = now.isoweekday() # 1-7
+        current_day = now.isoweekday()  # 1-7
         current_time = now.time()
-        
+
         # Check OpeningHours (Optimized to use prefetched data if available)
         # If prefetched, obj.opening_hours.all() will not hit the DB
         opening_hours = getattr(obj, 'opening_hours', None)
         if opening_hours is not None:
-             # Search in the prefetched list
-             oh = next((h for h in opening_hours.all() if h.day == current_day and not h.is_closed), None)
+            # Search in the prefetched list
+            oh = next((h for h in opening_hours.all() if h.day ==
+                      current_day and not h.is_closed), None)
         else:
-             oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
-             
-        is_open_now = bool(oh and oh.opening_time <= current_time <= oh.closing_time)
-        
-        cache.set(cache_key, is_open_now, 300) # 5 minutes
+            oh = OpeningHours.objects.filter(
+                laundry=obj, day=current_day, is_closed=False).first()
+
+        is_open_now = bool(oh and oh.opening_time <=
+                           current_time <= oh.closing_time)
+
+        cache.set(cache_key, is_open_now, 300)  # 5 minutes
         return is_open_now
 
     def get_isFavorite(self, obj):
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return Favorite.objects.filter(user=request.user, laundry=obj).exists()
+        if request and hasattr(request,
+                               'user') and request.user.is_authenticated:
+            return Favorite.objects.filter(
+                user=request.user, laundry=obj).exists()
         return False
 
     def get_estimatedDelivery(self, obj):
         # pyre-ignore[missing-module]
         from ..services.delivery_estimator import DeliveryEstimator
-        
+
         # 1. Get user location from context if available
         request = self.context.get('request')
         user_lat = None
@@ -111,26 +150,29 @@ class LaundryListSerializer(serializers.ModelSerializer):
         # 2. Get active order count (either annotated or via cached lookup)
         # Check if already annotated (efficient)
         active_order_count = getattr(obj, 'active_order_count', None)
-        
+
         if active_order_count is None:
             # Fallback for retrieve or cases where not annotated
             cache_key = f"laundry_active_orders_{obj.id}"
             active_order_count = cache.get(cache_key)
-            
+
             if active_order_count is None:
                 # pyre-ignore[missing-module]
                 from ordering.models.base import Order
                 active_order_count = Order.objects.filter(
-                    laundry=obj, 
-                    status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
-                ).count()
-                cache.set(cache_key, active_order_count, 120) # 2 minutes
+                    laundry=obj,
+                    status__in=[
+                        'PENDING',
+                        'PICKED_UP',
+                        'IN_PROCESS',
+                        'OUT_FOR_DELIVERY']).count()
+                cache.set(cache_key, active_order_count, 120)  # 2 minutes
 
         # 3. Calculate dynamic estimation
         estimator = DeliveryEstimator()
         return estimator.get_estimated_delivery_time(
-            obj, 
-            user_lat=user_lat, 
-            user_lng=user_lng, 
+            obj,
+            user_lat=user_lat,
+            user_lng=user_lng,
             active_order_count=active_order_count
         )

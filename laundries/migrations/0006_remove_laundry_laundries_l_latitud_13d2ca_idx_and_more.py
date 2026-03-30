@@ -17,6 +17,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='laundry',
             name='city',
-            field=models.CharField(db_index=True, default='Accra', max_length=100, verbose_name='city'),
+            field=models.CharField(
+                db_index=True,
+                default='Accra',
+                max_length=100,
+                verbose_name='city'),
         ),
     ]

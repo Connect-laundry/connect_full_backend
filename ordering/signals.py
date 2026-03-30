@@ -6,22 +6,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @receiver(order_status_changed)
-def log_order_status_change(sender, order, from_status, to_status, user, **kwargs):
+def log_order_status_change(
+        sender,
+        order,
+        from_status,
+        to_status,
+        user,
+        **kwargs):
     """
     Structured logging for every status transition.
     """
     logger.info(
-        f"Lifecycle Transition: {order.order_no} | {from_status} -> {to_status}",
+        f"Lifecycle Transition: {
+            order.order_no} | {from_status} -> {to_status}",
         extra={
-            'order_id': str(order.id),
+            'order_id': str(
+                order.id),
             'order_no': order.order_no,
             'from_status': from_status,
-            'to_status': to_status,
-            'user_id': str(user.id) if user else None,
-            'metadata': kwargs.get('metadata', {})
-        }
-    )
+                'to_status': to_status,
+                'user_id': str(
+                    user.id) if user else None,
+            'metadata': kwargs.get(
+                'metadata',
+                {})})
 
 
 @receiver(order_status_changed)
@@ -35,4 +45,7 @@ def handle_coupon_usage(sender, order, from_status, to_status, **kwargs):
             # Real-time increment
             coupon.used_count += 1
             coupon.save()
-            logger.info(f"Verified Coupon {coupon.code} used for Order {order.order_no}")
+            logger.info(
+                f"Verified Coupon {
+                    coupon.code} used for Order {
+                    order.order_no}")

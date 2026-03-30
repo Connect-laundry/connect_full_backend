@@ -50,8 +50,7 @@ def remove_postgis_location(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0006_remove_laundry_laundries_l_latitud_13d2ca_idx_and_more'),
-    ]
+        ('laundries', '0006_remove_laundry_laundries_l_latitud_13d2ca_idx_and_more'), ]
 
     operations = [
         migrations.RunPython(

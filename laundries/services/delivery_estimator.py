@@ -2,6 +2,7 @@ import math
 from datetime import datetime
 from django.utils import timezone
 
+
 class DeliveryEstimator:
     """
     Service to calculate dynamic delivery time estimates.
@@ -9,10 +10,10 @@ class DeliveryEstimator:
     @staticmethod
     def calculate_haversine_distance(lat1, lon1, lat2, lon2):
         """
-        Calculate the great circle distance between two points 
+        Calculate the great circle distance between two points
         on the earth (specified in decimal degrees)
         """
-        # Convert decimal degrees to radians 
+        # Convert decimal degrees to radians
         try:
             points = [float(lat1), float(lon1), float(lat2), float(lon2)]
             lat1, lon1, lat2, lon2 = map(math.radians, points)
@@ -20,15 +21,21 @@ class DeliveryEstimator:
             # Fallback distance if coordinates are invalid
             return 0.0
 
-        # Haversine formula 
-        dlon = lon2 - lon1 
-        dlat = lat2 - lat1 
-        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-        c = 2 * math.asin(math.sqrt(a)) 
-        r = 6371 # Radius of earth in kilometers
+        # Haversine formula
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = math.sin(dlat / 2)**2 + math.cos(lat1) * \
+            math.cos(lat2) * math.sin(dlon / 2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        r = 6371  # Radius of earth in kilometers
         return c * r
 
-    def get_estimated_delivery_time(self, laundry, user_lat=None, user_lng=None, active_order_count=0):
+    def get_estimated_delivery_time(
+            self,
+            laundry,
+            user_lat=None,
+            user_lng=None,
+            active_order_count=0):
         """
         Main calculation logic for delivery estimation.
         - Base time = laundry.estimated_delivery_hours
@@ -56,7 +63,9 @@ class DeliveryEstimator:
                     distance_delay = (distance / 5) * 5
                     total_minutes += distance_delay
                 except Exception as e:
-                    logger.warning(f"Distance calculation failed for laundry {laundry.id}: {e}")
+                    logger.warning(
+                        f"Distance calculation failed for laundry {
+                            laundry.id}: {e}")
 
             # 3. Peak Hour Surge (+15%)
             # Peak hours: 17:00 to 21:00
@@ -75,14 +84,16 @@ class DeliveryEstimator:
 
             return self.format_duration(total_minutes)
         except Exception as e:
-            logger.error(f"Error calculating delivery time for laundry {laundry.id}: {e}", exc_info=True)
+            logger.error(
+                f"Error calculating delivery time for laundry {
+                    laundry.id}: {e}", exc_info=True)
             return f"{laundry.estimated_delivery_hours or 24}h 0m"
 
     def format_duration(self, total_minutes):
         """Format minutes into '3h 25m' string."""
         hours = int(total_minutes // 60)
         minutes = int(total_minutes % 60)
-        
+
         if hours > 0:
             return f"{hours}h {minutes}m"
         return f"{minutes}m"

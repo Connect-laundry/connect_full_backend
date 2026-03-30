@@ -7,12 +7,13 @@ from laundries.models import Category, Laundry
 # pyre-ignore[missing-module]
 from users.models import User
 
+
 class Command(BaseCommand):
     help = 'Seed database with sample laundry data'
 
     def handle(self, *args, **kwargs):
         self.stdout.write('Seeding database...')
-        
+
         # 1. Ensure a user exists (Owner)
         owner, created = User.objects.get_or_create(
             email='owner@example.com',
@@ -29,7 +30,11 @@ class Command(BaseCommand):
             owner.save()
 
         # 2. Categories
-        categories_names = ['Wash & Fold', 'Dry Cleaning', 'Ironing', 'Duvet Cleaning']
+        categories_names = [
+            'Wash & Fold',
+            'Dry Cleaning',
+            'Ironing',
+            'Duvet Cleaning']
         categories = []
         for name in categories_names:
             cat, _ = Category.objects.get_or_create(name=name)
@@ -81,11 +86,12 @@ class Command(BaseCommand):
                     'address': f"Location for {ld['name']}"
                 }
             )
-            
+
             # 4. Services for each laundry
             if l_created:
-                # Seeded LaundryServices will be handled via the new seed_booking.py 
-                # to map specific items to services. We skip legacy Service creation here.
+                # Seeded LaundryServices will be handled via the new seed_booking.py
+                # to map specific items to services. We skip legacy Service
+                # creation here.
                 pass
 
         self.stdout.write(self.style.SUCCESS('Successfully seeded database!'))

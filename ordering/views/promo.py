@@ -13,6 +13,7 @@ from ordering.models.promo import Coupon
 # pyre-ignore[missing-module]
 from ordering.serializers.promo import CouponValidateSerializer, CouponResponseSerializer
 
+
 class CouponViewSet(viewsets.GenericViewSet):
     """
     Endpoints for coupon validation and management.
@@ -28,7 +29,9 @@ class CouponViewSet(viewsets.GenericViewSet):
         """
         serializer = CouponValidateSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST)
 
         code = serializer.validated_data['code']
         order_amount = serializer.validated_data['order_amount']
@@ -41,7 +44,7 @@ class CouponViewSet(viewsets.GenericViewSet):
                     code__iexact=code,
                     is_active=True
                 )
-                
+
                 is_valid, message, discount = coupon.validate_for_order(
                     order_amount=order_amount,
                     user=request.user,
@@ -71,7 +74,7 @@ class CouponViewSet(viewsets.GenericViewSet):
         except Coupon.DoesNotExist:
             return Response({
                 "success": False,
-                        "status": "error",
+                "status": "error",
                 "message": "Invalid coupon code",
                 "data": {}
             }, status=status.HTTP_400_BAD_REQUEST)

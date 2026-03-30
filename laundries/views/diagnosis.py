@@ -7,9 +7,10 @@ from django.core.management import call_command
 import os
 import io
 
+
 class DiagnosisView(APIView):
     permission_classes = [AllowAny]
-    
+
     def get(self, request):
         db_conn = False
         try:
@@ -18,7 +19,7 @@ class DiagnosisView(APIView):
                 db_conn = True
         except Exception as e:
             db_conn = f"Failed: {str(e)}"
-            
+
         postgis_available = False
         try:
             with connection.cursor() as cursor:
@@ -32,10 +33,10 @@ class DiagnosisView(APIView):
                 # 1. Check if table exists
                 if not model_class.objects.exists():
                     return "OK (Empty)"
-                
+
                 # 2. Try to fetch first record
                 obj = model_class.objects.first()
-                
+
                 # 3. Special check for Laundry location
                 if model_class.__name__ == 'Laundry':
                     try:
@@ -43,13 +44,16 @@ class DiagnosisView(APIView):
                         return f"OK (Location: {type(loc)})"
                     except Exception as e:
                         return f"Error on Location field: {str(e)}"
-                
+
                 # Check serialization of a record (dummy)
                 str(obj)
                 return "OK"
             except Exception as e:
                 import traceback
-                return f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
+                return f"Error: {
+                    str(e)} | Details: {
+                    traceback.format_exc().splitlines()[
+                        -1]}"
 
         from laundries.models.laundry import Laundry
         from laundries.models.service import LaundryService
@@ -58,9 +62,9 @@ class DiagnosisView(APIView):
         from ordering.models.base import Order
         from marketplace.models.special_offer import SpecialOffer
         from marketplace.models.notification import Notification
-        
+
         # Check for pending migrations
-        pending_migrations = []     
+        pending_migrations = []
         try:
             from django.db.migrations.executor import MigrationExecutor
             executor = MigrationExecutor(connections['default'])
@@ -77,25 +81,32 @@ class DiagnosisView(APIView):
                 from django.contrib.gis.db.models.functions import Distance
                 # Test a simple spatial query
                 pnt = Point(0, 0, srid=4326)
-                qs = Laundry.objects.filter(location__distance_lte=(pnt, D(km=10))).annotate(
-                    test_dist=Distance('location', pnt)
-                )
+                qs = Laundry.objects.filter(
+                    location__distance_lte=(
+                        pnt, D(
+                            km=10))).annotate(
+                    test_dist=Distance(
+                        'location', pnt))
                 if qs.exists():
                     obj = qs.first()
                     dist = getattr(obj, 'test_dist', None)
-                    # Check serialization
                     try:
-                        import json
                         from rest_framework.renderers import JSONRenderer
                         JSONRenderer().render({"d": dist})
-                        spatial_search_status = f"OK (Found {qs.count()}, Serialized: {type(dist)})"
+                        spatial_search_status = f"OK (Found {
+                            qs.count()}, Serialized: {
+                            type(dist)})"
                     except Exception as e:
-                        spatial_search_status = f"Serialization Error: {str(e)}"
+                        spatial_search_status = f"Serialization Error: {
+                            str(e)}"
                 else:
                     spatial_search_status = "OK (No data in 10km radius, test query passed)"
             except Exception as e:
                 import traceback
-                spatial_search_status = f"Error: {str(e)} | Details: {traceback.format_exc().splitlines()[-1]}"
+                spatial_search_status = f"Error: {
+                    str(e)} | Details: {
+                    traceback.format_exc().splitlines()[
+                        -1]}"
 
         return Response({
             "success": True,
@@ -130,20 +141,24 @@ class DiagnosisView(APIView):
             # 1. Run Migrations
             call_command('migrate', interactive=False, stdout=out)
             migration_result = out.getvalue()
-            
+
             # 2. Sync Locations
             sync_count = 0
             if os.getenv('USE_POSTGIS', 'False') == 'True':
                 from laundries.models.laundry import Laundry
                 from django.contrib.gis.geos import Point
-                
-                laundries_to_sync = Laundry.objects.filter(location__isnull=True)
-                for l in laundries_to_sync:
-                    if l.latitude and l.longitude:
-                        l.location = Point(float(l.longitude), float(l.latitude), srid=4326)
-                        l.save()
+
+                laundries_to_sync = Laundry.objects.filter(
+                    location__isnull=True)
+                for laundry_item in laundries_to_sync:
+                    if laundry_item.latitude and laundry_item.longitude:
+                        laundry_item.location = Point(
+                            float(
+                                laundry_item.longitude), float(
+                                laundry_item.latitude), srid=4326)
+                        laundry_item.save()
                         sync_count += 1
-            
+
             return Response({
                 "success": True,
                 "message": f"Tasks completed. Synced {sync_count} laundries.",

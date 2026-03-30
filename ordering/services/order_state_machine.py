@@ -10,12 +10,13 @@ from ..models.base import Order, OrderStatusHistory
 # Signal for status changes
 order_status_changed = Signal()
 
+
 class OrderStateMachine:
     """
     Strict, deterministic state machine for managing Order lifecycle.
     Ensures safe transitions, audit logging, and role-based validation.
     """
-    
+
     VALID_TRANSITIONS = {
         Order.Status.PENDING: [
             Order.Status.CONFIRMED,

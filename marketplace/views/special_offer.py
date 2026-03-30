@@ -5,16 +5,26 @@ from ..models.special_offer import SpecialOffer
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
+
 class SpecialOfferSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpecialOffer
-        fields = ['id', 'title', 'description', 'image', 'order', 'valid_until']
+        fields = [
+            'id',
+            'title',
+            'description',
+            'image',
+            'order',
+            'valid_until']
+
 
 class SpecialOfferViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SpecialOfferSerializer
-    permission_classes = [permissions.AllowAny] # Public endpoint
+    permission_classes = [permissions.AllowAny]  # Public endpoint
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return SpecialOffer.objects.none()
-        return SpecialOffer.objects.filter(is_active=True).order_by('order', '-created_at')
+        return SpecialOffer.objects.filter(
+            is_active=True).order_by(
+            'order', '-created_at')

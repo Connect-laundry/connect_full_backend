@@ -5,7 +5,10 @@ from rest_framework.routers import DefaultRouter
 from .views import DeliveryAssignmentViewSet, TrackingViewSet
 
 router = DefaultRouter()
-router.register(r'assignments', DeliveryAssignmentViewSet, basename='assignment')
+router.register(
+    r'assignments',
+    DeliveryAssignmentViewSet,
+    basename='assignment')
 router.register(r'tracking', TrackingViewSet, basename='tracking')
 
 urlpatterns = [

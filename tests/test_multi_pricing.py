@@ -6,16 +6,19 @@ from rest_framework.test import APIClient
 from laundries.models import Laundry, Category, LaundryService
 from ordering.models import Order, LaunderableItem
 
+
 @pytest.fixture
 def api_client(authenticated_user):
     client = APIClient()
     client.force_authenticate(user=authenticated_user)
     return client
 
+
 @pytest.fixture
 def pricing_setup(db):
     """Sets up basic categories and items for pricing tests."""
-    service_type = Category.objects.create(name="Wash & Iron", type='SERVICE_TYPE')
+    service_type = Category.objects.create(
+        name="Wash & Iron", type='SERVICE_TYPE')
     item_cat = Category.objects.create(name="Clothing", type='ITEM_CATEGORY')
     item = LaunderableItem.objects.create(name="Shirt", item_category=item_cat)
     return {
@@ -23,13 +26,18 @@ def pricing_setup(db):
         "item": item
     }
 
+
 @pytest.mark.django_db
 class TestMultiPricingWorkflow:
-    
-    def test_per_item_order_creation(self, api_client, sample_laundry, pricing_setup):
+
+    def test_per_item_order_creation(
+            self,
+            api_client,
+            sample_laundry,
+            pricing_setup):
         # 1. Setup Laundry for Per Item
         sample_laundry.pricing_methods = ["PER_ITEM"]
-        
+
         # Add a service price (required for validation now)
         LaundryService.objects.create(
             laundry=sample_laundry,
@@ -38,11 +46,12 @@ class TestMultiPricingWorkflow:
             price=Decimal('5.00')
         )
         sample_laundry.save()
-        
+
         # 2. Create Order
         url = reverse('booking-create')
-        if not url.endswith('/'): url += '/'
-        
+        if not url.endswith('/'):
+            url += '/'
+
         data = {
             "laundry": sample_laundry.id,
             "pickup_date": "2026-04-01T10:00:00Z",
@@ -56,10 +65,10 @@ class TestMultiPricingWorkflow:
             ],
             "pickup_address": "Test Address"
         }
-        
+
         response = api_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_201_CREATED
-        
+
         order = Order.objects.get(id=response.data['id'])
         assert order.pricing_method == 'PER_ITEM'
         assert order.estimated_price >= Decimal('10.00')
@@ -71,10 +80,11 @@ class TestMultiPricingWorkflow:
         sample_laundry.price_per_kg = Decimal('10.00')
         sample_laundry.min_weight = Decimal('2.00')
         sample_laundry.save()
-        
+
         # 2. Create Order (Estimated)
         url = reverse('booking-create')
-        if not url.endswith('/'): url += '/'
+        if not url.endswith('/'):
+            url += '/'
         data = {
             "laundry": sample_laundry.id,
             "pickup_date": "2026-04-01T10:00:00Z",
@@ -82,23 +92,24 @@ class TestMultiPricingWorkflow:
             "estimated_weight": 5.0,
             "pickup_address": "Test Address"
         }
-        
+
         response = api_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_201_CREATED
-        
+
         order = Order.objects.get(id=response.data['id'])
         assert order.pricing_method == 'PER_KG'
         assert order.estimated_price >= Decimal('50.00')
         assert order.final_price == Decimal('0.00')
-        
+
         # 3. Staff Updates Weight
         weight_url = reverse('order-update-weight', kwargs={'pk': order.id})
-        if not weight_url.endswith('/'): weight_url += '/'
-        
+        if not weight_url.endswith('/'):
+            weight_url += '/'
+
         weight_data = {"actual_weight": 6.5}
         response = api_client.patch(weight_url, weight_data, format='json')
         assert response.status_code == status.HTTP_200_OK
-        
+
         order.refresh_from_db()
         assert order.actual_weight == Decimal('6.50')
         assert order.final_price >= Decimal('65.00')
@@ -117,16 +128,17 @@ class TestMultiPricingWorkflow:
         sample_laundry.pricing_methods = ["PER_KG"]
         sample_laundry.price_per_kg = Decimal('10.00')
         sample_laundry.save()
-        
+
         url = reverse('booking-create')
-        if not url.endswith('/'): url += '/'
+        if not url.endswith('/'):
+            url += '/'
         data = {
             "laundry": sample_laundry.id,
             "pickup_date": "2026-04-01T10:00:00Z",
             "pickup_address": "Test Address",
             "pricing_method": "PER_KG"
         }
-        
+
         response = api_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "estimated_weight" in response.data
@@ -134,9 +146,9 @@ class TestMultiPricingWorkflow:
     def test_per_kg_unsupported_failure(self, api_client, sample_laundry):
         # We need to add an item so PER_ITEM is valid during save
         pricing_setup = {
-            'item': LaunderableItem.objects.create(name="Shirt"),
-            'service_type': Category.objects.create(name="Wash", type='SERVICE_TYPE')
-        }
+            'item': LaunderableItem.objects.create(
+                name="Shirt"), 'service_type': Category.objects.create(
+                name="Wash", type='SERVICE_TYPE')}
         LaundryService.objects.create(
             laundry=sample_laundry,
             item=pricing_setup['item'],
@@ -146,9 +158,10 @@ class TestMultiPricingWorkflow:
         sample_laundry.pricing_methods = ["PER_ITEM"]
         sample_laundry.price_per_kg = Decimal('0.00')
         sample_laundry.save()
-        
+
         url = reverse('booking-create')
-        if not url.endswith('/'): url += '/'
+        if not url.endswith('/'):
+            url += '/'
         data = {
             "laundry": sample_laundry.id,
             "pickup_date": "2026-04-01T10:00:00Z",
@@ -156,7 +169,7 @@ class TestMultiPricingWorkflow:
             "pricing_method": "PER_KG",
             "estimated_weight": 5.0
         }
-        
+
         response = api_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "does not support weight-based pricing" in str(response.data)

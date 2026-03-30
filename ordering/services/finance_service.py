@@ -4,6 +4,7 @@ from django.conf import settings
 # pyre-ignore[missing-module]
 from django.db.models import Sum, F
 
+
 class FinanceService:
     """
     Centralized service for handling all financial calculations.
@@ -17,7 +18,7 @@ class FinanceService:
             tax_rate = Decimal(str(settings.TAX_RATE))
         else:
             tax_rate = Decimal(str(tax_rate))
-            
+
         return (Decimal(str(amount)) * tax_rate).quantize(Decimal('0.01'))
 
     @staticmethod
@@ -27,7 +28,7 @@ class FinanceService:
         laundry_fee = getattr(order.laundry, 'delivery_fee', None)
         if laundry_fee is not None:
             return Decimal(str(laundry_fee))
-            
+
         return Decimal(str(settings.DELIVERY_FEE_BASE))
 
     @staticmethod
@@ -43,7 +44,8 @@ class FinanceService:
         """
         # 1. Calculate base items total based on pricing method
         if order.pricing_method == 'PER_KG':
-            weight = order.actual_weight or order.estimated_weight or Decimal('0.00')
+            weight = order.actual_weight or order.estimated_weight or Decimal(
+                '0.00')
             price_per_kg = order.price_per_kg_snapshot or Decimal('0.00')
             # Use min_weight constraint if weight is low
             min_weight = getattr(order.laundry, 'min_weight', Decimal('1.00'))
@@ -53,40 +55,44 @@ class FinanceService:
             items_total = order.items.aggregate(
                 total=Sum(F('quantity') * F('price'))
             )['total'] or Decimal('0.00')
-        
+
         # 2. Fees
         delivery_fee = FinanceService.calculate_delivery_fee(order)
         pickup_fee = FinanceService.calculate_pickup_fee(order)
-        
+
         # 3. Discount
         discount = Decimal('0.00')
         if coupon:
             is_valid, error = coupon.is_valid(
-                user=order.user, 
-                laundry_id=order.laundry_id, 
+                user=order.user,
+                laundry_id=order.laundry_id,
                 order_value=items_total
             )
-            
+
             if is_valid:
                 if coupon.discount_type == 'FIXED':
                     discount = Decimal(str(coupon.discount_value))
                 else:
-                    discount = (items_total * (Decimal(str(coupon.discount_value)) / 100))
-                
+                    discount = (items_total *
+                                (Decimal(str(coupon.discount_value)) / 100))
+
                 # Ensure discount doesn't exceed items_total
                 discount = min(discount, items_total)
-        
+
         # 4. Tax (Calculated on items_total - discount)
         taxable_amount = max(Decimal('0.00'), items_total - discount)
         tax = FinanceService.calculate_tax_amount(taxable_amount)
-        
+
         # 5. Platform Fee
         platform_fee_rate = Decimal(str(settings.PLATFORM_FEE_RATE))
-        platform_fee = (taxable_amount * platform_fee_rate).quantize(Decimal('0.01'))
-        
+        platform_fee = (
+            taxable_amount *
+            platform_fee_rate).quantize(
+            Decimal('0.01'))
+
         # 6. Final Total
         total = taxable_amount + delivery_fee + pickup_fee + tax + platform_fee
-        
+
         return {
             "items_total": str(items_total.quantize(Decimal('0.01'))),
             "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),

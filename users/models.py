@@ -20,12 +20,13 @@ class UserManager(BaseUserManager):
     Custom manager for the User model where email is the unique identifier
     for authentication instead of usernames.
     """
+
     def create_user(self, email, phone, password=None, **extra_fields):
         if not email:
             raise ValueError(_('The Email field must be set'))
         if not phone:
             raise ValueError(_('The Phone field must be set'))
-        
+
         email = self.normalize_email(email)
         user = self.model(email=email, phone=phone, **extra_fields)
         user.set_password(password)
@@ -56,30 +57,48 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(_('email address'), unique=True, db_index=True)
-    phone = models.CharField(_('phone number'), max_length=20, unique=True, db_index=True)
+    phone = models.CharField(
+        _('phone number'),
+        max_length=20,
+        unique=True,
+        db_index=True)
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
-    
+
     # Referrals
-    referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True, db_index=True)
-    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
-        
+    referral_code = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True)
+    referred_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referrals')
+
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
         default=Role.CUSTOMER
     )
-    
+
     is_verified = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    
+
     # Deactivation (Soft-Delete)
     deactivated_at = models.DateTimeField(null=True, blank=True)
     deactivation_reason = models.TextField(null=True, blank=True)
-    
-    avatar = models.ImageField(_('avatar'), upload_to='avatars/', null=True, blank=True)
-    
+
+    avatar = models.ImageField(
+        _('avatar'),
+        upload_to='avatars/',
+        null=True,
+        blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -99,20 +118,35 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
 
+
 class Address(models.Model):
     """User-defined delivery addresses."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
-    
-    label = models.CharField(_('label'), max_length=50, help_text="Home, Work, etc.")
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='addresses')
+
+    label = models.CharField(
+        _('label'),
+        max_length=50,
+        help_text="Home, Work, etc.")
     address_line1 = models.CharField(_('address line 1'), max_length=255)
     city = models.CharField(_('city'), max_length=100, default='Accra')
-    
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    
+
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True)
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True)
+
     is_default = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -133,7 +167,10 @@ class Address(models.Model):
 
 class PasswordResetToken(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens')
     token_hash = models.CharField(max_length=64, unique=True, db_index=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
@@ -151,15 +188,19 @@ class PasswordResetToken(models.Model):
     @classmethod
     def create_for_user(cls, user):
         """Invalidate old tokens and create a new one."""
-        cls.objects.filter(user=user, used_at__isnull=True).update(expires_at=timezone.now())
-        
+        cls.objects.filter(
+            user=user,
+            used_at__isnull=True).update(
+            expires_at=timezone.now())
+
         raw_token = str(uuid.uuid4())
         token_hash = cls._hash_token(raw_token)
-        
+
         # Default expiry 1 hour (can be overridden by settings if needed)
         from django.conf import settings
-        expiry_hours = getattr(settings, 'PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1)
-        
+        expiry_hours = getattr(
+            settings, 'PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1)
+
         cls.objects.create(
             user=user,
             token_hash=token_hash,

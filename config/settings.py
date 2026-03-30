@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 import os
 # pyre-ignore[import]
@@ -57,7 +58,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'cloudinary_storage',
-   
+
     'rest_framework',
     'drf_spectacular',
     'corsheaders',
@@ -102,18 +103,18 @@ MIDDLEWARE = [
 
 # Security Settings
 
-if not DEBUG:    
+if not DEBUG:
     # SSL/HTTPS
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    
+
     # HSTS
-    SECURE_HSTS_SECONDS = 31536000 # 1 year
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    
+
     # Misc
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
@@ -129,24 +130,22 @@ if not DEBUG:
         )
 
 # Data limits
-DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440 # 2.5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
 
 # CORS configuration
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in dev mode
 CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-    if origin.strip()
-]
+    origin.strip() for origin in os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000').split(',') if origin.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF Trusted Origins (required for Django 4.0+)
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-    if origin.strip()
-]
+    origin.strip() for origin in os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000').split(',') if origin.strip()]
 
 ROOT_URLCONF = 'config.urls'
 
@@ -173,12 +172,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Determine database scheme based on USE_POSTGIS
 db_scheme = 'postgis' if USE_POSTGIS else 'postgres'
-default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'connect_db')}"
+default_db_url = f"{db_scheme}://{os.getenv('DB_USER',
+                                            'postgres')}:{os.getenv('DB_PASSWORD',
+                                                                    'postgres')}@{os.getenv('DB_HOST',
+                                                                                            'localhost')}:{os.getenv('DB_PORT',
+                                                                                                                     '5432')}/{os.getenv('DB_NAME',
+                                                                                                                                         'connect_db')}"
 
 # Determine if SSL is required for the database
 # By default, SSL is required if DEBUG is False (production)
 # Use DATABASE_SSL_REQUIRE environmental variable to override (e.g., in CI)
-DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', str(not DEBUG)).lower() == 'true'
+DATABASE_SSL_REQUIRE = os.getenv(
+    'DATABASE_SSL_REQUIRE', str(
+        not DEBUG)).lower() == 'true'
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -188,7 +194,8 @@ DATABASES = {
     )
 }
 
-# Set the appropriate database engine to PostGIS only if we're using PostgreSQL and POSTGIS is enabled
+# Set the appropriate database engine to PostGIS only if we're using
+# PostgreSQL and POSTGIS is enabled
 if USE_POSTGIS and DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 
@@ -298,7 +305,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 
-
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
@@ -310,7 +316,6 @@ CACHES = {
     }
 }
 
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=100),
@@ -340,9 +345,12 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # Password Reset Settings
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f"Connect Laundry <{os.getenv('EMAIL_HOST_USER')}>")
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL', f"Connect Laundry <{
+        os.getenv('EMAIL_HOST_USER')}>")
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
+PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(
+    os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
 
 # DEBUG = False
@@ -350,10 +358,11 @@ PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_H
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# --- Observability ---    
+# --- Observability ---
 
 SENTRY_DSN = os.getenv('SENTRY_DSN')
-if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTRY_DSN:
+if SENTRY_DSN and SENTRY_DSN.startswith(
+        'http') and 'your_real_dsn' not in SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
@@ -381,13 +390,13 @@ LOGGING = {
         },
     },
     'loggers': {
-        '': { # Root logger
+        '': {  # Root logger
             'handlers': ['console'],
-            'level': LOGGING_LEVEL,            
+            'level': LOGGING_LEVEL,
         },
         'django.db.backends': {
             'handlers': ['console'],
-            'level': 'DEBUG', # Used for slow query detection via DB instrumentation
+            'level': 'DEBUG',  # Used for slow query detection via DB instrumentation
             'propagate': False,
         },
     },
@@ -407,9 +416,15 @@ PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 
 # Financial Settings
-TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
-DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
-PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
+TAX_RATE = float(os.getenv('TAX_RATE', '0.07'))  # Default 7%
+DELIVERY_FEE_BASE = float(
+    os.getenv(
+        'DELIVERY_FEE_BASE',
+        '10.00'))  # Default 10 GHS
+PLATFORM_FEE_RATE = float(
+    os.getenv(
+        'PLATFORM_FEE_RATE',
+        '0.05'))  # Default 5% commission
 
 # Currency Settings
 CURRENCY = os.getenv('CURRENCY', 'GHS')
@@ -417,9 +432,13 @@ CURRENCY_SYMBOL = os.getenv('CURRENCY_SYMBOL', '₵')
 
 # --- Security: Brute Force Protection (Axes) ---
 AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', 5))
-AXES_COOLOFF_TIME = timedelta(minutes=int(os.getenv('AXES_COOLOFF_MINUTES', 15)))
+AXES_COOLOFF_TIME = timedelta(
+    minutes=int(
+        os.getenv(
+            'AXES_COOLOFF_MINUTES',
+            15)))
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_TEMPLATE = None # Use default or custom
+AXES_LOCKOUT_TEMPLATE = None  # Use default or custom
 AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesBackend',
@@ -428,11 +447,22 @@ AUTHENTICATION_BACKENDS = [
 
 # --- Security: Content Security Policy (CSP) ---
 CSP_DEFAULT_SRC = ("'self'",)
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net")
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net")
-CSP_IMG_SRC = ("'self'", "data:", "https://res.cloudinary.com", "https://cdn.jsdelivr.net")
+CSP_STYLE_SRC = (
+    "'self'",
+    "'unsafe-inline'",
+    "https://fonts.googleapis.com",
+    "https://cdn.jsdelivr.net")
+CSP_SCRIPT_SRC = (
+    "'self'",
+    "'unsafe-inline'",
+    "'unsafe-eval'",
+    "https://cdn.jsdelivr.net")
+CSP_IMG_SRC = (
+    "'self'",
+    "data:",
+    "https://res.cloudinary.com",
+    "https://cdn.jsdelivr.net")
 CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
 CSP_CONNECT_SRC = ("'self'", "https://sentry.io")
 CSP_FRAME_ANCESTORS = ("'none'",)
-CSP_REPORT_ONLY = DEBUG # Only report during dev, enforce in prod
-
+CSP_REPORT_ONLY = DEBUG  # Only report during dev, enforce in prod

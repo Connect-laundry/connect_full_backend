@@ -11,9 +11,10 @@ from ..serializers.login import LoginSerializer
 # pyre-ignore[missing-module]
 from ..services.auth_service import AuthService
 
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():

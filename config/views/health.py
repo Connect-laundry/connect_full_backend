@@ -11,6 +11,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
 def health_check(request):
     """
     Production health check endpoint.
@@ -21,12 +22,12 @@ def health_check(request):
         "cache": "down",
         "celery": "down",
     }
-    
+
     health_status = {
         "status": "healthy",
         "components": components_status
     }
-    
+
     # 1. Check Database (Essential)
     try:
         from django.db import connection
@@ -66,11 +67,12 @@ def health_check(request):
     # Determination of HTTP status code
     db_engine = connections['default'].settings_dict.get('ENGINE', '')
     is_sqlite = 'sqlite' in db_engine
-    skip_services = is_sqlite or os.getenv('SKIP_HEALTH_SERVICES', 'False').lower() == 'true'
-    
+    skip_services = is_sqlite or os.getenv(
+        'SKIP_HEALTH_SERVICES', 'False').lower() == 'true'
+
     if health_status['status'] == "healthy" or skip_services:
         status_code = 200
     else:
         status_code = 503
-        
+
     return JsonResponse(health_status, status=status_code)

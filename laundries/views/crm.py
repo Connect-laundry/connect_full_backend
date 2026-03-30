@@ -27,7 +27,8 @@ class CustomerListView(views.APIView):
     def get(self, request):
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
-            return Response({"success": False, "status": "error", "message": "Laundry not found"}, status=404)
+            return Response({"success": False, "status": "error",
+                            "message": "Laundry not found"}, status=404)
 
         customers = (
             Order.objects.filter(laundry=laundry)
@@ -73,7 +74,8 @@ class CustomerProfileView(views.APIView):
     def get(self, request, user_id):
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
-            return Response({"success": False, "status": "error", "message": "Laundry not found"}, status=404)
+            return Response({"success": False, "status": "error",
+                            "message": "Laundry not found"}, status=404)
 
         orders = Order.objects.filter(
             laundry=laundry, user_id=user_id

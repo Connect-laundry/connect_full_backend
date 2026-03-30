@@ -7,6 +7,7 @@ from ..serializers.review import ReviewSerializer
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 
+
 class ReviewCreateView(generics.CreateAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]

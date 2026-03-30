@@ -3,6 +3,7 @@ from django.conf import settings
 from unittest.mock import patch
 from decimal import Decimal
 
+
 @pytest.fixture(autouse=True)
 def force_celery_eager(settings):
     """
@@ -20,14 +21,17 @@ def force_celery_eager(settings):
     # Some older versions or specific setups might check this
     settings.CELERY_BROKER_TRANSPORT = 'memory'
 
+
 @pytest.fixture(autouse=True)
 def mock_celery_retry():
     """
     Global mock for celery task retry to avoid broker connection attempts.
     """
     with patch('celery.app.task.Task.retry') as mock_retry:
-        mock_retry.side_effect = Exception("Celery retry called but caught by mock for testing")
+        mock_retry.side_effect = Exception(
+            "Celery retry called but caught by mock for testing")
         yield mock_retry
+
 
 @pytest.fixture(autouse=True)
 def mock_celery_task_execution():
@@ -35,33 +39,38 @@ def mock_celery_task_execution():
     Force Celery tasks to execute synchronously when .delay() or .apply_async() is called.
     This is a foolproof way to bypass broker connection issues.
     """
+
     def mock_delay(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
     with patch('celery.app.task.Task.delay', autospec=True) as mock_d:
         mock_d.side_effect = mock_delay
         with patch('celery.app.task.Task.apply_async', autospec=True) as mock_a:
-            mock_a.side_effect = lambda self, args=None, kwargs=None, **other: self.run(*(args or []), **(kwargs or {}))
+            mock_a.side_effect = lambda self, args=None, kwargs=None, **other: self.run(
+                *(args or []), **(kwargs or {}))
             yield
+
 
 @pytest.fixture
 def authenticated_user(db):
     from django.contrib.auth import get_user_model
     User = get_user_model()
     user = User.objects.create_user(
-        email="testuser@example.com", 
-        password="password123", 
+        email="testuser@example.com",
+        password="password123",
         first_name="Test",
         last_name="User",
         phone="1234567890",
-        role="OWNER" # Added role for validation
+        role="OWNER"  # Added role for validation
     )
     return user
+
 
 @pytest.fixture
 def auth_client(client, authenticated_user):
     client.force_login(authenticated_user)
     return client
+
 
 @pytest.fixture
 def sample_laundry(db, authenticated_user):
@@ -78,6 +87,7 @@ def sample_laundry(db, authenticated_user):
         pricing_methods=['PER_KG']
     )
 
+
 @pytest.fixture
 def sample_order(db, authenticated_user, sample_laundry):
     from ordering.models import Order
@@ -89,6 +99,7 @@ def sample_order(db, authenticated_user, sample_laundry):
         status='PENDING',
         order_no='ORD-TEST-123'
     )
+
 
 @pytest.fixture
 def sample_payment(db, sample_order):

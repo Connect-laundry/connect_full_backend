@@ -7,12 +7,13 @@ from rest_framework.validators import UniqueValidator
 # pyre-ignore[missing-module]
 from ..models import User
 
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         write_only=True, required=True, validators=[validate_password]
     )
     password_confirm = serializers.CharField(write_only=True, required=True)
-    
+
     email = serializers.EmailField(
         required=True,
         validators=[UniqueValidator(queryset=User.objects.all())]
@@ -25,7 +26,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'email', 'phone', 'first_name', 'last_name', 
+            'email', 'phone', 'first_name', 'last_name',
             'role', 'password', 'password_confirm'
         )
 
@@ -33,18 +34,19 @@ class RegisterSerializer(serializers.ModelSerializer):
         """Only allow CUSTOMER and OWNER self-registration."""
         allowed = [User.Role.CUSTOMER, User.Role.OWNER]
         if value not in allowed:
-            raise serializers.ValidationError("Only CUSTOMER and OWNER roles are allowed for self-registration.")
+            raise serializers.ValidationError(
+                "Only CUSTOMER and OWNER roles are allowed for self-registration.")
         return value
-
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})  # nosec B105
+            raise serializers.ValidationError(
+                {"password": "Password fields didn't match."})  # nosec B105
         return attrs
 
     def create(self, validated_data):
         # Remove password_confirm as it's not a model field
         validated_data.pop('password_confirm')
-        
+
         # User create_user to handle password hashing
         return User.objects.create_user(**validated_data)

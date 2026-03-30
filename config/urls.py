@@ -15,6 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 # pyre-ignore[missing-module]
+from django.conf.urls.static import static
+from django.conf import settings
 from django.contrib import admin
 # pyre-ignore[missing-module]
 from django.urls import path, include
@@ -26,7 +28,12 @@ from config.views.health import health_check
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
-    path('', RedirectView.as_view(url='/api/schema/swagger-ui/', permanent=False), name='root'),
+    path(
+        '',
+        RedirectView.as_view(
+            url='/api/schema/swagger-ui/',
+            permanent=False),
+        name='root'),
     path('health/', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('users.urls')),
@@ -36,16 +43,23 @@ urlpatterns = [
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
-    
-# OpenAPI Documentation
+
+    # OpenAPI Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path(
+        'api/schema/swagger-ui/',
+        SpectacularSwaggerView.as_view(
+            url_name='schema'),
+        name='swagger-ui'),
+    path(
+        'api/schema/redoc/',
+        SpectacularRedocView.as_view(
+            url_name='schema'),
+        name='redoc'),
 ]
 
 # Serve media files in development
-from django.conf import settings
-from django.conf.urls.static import static
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)

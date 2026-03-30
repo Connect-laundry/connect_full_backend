@@ -4,6 +4,7 @@ from django.db import models
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
+
 class OpeningHours(models.Model):
     class Weekday(models.IntegerChoices):
         MONDAY = 1, _('Monday')
@@ -15,8 +16,11 @@ class OpeningHours(models.Model):
         SUNDAY = 7, _('Sunday')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    laundry = models.ForeignKey('laundries.Laundry', on_delete=models.CASCADE, related_name='opening_hours')
-    
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='opening_hours')
+
     day = models.IntegerField(choices=Weekday.choices)
     opening_time = models.TimeField()
     closing_time = models.TimeField()
@@ -29,4 +33,8 @@ class OpeningHours(models.Model):
         ordering = ['day', 'opening_time']
 
     def __str__(self):
-        return f"{self.laundry.name} - {self.get_day_display()}: {self.opening_time} to {self.closing_time}"
+        return f"{
+            self.laundry.name} - {
+            self.get_day_display()}: {
+            self.opening_time} to {
+                self.closing_time}"

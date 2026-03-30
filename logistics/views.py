@@ -5,6 +5,7 @@ from .models import DeliveryAssignment, TrackingLog
 # pyre-ignore[missing-module]
 from .serializers import DeliveryAssignmentSerializer, TrackingLogSerializer
 
+
 class DeliveryAssignmentViewSet(viewsets.ModelViewSet):
     """Management of delivery assignments (Admin/Owner only usually)."""
     queryset = DeliveryAssignment.objects.all()
@@ -17,6 +18,7 @@ class DeliveryAssignmentViewSet(viewsets.ModelViewSet):
         if user.role == 'DRIVER':
             return self.queryset.filter(driver=user)
         return self.queryset
+
 
 class TrackingViewSet(viewsets.ReadOnlyModelViewSet):
     """Public/User tracking info for orders."""

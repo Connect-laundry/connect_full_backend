@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 class IsOwner(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in ('OWNER', 'ADMIN')
+        return request.user.is_authenticated and request.user.role in (
+            'OWNER', 'ADMIN')
 
 
 # ─── Serializers ──────────────────────────────────────────
@@ -34,7 +35,12 @@ class PayoutRequestSerializer(serializers.ModelSerializer):
         fields = ('id', 'bank_account', 'bank_account_display', 'amount',
                   'currency', 'status', 'reference', 'notes',
                   'requested_at', 'processed_at')
-        read_only_fields = ('id', 'status', 'reference', 'requested_at', 'processed_at')
+        read_only_fields = (
+            'id',
+            'status',
+            'reference',
+            'requested_at',
+            'processed_at')
 
     def get_bank_account_display(self, obj):
         return str(obj.bank_account) if obj.bank_account else None
@@ -93,7 +99,8 @@ class PayoutRequestView(views.APIView):
 
         # Validate bank account belongs to owner
         try:
-            bank_account = BankAccount.objects.get(id=bank_account_id, owner=request.user)
+            bank_account = BankAccount.objects.get(
+                id=bank_account_id, owner=request.user)
         except BankAccount.DoesNotExist:
             return Response({
                 "success": False,
@@ -101,7 +108,8 @@ class PayoutRequestView(views.APIView):
                 "message": "Bank account not found."
             }, status=status.HTTP_404_NOT_FOUND)
 
-        # Check available balance (simplified: sum of DELIVERED/COMPLETED orders)
+        # Check available balance (simplified: sum of DELIVERED/COMPLETED
+        # orders)
         from laundries.models.laundry import Laundry
         laundry = Laundry.objects.filter(owner=request.user).first()
         if not laundry:
@@ -116,8 +124,9 @@ class PayoutRequestView(views.APIView):
         ).aggregate(total=Sum('final_price'))['total'] or 0
 
         total_paid_out = PayoutRequest.objects.filter(
-            owner=request.user, status__in=['PENDING', 'PROCESSING', 'COMPLETED']
-        ).aggregate(total=Sum('amount'))['total'] or 0
+            owner=request.user, status__in=[
+                'PENDING', 'PROCESSING', 'COMPLETED']).aggregate(
+            total=Sum('amount'))['total'] or 0
 
         available_balance = total_earned - total_paid_out
 
@@ -136,7 +145,10 @@ class PayoutRequestView(views.APIView):
             notes=notes,
         )
 
-        logger.info(f"Payout requested: {payout.reference} for {amount} by {request.user.email}")
+        logger.info(
+            f"Payout requested: {
+                payout.reference} for {amount} by {
+                request.user.email}")
 
         return Response({
             "success": True,

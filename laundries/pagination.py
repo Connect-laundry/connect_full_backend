@@ -3,6 +3,7 @@ from rest_framework import pagination
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 
+
 class StandardResultsSetPagination(pagination.PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'

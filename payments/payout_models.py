@@ -33,7 +33,9 @@ class BankAccount(models.Model):
 
     def save(self, *args, **kwargs):
         if self.is_primary:
-            BankAccount.objects.filter(owner=self.owner).update(is_primary=False)
+            BankAccount.objects.filter(
+                owner=self.owner).update(
+                is_primary=False)
         super().save(*args, **kwargs)
 
 

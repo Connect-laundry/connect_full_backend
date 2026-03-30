@@ -1,9 +1,10 @@
-#pyre-ignore
+# pyre-ignore
 import uuid
 # pyre-ignore[missing-module]
 from django.db import models
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
+
 
 class FailedTask(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

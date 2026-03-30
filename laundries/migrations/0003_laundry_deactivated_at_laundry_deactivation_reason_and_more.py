@@ -7,23 +7,34 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('laundries', '0002_openinghours_laundry_laundries_l_is_feat_fc6373_idx_and_more'),
+        ('laundries',
+         '0002_openinghours_laundry_laundries_l_is_feat_fc6373_idx_and_more'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='laundry',
             name='deactivated_at',
-            field=models.DateTimeField(blank=True, null=True),
+            field=models.DateTimeField(
+                blank=True,
+                null=True),
         ),
         migrations.AddField(
             model_name='laundry',
             name='deactivation_reason',
-            field=models.TextField(blank=True, null=True),
+            field=models.TextField(
+                blank=True,
+                null=True),
         ),
         migrations.AlterField(
             model_name='laundry',
             name='image',
-            field=models.ImageField(blank=True, null=True, upload_to='laundries/', validators=[laundries.utils.validators.validate_file_upload], verbose_name='image'),
+            field=models.ImageField(
+                blank=True,
+                null=True,
+                upload_to='laundries/',
+                validators=[
+                    laundries.utils.validators.validate_file_upload],
+                verbose_name='image'),
         ),
     ]

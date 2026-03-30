@@ -11,9 +11,11 @@ from django.conf import settings
 import uuid
 import os
 
+
 class MediaUploadSerializer(serializers.Serializer):
     file = serializers.ImageField()
     folder = serializers.CharField(required=False, default='uploads')
+
 
 class MediaUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -26,17 +28,18 @@ class MediaUploadView(views.APIView):
         if serializer.is_valid():
             uploaded_file = serializer.validated_data['file']
             folder = serializer.validated_data['folder']
-            
-            # Generate unique filename 
+
+            # Generate unique filename
             ext = os.path.splitext(uploaded_file.name)[1]
             filename = f"{uuid.uuid4().hex}{ext}"
             file_path = f"{folder}/{filename}"
-            
+
             # Save file
             saved_path = default_storage.save(file_path, uploaded_file)
             file_url = default_storage.url(saved_path)
-            
-            # Ensure full URL if needed (though default_storage.url usually gives relative or absolute depending on config)
+
+            # Ensure full URL if needed (though default_storage.url usually gives
+            # relative or absolute depending on config)
             if not file_url.startswith('http'):
                 file_url = request.build_absolute_uri(file_url)
 
@@ -49,5 +52,5 @@ class MediaUploadView(views.APIView):
                     "type": uploaded_file.content_type
                 }
             })
-            
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

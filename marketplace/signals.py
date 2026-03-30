@@ -23,13 +23,15 @@ def _safe_delay(task, **kwargs):
         task.delay(**kwargs)
     except Exception as e:
         logger.warning(
-            f"Celery broker unavailable, falling back to synchronous execution for {task.name}: {e}"
-        )
+            f"Celery broker unavailable, falling back to synchronous execution for {
+                task.name}: {e}")
         try:
             # task.apply() runs the task synchronously in the current process
             task.apply(kwargs=kwargs)
         except Exception as sync_err:
-            logger.error(f"Synchronous fallback also failed for {task.name}: {sync_err}")
+            logger.error(
+                f"Synchronous fallback also failed for {
+                    task.name}: {sync_err}")
 
 
 @receiver(post_save, sender=Order)
@@ -39,16 +41,25 @@ def notify_on_order_creation(sender, instance, created, **kwargs):
         owner = instance.laundry.owner
         _safe_delay(
             create_notification,
-            user_id=str(owner.id),
+            user_id=str(
+                owner.id),
             title="New Laundry Order",
-            body=f"You have a new order {instance.order_no} from {instance.user.get_full_name()}.",
+            body=f"You have a new order {
+                instance.order_no} from {
+                instance.user.get_full_name()}.",
             notification_type='ORDER',
-            related_order_id=str(instance.id)
-        )
+            related_order_id=str(
+                instance.id))
 
 
 @receiver(order_status_changed)
-def notify_on_status_change(sender, order, from_status, to_status, user, **kwargs):
+def notify_on_status_change(
+        sender,
+        order,
+        from_status,
+        to_status,
+        user,
+        **kwargs):
     """Notify the customer on important order status updates and award loyalty points."""
     status_content = {
         Order.Status.CONFIRMED: {
@@ -57,7 +68,7 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
         },
         Order.Status.PICKED_UP: {
             "title": "Laundry Picked Up",
-            "body": f"The rider has picked up your laundry."
+            "body": "The rider has picked up your laundry."
         },
         Order.Status.IN_PROCESS: {
             "title": "Washing Started",
@@ -81,7 +92,7 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
         },
         Order.Status.REJECTED: {
             "title": "Order Rejected",
-            "body": f"The laundry has rejected your order."
+            "body": "The laundry has rejected your order."
         }
     }
 
@@ -102,18 +113,22 @@ def notify_on_status_change(sender, order, from_status, to_status, user, **kwarg
         try:
             from marketplace.models.loyalty import LoyaltyPoint, LoyaltyTransaction
             profile, _ = LoyaltyPoint.objects.get_or_create(user=order.user)
-            
+
             # Award 10 points per order for now
             points_to_award = 10
             profile.points += points_to_award
             profile.total_earned += points_to_award
             profile.save()
-            
+
             LoyaltyTransaction.objects.create(
                 loyalty_profile=profile,
                 amount=points_to_award,
                 description=f"Points earned from Order {order.order_no}"
             )
-            logger.info(f"Awarded {points_to_award} points to {order.user.email}")
+            logger.info(
+                f"Awarded {points_to_award} points to {
+                    order.user.email}")
         except Exception as e:
-            logger.error(f"Failed to award loyalty points for order {order.id}: {e}")
+            logger.error(
+                f"Failed to award loyalty points for order {
+                    order.id}: {e}")

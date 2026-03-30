@@ -1,0 +1,24 @@
+﻿.\laundries\management\commands\seed_laundries.py:1:1: F401 'random' imported but unused
+.\laundries\management\commands\seed_laundries.py:2:1: F401 'uuid' imported but unused
+.\laundries\middleware.py:1:1: F401 'json' imported but unused
+.\laundries\services\laundry_validation.py:17:121: E501 line too long (125 > 120 characters)
+.\laundries\tests\test_owner_api.py:1:1: F401 'uuid' imported but unused
+.\laundries\views\diagnosis.py:95:25: F401 'json' imported but unused
+.\laundries\views\diagnosis.py:155:21: E741 ambiguous variable name 'l'
+.\laundries\views\laundry.py:7:1: F401 '..models.review.Review' imported but unused
+.\laundries\views\laundry.py:8:1: F401 '..models.opening_hours.OpeningHours' imported but unused
+.\laundries\views\laundry.py:39:5: F401 'django.db.connection' imported but unused
+.\marketplace\signals.py:71:21: F541 f-string is missing placeholders
+.\marketplace\signals.py:95:21: F541 f-string is missing placeholders
+.\marketplace\tasks.py:10:1: F401 'django.core.exceptions.ObjectDoesNotExist' imported but unused
+.\marketplace\tasks.py:69:9: F841 local variable 'notification' is assigned to but never used
+.\marketplace\views\admin_monitoring.py:1:1: F401 'rest_framework.status' imported but unused
+.\marketplace\views\admin_monitoring.py:3:1: F401 'django.db.models.Count' imported but unused
+.\marketplace\views\admin_monitoring.py:3:1: F401 'django.db.models.Avg' imported but unused
+.\marketplace\views\admin_monitoring.py:3:1: F401 'django.db.models.Q' imported but unused
+.\marketplace\views\faq.py:1:1: F401 'rest_framework.status' imported but unused
+.\marketplace\views\feedback.py:3:1: F401 'marketplace.models.Feedback' imported but unused
+.\marketplace\views\notifications.py:2:1: F401 'rest_framework.status' imported but unused
+.\ordering\views\order_views.py:125:121: E501 line too long (179 > 120 characters)
+.\payments\tests.py:1:1: F401 'django.test.TestCase' imported but unused
+.\payments\webhooks.py:60:24: F541 f-string is missing placeholders

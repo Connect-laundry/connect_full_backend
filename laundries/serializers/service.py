@@ -3,6 +3,7 @@ from rest_framework import serializers
 # pyre-ignore[missing-module]
 from ..models.service import LaundryService
 
+
 class LaundryServiceSerializer(serializers.ModelSerializer):
     """
     Serializer for managing laundry services.
@@ -10,8 +11,10 @@ class LaundryServiceSerializer(serializers.ModelSerializer):
     """
     # Read-only fields for frontend display
     itemName = serializers.CharField(source='item.name', read_only=True)
-    serviceType = serializers.CharField(source='service_type.name', read_only=True)
-    itemCategory = serializers.CharField(source='item.item_category.name', read_only=True)
+    serviceType = serializers.CharField(
+        source='service_type.name', read_only=True)
+    itemCategory = serializers.CharField(
+        source='item.item_category.name', read_only=True)
 
     class Meta:
         model = LaundryService

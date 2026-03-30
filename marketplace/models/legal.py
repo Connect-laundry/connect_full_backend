@@ -5,6 +5,7 @@ from django.db import models
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
+
 class LegalDocument(models.Model):
     class Type(models.TextChoices):
         TOS = 'TOS', _('Terms of Service')
@@ -20,7 +21,7 @@ class LegalDocument(models.Model):
     title = models.CharField(_('title'), max_length=255)
     content = models.TextField(_('content'))
     version = models.CharField(_('version'), max_length=20, default='1.0')
-    
+
     is_active = models.BooleanField(default=True)
     published_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

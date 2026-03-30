@@ -1,3 +1,8 @@
+from decimal import Decimal
+from ordering.models import LaunderableItem
+from laundries.models.category import Category
+from dotenv import load_dotenv
+import sys
 import os
 import django
 import socket
@@ -10,12 +15,10 @@ try:
     print(f"Resolved {host} to {ip}")
 except Exception as e:
     print(f"Failed to resolve {host}: {e}")
-    ip = host # Fallback
+    ip = host  # Fallback
 
 # 2. Setup Database URL with IP
-import sys
 sys.path.append(os.getcwd())
-from dotenv import load_dotenv
 load_dotenv()
 
 db_url = os.getenv('DATABASE_URL')
@@ -27,13 +30,10 @@ if db_url and host in db_url:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from laundries.models.category import Category
-from ordering.models import LaunderableItem
-from decimal import Decimal
 
 def seed_booking_data():
     print("--- Seeding Booking Data ---")
-    
+
     # 1. Create Service Types
     service_names = ["Wash Only", "Wash & Iron", "Dry Clean", "Ironing Only"]
     services = {}
@@ -110,15 +110,21 @@ def seed_booking_data():
                 "item_category": item_cats[item_info["category"]]
             }
         )
-        
+
         # Add supported services
         for s_name in item_info["services"]:
             item.supported_services.add(services[s_name])
-        
+
         item.save()
-        print(f"Item: {item.name} ({'Created' if created else 'Updated'}) linked to {len(item_info['services'])} services.")
+        print(
+            f"Item: {
+                item.name} ({
+                'Created' if created else 'Updated'}) linked to {
+                len(
+                    item_info['services'])} services.")
 
     print("\n[SUCCESS] Seeding complete!")
+
 
 if __name__ == "__main__":
     seed_booking_data()

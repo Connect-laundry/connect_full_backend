@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 from pathlib import Path
@@ -24,7 +23,8 @@ def check_debug():
 
     # Check if DEBUG is set to True explicitly without environment lookup
     if "DEBUG = True" in content and "os.environ.get" not in content and "getenv" not in content:
-        logging.error("CRITICAL: DEBUG = True is hardcoded in settings.py. Use environment variables.")
+        logging.error(
+            "CRITICAL: DEBUG = True is hardcoded in settings.py. Use environment variables.")
         return False
 
     logging.info("[OK] DEBUG safety check passed.")
@@ -45,7 +45,8 @@ def check_secrets():
             if f"{key} =" in line and "os.environ" not in line and "getenv" not in line and "token" not in line:
                 # Basic check for hardcoded strings
                 if '"' in line or "'" in line:
-                    logging.error(f"CRITICAL: Potential hardcoded secret found for {key} in settings.py.")
+                    logging.error(
+                        f"CRITICAL: Potential hardcoded secret found for {key} in settings.py.")
                     return False
 
     logging.info("[OK] Secrets safety check passed.")

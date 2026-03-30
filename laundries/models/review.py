@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
 
+
 class Review(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     laundry = models.ForeignKey(

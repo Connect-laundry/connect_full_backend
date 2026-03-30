@@ -16,6 +16,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class OrderLifecycleViewSet(viewsets.GenericViewSet):
     """
     ViewSet for managing order lifecycle transitions and history.
@@ -23,7 +24,10 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
     """
     queryset = Order.objects.all()
     serializer_class = OrderTransitionSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrderParticipant, CanManageLifecycle]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsOrderParticipant,
+        CanManageLifecycle]
 
     def get_order(self):
         return get_object_or_404(Order, id=self.kwargs['pk'])
@@ -32,10 +36,10 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         order = self.get_order()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         reason = serializer.validated_data.get('reason')
         metadata = serializer.validated_data.get('metadata', {})
-        
+
         # Perform atomic transition via State Machine
         updated_order, success = OrderStateMachine.transition(
             order_id=order.id,
@@ -44,7 +48,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
             metadata=metadata,
             reason=reason
         )
-        
+
         if not success:
             return Response({
                 "success": False,
@@ -55,9 +59,12 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
                     "target_status": to_status
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
-            
-        logger.info(f"Order {order.order_no} transitioned to {to_status} by {request.user.email}")
-        
+
+        logger.info(
+            f"Order {
+                order.order_no} transitioned to {to_status} by {
+                request.user.email}")
+
         return Response({
             "success": True,
             "message": f"Order marked as {to_status}",
@@ -77,7 +84,9 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         """PENDING -> REJECTED (Laundry Only)"""
         return self._handle_transition(request, Order.Status.REJECTED)
 
-    @decorators.action(detail=True, methods=['patch'], url_path='mark-picked-up')
+    @decorators.action(detail=True,
+                       methods=['patch'],
+                       url_path='mark-picked-up')
     def mark_picked_up(self, request, pk=None):
         """CONFIRMED -> PICKED_UP (Rider/Laundry)"""
         return self._handle_transition(request, Order.Status.PICKED_UP)
@@ -87,12 +96,16 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         """PICKED_UP -> IN_PROCESS (Laundry)"""
         return self._handle_transition(request, Order.Status.IN_PROCESS)
 
-    @decorators.action(detail=True, methods=['patch'], url_path='mark-out-for-delivery')
+    @decorators.action(detail=True,
+                       methods=['patch'],
+                       url_path='mark-out-for-delivery')
     def mark_out_for_delivery(self, request, pk=None):
         """IN_PROCESS -> OUT_FOR_DELIVERY (Rider/Laundry)"""
         return self._handle_transition(request, Order.Status.OUT_FOR_DELIVERY)
 
-    @decorators.action(detail=True, methods=['patch'], url_path='mark-delivered')
+    @decorators.action(detail=True,
+                       methods=['patch'],
+                       url_path='mark-delivered')
     def mark_delivered(self, request, pk=None):
         """OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)"""
         return self._handle_transition(request, Order.Status.DELIVERED)
@@ -113,10 +126,9 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         order = self.get_order()
         history = order.status_history.all()
         serializer = OrderStatusHistorySerializer(history, many=True)
-        
+
         return Response({
             "success": True,
             "message": "Order timeline fetched",
             "data": serializer.data
         })
-        

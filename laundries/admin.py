@@ -4,13 +4,21 @@ from .models.opening_hours import OpeningHours
 from .models.review import Review
 from .models.favorite import Favorite
 
+
 class OpeningHoursInline(admin.TabularInline):
     model = OpeningHours
     extra = 1
 
+
 @admin.register(Laundry)
 class LaundryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'price_range', 'is_featured', 'is_active', 'created_at')
+    list_display = (
+        'name',
+        'owner',
+        'price_range',
+        'is_featured',
+        'is_active',
+        'created_at')
     list_filter = ('is_featured', 'is_active', 'price_range')
     search_fields = ('name', 'description', 'address')
     inlines = [OpeningHoursInline]
@@ -23,6 +31,7 @@ class LaundryAdmin(admin.ModelAdmin):
             # Fallback to extremely basic queryset if migrations are broken
             return Laundry.objects.none()
 
+
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ('laundry', 'user', 'rating', 'created_at')
@@ -34,6 +43,7 @@ class ReviewAdmin(admin.ModelAdmin):
             return super().get_queryset(request)
         except Exception:
             return Review.objects.none()
+
 
 @admin.register(Favorite)
 class FavoriteAdmin(admin.ModelAdmin):

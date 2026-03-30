@@ -52,7 +52,10 @@ class MachineViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        logger.info(f"Machine '{serializer.data.get('name')}' registered by {request.user.email}")
+        logger.info(
+            f"Machine '{
+                serializer.data.get('name')}' registered by {
+                request.user.email}")
 
         return Response({
             "success": True,
@@ -70,7 +73,11 @@ class MachineViewSet(viewsets.ModelViewSet):
         machine.status = serializer.validated_data['status']
         machine.save(update_fields=['status', 'updated_at'])
 
-        logger.info(f"Machine {machine.id} status → {machine.status} by {request.user.email}")
+        logger.info(
+            f"Machine {
+                machine.id} status → {
+                machine.status} by {
+                request.user.email}")
 
         return Response({
             "success": True,

@@ -14,6 +14,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='laundry',
             name='pricing_methods',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('PER_ITEM', 'Per Item'), ('PER_KG', 'Per Kg')], max_length=20), blank=True, default=list, help_text="List of supported methods: ['PER_ITEM', 'PER_KG']"),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(
+                    choices=[
+                        ('PER_ITEM',
+                         'Per Item'),
+                        ('PER_KG',
+                         'Per Kg')],
+                    max_length=20),
+                blank=True,
+                default=list,
+                help_text="List of supported methods: ['PER_ITEM', 'PER_KG']"),
         ),
     ]

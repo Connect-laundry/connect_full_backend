@@ -13,20 +13,21 @@ from ..services.auth_service import AuthService
 # pyre-ignore[missing-module]
 from config.throttling import AuthThrottle
 
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
-    
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             # Create user (verified by default now)
             user = serializer.save()
-            
+
             # Authenticate and get tokens for auto-login
             service = AuthService()
             tokens = service.get_tokens_for_user(user)
-            
+
             return Response({
                 "success": True,
                 "message": "User registered successfully",
@@ -41,7 +42,7 @@ class RegisterView(APIView):
                     }
                 }
             }, status=status.HTTP_201_CREATED)
-            
+
         return Response({
             "success": False,
             "message": "Validation failed.",
