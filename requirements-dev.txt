@@ -3,4 +3,4 @@ bandit==1.8.3
 pip-audit==2.8.0
 pytest-django==4.10.0
 pytest-cov==6.1.0
-requests==2.32.4
+requests==2.33.0
