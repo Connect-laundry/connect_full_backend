@@ -1,8 +1,10 @@
 # pyre-ignore[missing-module]
 import pytest
+from decimal import Decimal
 
 # pyre-ignore[missing-module]
 from django.urls import reverse
+from django.utils import timezone
 
 # pyre-ignore[missing-module]
 from rest_framework import status
@@ -33,9 +35,10 @@ class TestOrderStateTransitions:
         order = Order.objects.create(
             user=authenticated_user,
             laundry=sample_laundry,
-            total_amount=100.00,
+            estimated_price=Decimal("100.00"),
+            final_price=Decimal("100.00"),
             status="PENDING",
-            order_no="ORD-123",
+            pickup_date=timezone.now(),
         )
 
         assert order.status == "PENDING"

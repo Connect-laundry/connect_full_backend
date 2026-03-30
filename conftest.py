@@ -2,6 +2,7 @@ import pytest
 from django.conf import settings
 from unittest.mock import patch
 from decimal import Decimal
+from django.utils import timezone
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +107,7 @@ def sample_order(db, authenticated_user, sample_laundry):
         estimated_price=Decimal("100.00"),
         final_price=Decimal("100.00"),
         status="PENDING",
-        order_no="ORD-TEST-123",
+        pickup_date=timezone.now(),
     )
 
 

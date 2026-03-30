@@ -2,12 +2,14 @@ from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from marketplace.models import Feedback
 from marketplace.serializers import FeedbackSerializer
+from config.throttling import FeedbackThrottle
 
 
 class FeedbackView(views.APIView):
     """Collect user feedback and persist it to the database."""
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [FeedbackThrottle]
 
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
