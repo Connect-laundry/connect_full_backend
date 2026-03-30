@@ -78,6 +78,14 @@ jobs:
         run: |
           python manage.py makemigrations --check --dry-run || (echo "::error::Migrations out of sync!" && exit 1)
 
+      - name: Prepare Database for Integration Tests
+        run: |
+          echo "Running migrations..."
+          python manage.py migrate --noinput
+          echo "Creating cache table..."
+          python manage.py createcachetable
+          echo "Database ready."
+
       - name: Start Background Server for API Validation
         run: |
           nohup python manage.py runserver 0.0.0.0:8000 > django_server.log 2>&1 &
@@ -90,6 +98,12 @@ jobs:
             echo "Still waiting... ($i/30)"
             sleep 2
           done
+
+      - name: Create Admin User for Integration Tests
+        run: |
+          echo "Creating test admin user..."
+          python create_admin.py
+          echo "Admin user ready."
 
       - name: Run Full API Validation Suite
         run: python scripts/full_validation_suite.py

@@ -122,3 +122,24 @@ def sample_payment(db, sample_order):
         transaction_reference="REF_TEST_123",
         status="PENDING",
     )
+
+
+@pytest.fixture
+def admin_user(db):
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    return User.objects.create_superuser(
+        email="testadmin100@example.com",
+        phone="01234567890",
+        password="testpassword123",
+    )
+
+
+@pytest.fixture
+def admin_client(admin_user):
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_authenticate(user=admin_user)
+    return client

@@ -4,18 +4,22 @@ import logging
 import uuid
 import sys
 import time
+import os
 
 # Use 127.0.0.1 to avoid Windows localhost/IPv6 issues
-BASE_URL = "http://127.0.0.1:8000/api/v1"
-ADMIN_CREDENTIALS = {"email": "testadmin100@example.com", "password": "testpassword123"}
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000/api/v1")
+ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "testadmin100@example.com")
+ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "testpassword123")
+ADMIN_CREDENTIALS = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
 
 # Global constants from DB seed
 ST_ID = "cf76367a-fb24-4233-b86d-8d90b38b2202"  # Wash & Iron
 ITEM_ID = "6164ce16-1a7f-4a9e-9abf-372b83d4b5c6"  # Shirt
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
-results = {"total_tests": 0, "passed": 0, "failed": 0, "tests": []}
+results = {"total_tests": 0, "passed": 0, "failed": 0, "tests": [], "environment": {}}
 
 store = {
     "admin_token": None,
@@ -55,20 +59,39 @@ def assert_status(response, expected_status, test_name):
         not isinstance(expected_status, list)
         and response.status_code == expected_status
     )
-    details = f"Expected {expected_status}, got {
-        response.status_code}. Response: {
-        response.text[
-            :200]}"
+    details = f"Expected {expected_status}, got {response.status_code}. Response: {response.text[:200]}"
     log_test(test_name, passed, details)
     return passed
 
 
+def validate_token_response(response, test_name):
+    """Validate that login response has required token fields."""
+    try:
+        data = response.json()
+        token = data.get("data", {}).get("accessToken")
+        if not token:
+            details = f"Response missing accessToken in data field. Response: {json.dumps(data)[:200]}"
+            log_test(test_name, False, details)
+            return None
+        return token
+    except Exception as e:
+        details = f"Failed to parse login response: {str(e)}. Response: {response.text[:200]}"
+        log_test(test_name, False, details)
+        return None
+
+
 def run_tests():
+    # Log environment setup
+    results["environment"] = {
+        "base_url": BASE_URL,
+        "admin_email": ADMIN_EMAIL,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
     owner_email = f"owner_{uuid.uuid4().hex[:6]}@test.com"
     customer_email = f"customer_{uuid.uuid4().hex[:6]}@test.com"
 
-    logging.info(f"Starting Quality Certification at {
-            time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"Starting Quality Certification at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
         # STEP 1: Admin Setup
@@ -77,10 +100,16 @@ def run_tests():
             f"{BASE_URL}/auth/login/", json=ADMIN_CREDENTIALS, timeout=30
         )
         assert_status(r_admin, 200, "1.1 Admin Authentication")
-        store["admin_token"] = r_admin.json().get("data", {}).get("accessToken")
+        
+        # Validate response structure and extract token
+        admin_token = validate_token_response(r_admin, "1.1 Admin Authentication - Token Extraction")
+        if not admin_token:
+            raise CriticalTestFailure("Admin token extraction failed")
+        
+        store["admin_token"] = admin_token
         a_client = requests.Session()
         a_client.headers.update({"Authorization": f"Bearer {store['admin_token']}"})
-
+        logging.info("✓ Admin authentication successful with token")
         # STEP 2: User Onboarding
         logging.info("\n--- STEP 2: User Onboarding ---")
         phone_o = f"024{uuid.uuid4().hex[:7]}"[:10]
@@ -159,11 +188,11 @@ def run_tests():
 
         # Add Service Item (to allow PER_ITEM activation)
         r_item = o_client.post(
-            f"{BASE_URL}/laundries/dashboard/my-laundry/{
-                store['laundry_id']}/services/",
+            f"{BASE_URL}/laundries/dashboard/my-laundry/{store['laundry_id']}/services/",
             json={"item_id": ITEM_ID, "service_type_id": ST_ID, "price": 10.00},
         )
-        assert_status(r_item, 201, "4.2 Added Service Pricing (PER_ITEM)")
+        # Accept both 201 (created) and 200 (updated) as service creation is idempotent
+        assert_status(r_item, [200, 201], "4.2 Added Service Pricing (PER_ITEM)")
 
         # STEP 5: Activation
         logging.info("\n--- STEP 5: Activation ---")

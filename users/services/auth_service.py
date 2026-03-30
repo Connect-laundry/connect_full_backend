@@ -16,6 +16,10 @@ from django.core.cache import cache
 # pyre-ignore[missing-module]
 from ..models import User
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class AuthService:
     @staticmethod
@@ -42,7 +46,11 @@ class AuthService:
         return user, self.get_tokens_for_user(user)
 
     def login_user(self, email, password, request=None):
-        user = authenticate(request=request, email=email, password=password)
+        try:
+            user = authenticate(request=request, email=email, password=password)
+        except Exception as e:
+            logger.error(f"Authentication backend error during login for {email}: {str(e)}", exc_info=True)
+            raise serializers.ValidationError("Authentication service temporarily unavailable. Please try again.")
 
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
@@ -50,4 +58,10 @@ class AuthService:
         if not user.is_active:
             raise serializers.ValidationError("User account is disabled.")
 
-        return user, self.get_tokens_for_user(user)
+        try:
+            tokens = self.get_tokens_for_user(user)
+        except Exception as e:
+            logger.error(f"Token generation failed for user {user.id}: {str(e)}", exc_info=True)
+            raise serializers.ValidationError("Failed to generate authentication tokens. Please try again.")
+
+        return user, tokens
