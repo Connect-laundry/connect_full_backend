@@ -105,7 +105,6 @@ def seed_booking_data():
                 id=i_id,
                 defaults={
                     "name": item_info["name"],
-                    "base_price": Decimal(item_info["price"]),
                     "item_category": item_cats[item_info["category"]],
                 },
             )
@@ -113,7 +112,6 @@ def seed_booking_data():
             item, created = LaunderableItem.objects.get_or_create(
                 name=item_info["name"],
                 defaults={
-                    "base_price": Decimal(item_info["price"]),
                     "item_category": item_cats[item_info["category"]],
                 },
             )
