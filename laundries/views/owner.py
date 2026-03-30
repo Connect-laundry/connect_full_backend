@@ -210,16 +210,27 @@ class OwnerLaundryViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            laundry_service, created = LaundryService.objects.update_or_create(
-                laundry=laundry,
-                item_id=item_id,
-                service_type_id=service_type_id,
-                defaults={
-                    "price": price,
-                    "estimated_duration": estimated_duration,
-                    "is_available": is_available,
-                },
-            )
+            try:
+                from django.db import IntegrityError
+                laundry_service, created = LaundryService.objects.update_or_create(
+                    laundry=laundry,
+                    item_id=item_id,
+                    service_type_id=service_type_id,
+                    defaults={
+                        "price": price,
+                        "estimated_duration": estimated_duration,
+                        "is_available": is_available,
+                    },
+                )
+            except IntegrityError:
+                return Response(
+                    {
+                        "success": False,
+                        "status": "error",
+                        "message": "Invalid item_id or service_type_id. Referenced record does not exist.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             serializer = LaundryServiceSerializer(
                 laundry_service, context={"request": request}

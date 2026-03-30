@@ -6,6 +6,6 @@
   "environment": {
     "base_url": "http://127.0.0.1:8000/api/v1",
     "admin_email": "testadmin100@example.com",
-    "timestamp": "2026-03-30 11:59:38"
+    "timestamp": "2026-03-30 13:55:32"
   }
 }
