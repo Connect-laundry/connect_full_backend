@@ -53,6 +53,11 @@ class AuthService:
             raise serializers.ValidationError("Authentication service temporarily unavailable. Please try again.")
 
         if not user:
+            # Check if the user exists and is inactive to return a specific "disabled" message
+            # logic required by regression tests.
+            temp_user = User.objects.filter(email=email).first()
+            if temp_user and temp_user.check_password(password) and not temp_user.is_active:
+                raise serializers.ValidationError("User account is disabled.")
             raise serializers.ValidationError("Invalid email or password.")
 
         if not user.is_active:

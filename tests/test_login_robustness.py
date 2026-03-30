@@ -23,7 +23,7 @@ class TestLoginRobustness:
     def test_login_nonexistent_user_returns_400(self, client):
         """Should return 400 for nonexistent user, not 500 or 401."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": "nonexistent@test.com", "password": "anypassword"},
             format="json",
         )
@@ -36,7 +36,7 @@ class TestLoginRobustness:
         authenticated_user.save()
 
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": authenticated_user.email, "password": "password123"},
             format="json",
         )
@@ -46,7 +46,7 @@ class TestLoginRobustness:
     def test_login_missing_email_returns_400(self, client):
         """Missing email field should return 400 with validation error."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"password": "password123"},
             format="json",
         )
@@ -56,7 +56,7 @@ class TestLoginRobustness:
     def test_login_missing_password_returns_400(self, client, authenticated_user):
         """Missing password field should return 400 with validation error."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": authenticated_user.email},
             format="json",
         )
@@ -66,7 +66,7 @@ class TestLoginRobustness:
     def test_login_wrong_password_returns_400(self, client, authenticated_user):
         """Wrong password should return 400, not 500."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": authenticated_user.email, "password": "wrongpassword"},
             format="json",
         )
@@ -76,7 +76,7 @@ class TestLoginRobustness:
     def test_login_admin_user_succeeds(self, client, admin_user):
         """Admin user login should return 200 with valid tokens."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": admin_user.email, "password": "testpassword123"},
             format="json",
         )
@@ -92,7 +92,7 @@ class TestLoginRobustness:
     def test_login_regular_user_succeeds(self, client, authenticated_user):
         """Regular user login should return 200 with valid tokens."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": authenticated_user.email, "password": "password123"},
             format="json",
         )
@@ -107,7 +107,7 @@ class TestLoginRobustness:
     def test_login_response_envelope_consistency(self, client, authenticated_user):
         """All login responses should have consistent envelope structure."""
         r = client.post(
-            reverse("login"),
+            reverse("auth_login"),
             {"email": authenticated_user.email, "password": "password123"},
             format="json",
         )
