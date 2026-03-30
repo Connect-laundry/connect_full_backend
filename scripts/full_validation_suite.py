@@ -68,7 +68,7 @@ def run_tests():
     try:
         # STEP 1: Admin Setup
         logging.info("\n--- STEP 1: Admin Setup ---")
-        r_admin = requests.post(f"{BASE_URL}/auth/login/", json=ADMIN_CREDENTIALS)
+        r_admin = requests.post(f"{BASE_URL}/auth/login/", json=ADMIN_CREDENTIALS, timeout=30)
         assert_status(r_admin, 200, "1.1 Admin Authentication")
         store["admin_token"] = r_admin.json().get('data', {}).get('accessToken')
         a_client = requests.Session()
@@ -80,7 +80,7 @@ def run_tests():
         r1 = requests.post(f"{BASE_URL}/auth/register/", json={
             "email": owner_email, "password": "Password123!", "password_confirm": "Password123!", 
             "first_name": "Test", "last_name": "Owner", "phone": phone_o, "role": "OWNER"
-        })
+        }, timeout=30)
         assert_status(r1, 201, "2.1 Owner Registration")
         store["owner_token"] = r1.json().get('data', {}).get('accessToken')
         
@@ -88,7 +88,7 @@ def run_tests():
         r2 = requests.post(f"{BASE_URL}/auth/register/", json={
             "email": customer_email, "password": "Password123!", "password_confirm": "Password123!", 
             "first_name": "Test", "last_name": "Customer", "phone": phone_c
-        })
+        }, timeout=30)
         assert_status(r2, 201, "2.2 Customer Registration")
         store["customer_token"] = r2.json().get('data', {}).get('accessToken')
         
