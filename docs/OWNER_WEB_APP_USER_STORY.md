@@ -3,192 +3,196 @@
 ## Persona
 
 - **Name**: Kofi Mensah
-- **Role**: Laundry Business Owner
+- **Role**: Laundry Business Owner (Verified Vendor)
 - **Business**: "Kofi’s Premium Cleaners" (Mid-sized neighborhood service)
-- **Tech Proficiency**: Basic to Moderate
-- **Primary Device**: Desktop/Laptop Browser
+- **Tech Proficiency**: Moderate (Comfortable with Digital Dashboards)
+- **Primary Device**: Desktop/Laptop (Command Center) & Tablet (Shop Floor)
 
 ---
 
-## 1. Account Creation & Onboarding
+## 1. Identity & Access Management (IAM)
 
-### Registration & Verification
+### Registration & Vendor Onboarding
 
-Kofi visits the Connect Laundry portal. He selects "Register as Vendor." He enters his business email, phone number, and name. He sets a secure password.
-Upon submission, he is redirected to a business profile wizard. He must upload his business registration document for platform verification (Admin vetting).
+Kofi begins his journey by registering on the Connect Laundry platform. He enters his essential business details: email, phone number, and name.
+- **Unique Identity**: Behind the scenes, the system assigns a UUID (Universally Unique Identifier) to Kofi, ensuring his data remains secure and portable throughout the platform's lifecycle.
+- **Onboarding Wizard**: Upon registration, Kofi is guided through a multi-step setup to define his business profile, requiring administrative vetting (e.g., business license verification) before he can "Go Live."
 
-### Secure Login
+### Secure Authentication (JWT)
 
-Kofi logs in using his credentials. The system uses JWT (JSON Web Tokens) for authentication, eliminating the need for complex OTPs. His `OWNER` role is verified instantly, granting him access to the management suite.
+Kofi logs in using his verified credentials.
+- **Stateless Security**: The platform utilizes **JSON Web Tokens (JWT)**, which provides him with a secure, stateless session. This eliminates the friction of frequent re-logins while maintaining high-grade security for his business data.
+- **Role-Based Access Control (RBAC)**: The system instantly recognizes his `OWNER` role, granting him exclusive access to financial reports, staff management, and shop settings that are hidden from `DRIVER` or `CUSTOMER` roles.
 
-### First-time Walkthrough
+### Account Protection & Recovery
 
-The first login triggers a guided tour highlighting the Quick-Stats panel, the Order Queue, and the Service Management tab.
-
----
-
-## 2. Dashboard Overview
-
-### Real-Time Metrics
-
-The dashboard serves as Kofi's command center. He sees:
-
-- **Total Orders**: Lifetime count.
-- **Pending Orders**: Orders awaiting acceptance.
-- **Completed Orders**: Orders delivered and paid.
-- **Revenue Today**: Sum of earnings from successful deliveries today.
-- **Revenue This Month**: Aggregated monthly earnings.
-- **Active Customers**: Count of unique customers with recent orders.
-
-### Visual Analytics
-
-- **Order Volume Chart**: A 7-day bar chart showing the daily distribution of laundry loads.
-- **Revenue Trend**: A line graph comparing current month performance against the previous month.
-
-### Notification Center
-
-A sidebar or bell icon alerts Kofi to new orders, payment confirmations, or negative reviews requiring immediate attention.
+If Kofi forgets his password, he initiates a secure reset.
+- **Audit-Traceable Reset**: The system generates a cryptographically hashed, time-limited token and delivers a reset link to his email via a background task (Celery). This ensures that even in cases of server congestion, his recovery request is prioritized and reliably delivered.
+- **Profile Self-Service**: From his profile settings, Kofi can update his "Avatar" (brand logo), modify contact details, and review active sessions to ensure his account hasn't been compromised.
 
 ---
 
-## 3. Business Profile Setup
+## 2. Command Center (Dashboard)
 
-Kofi configures his digital storefront to attract customers:
+## 2. Command Center (Dashboard)
 
-- **Branding**: Uploads the "Kofi’s Premium Cleaners" logo and a high-quality cover photo of the shop.
-- **Availability**: Toggles the "Open" switch. If he goes on vacation, he can toggle "Closed" to hide his shop from the customer app.
-- **Operating Hours**: Sets specific intervals for Monday–Sunday (e.g., 8:00 AM – 6:00 PM).
-- **Service Catalog**:
-  - Adds items (e.g., "Regular Shirt", "Designer Suit", "Duvet").
-  - Sets prices for **Wash**, **Iron**, and **Dry Clean**.
-  - Toggles "Active" status for specific services based on equipment availability.
-- **Logistics**: Sets his **Delivery Fee** and **Minimum Order Value** (e.g., N5,000 min order, N1,000 delivery).
+### Real-Time Performance Analytics
+
+The dashboard is Kofi’s high-level command center, delivering live updates from the database without manual refresh.
+- **KPI Snapshot**: He monitors **Total Revenue** (aggregated from `COMPLETED` orders), **Pending Acceptance** (new incoming requests), and **Active Workflows** (orders currently `IN_PROCESS`).
+- **Trend Visualization**: A 7-day volume chart helps Kofi predict peak times (e.g., Sunday evenings) so he can adjust staffing.
+- **System Intelligence**: If the platform's background workers detect a high volume of unassigned orders, Kofi sees a priority alert in his sidebar.
 
 ---
 
-## 4. Order Management Flow
+## 3. Storefront Metadata & Config
 
-### Receiving & Vetting
+Kofi fine-tunes his digital shop to ensure high conversion and operational clarity:
 
-Kofi receives a browser notification for a new order. On the **Order Detail Screen**, he reviews:
+### Geospatial Presence (GIS)
+Kofi sets his shop’s precise coordinates using a map picker.
+- **Precision Targeting**: The system stores **Latitude and Longitude** (Decimal format), allowing the marketplace algorithm to accurately calculate distance-based delivery fees and surface his shop to customers in supported cities (e.g., Accra, Lagos).
 
-- Customer name and location.
-- List of items (e.g., 5 shirts, 2 trousers).
-- Selected service type (Wash & Iron).
-- Special instructions ("Handle with care, use specific detergent").
-- Scheduled pickup and delivery slots.
+### Dynamic Operating Hours
+Kofi defines his availability for each day of the week (Monday–Sunday).
+- **Time Slots**: He sets specific `opening_time` and `closing_time`.
+- **Vacation Mode**: He can toggle `is_closed` for specific days or his entire shop, instantly removing his listing from the customer app to prevent "Ghost Orders."
 
-### Operational Lifecycle
+### Specialized Asset Tracking (Machines)
+Kofi registers his physical laundry machines to monitor the shop floor’s pulse.
+- **Machine Inventory**: He adds Washers, Dryers, and Ironing Presses.
+- **Status Monitoring**: He toggles their status between `IDLE`, `BUSY`, or `MAINTENANCE`. This allows for future capacity planning based on available hardware.
 
-Kofi processes the order through the pipeline:
-
-1. **Accept/Reject**: Checks capacity and accepts the order. Status moves to `CONFIRMED`.
-2. **Staff Assignment**: Kofi assigns a staff member or driver for the pickup.
-3. **Status Updates**:
-   - **Picked Up**: Notification sent to customer when staff collects items.
-   - **In Progress (Washing/Ironing)**: Items are being processed in-house.
-   - **Ready for Delivery**: Items are packaged and tagged.
-   - **Out for Delivery**: Driver is en route to the customer.
-   - **Completed**: Items delivered. Payment status is finalized.
-
-### Edge Cases
-
-- **Cancelled Orders**: If a customer cancels before pickup, Kofi receives an alert.
-- **Notes & Logs**: Kofi adds an internal note: "Item arrived with slight fraying on collar - informed customer."
+### The Pricing Architecture
+Connect Laundry offers a flexible pricing engine which Kofi manages:
+- **Pricing Method Toggle**: Kofi chooses between **Per-Item** (fixed prices per shirt/suit) or **Per-Kg** (weight-based pricing).
+- **Service Catalog**: He maps global items (e.g., "Duvet") to his shop with custom price snapshots and estimated durations (e.g., "Ready in 48 hours").
+- **Logistics Fees**: He defines a **Minimum Order Value**, a **Base Delivery Fee**, and a **Pickup Fee** to protect his margins on small orders.
 
 ---
 
-## 5. Customer Management
+## 4. Advanced Order Lifecycle
 
-### CRM View
+## 4. Operational Order Lifecycle
 
-Kofi accesses the **Customer List** to build loyalty:
+Kofi manages a complex, state-driven pipeline designed for maximum transparency:
 
-- **Search**: Quickly finds a customer by name or phone number.
-- **History**: Views a customer’s lifetime order count and total spend.
-- **Blacklisting**: Blocks "problematic" customers who repeatedly cancel or provide fraudulent payment cues.
+### The "Weighing" Pivot (Per-Kg Mode)
+For orders set to **Per-Kg**, the process introduces a critical validation step:
+1. **Initial Order**: Customer provides an `estimated_weight`. Kofi receives the order as `PENDING`.
+2. **Pickup**: Driver collects items. Kofi updates status to `PICKED_UP`.
+3. **The Weighing Event**: Upon arrival at the shop, Kofi weighs the load and enters the **`actual_weight`**.
+4. **Final Pricing**: The system automatically calculates the `final_price` based on his `price_per_kg_snapshot`.
+5. **Customer Confirmation**: Order moves to `WEIGHED`. If there's a significant delta, the customer is notified to pay the balance before processing begins.
 
----
+### Status Progression & Audit Logs
+Kofi tracks the "living" state of every order with dedicated timestamps and history logs:
+- `PENDING` → `CONFIRMED` → `PICKED_UP` → `IN_PROCESS` → `OUT_FOR_DELIVERY` → `DELIVERED`.
+- **Transparency**: Every status change generates a `TrackingLog` and an `OrderStatusHistory` entry, allowing Kofi to audit exactly which staff member moved an order and when.
 
-## 6. Staff & Driver Management
-
-### Team Control
-
-Kofi manages his small team:
-
-- **Add Staff**: Registers workers by email and assigns roles (In-shop laundry staff or Field Driver).
-- **Assignment**: Directly assigns orders to drivers for pickup/delivery.
-- **Activity Tracking**: Sees which driver is currently "In-Transit" with which order.
-
----
-
-## 7. Financial Management
-
-### Revenue & Reporting
-
-Kofi monitors his cash flow:
-
-- **Earnings Tab**: Filters revenue by "This Week," "This Month," or custom date ranges.
-- **Export**: Generates a CSV report for bookkeeping or tax purposes.
-- **Platform Fees**: Clear view of the gross amount vs. the platform's commission and his net payout.
+### Edge Case Handling
+- **Rejection & Cancellation**: If Kofi lacks capacity, he marks the order as `REJECTED` and must provide a `rejection_reason`.
+- **Dual Address Support**: Kofi sees different addresses for "Pickup" and "Delivery" to handle customers who need laundry collected from work but delivered to home.
 
 ---
 
-## 8. Notifications & Alerts
+## 5. Customer Relationship Management (CRM)
 
-### System Intelligence
-
-- **High Priority**: "Urgent: Order #123 pickup slot starts in 15 minutes."
-- **Transactional**: "Payment of N12,500 verified for Order #123."
-- **Customer Feedback**: "New Review: 5 stars - Great service!"
-
----
-
-## 9. Settings & Security
-
-### Account Safety
-
-Kofi can update his personal profile, change his password, and review active login sessions. He can also update business banking details for payouts.
+### Loyalty & Retention Logic
+Kofi builds a loyal customer base using the platform's native CRM features:
+- **Loyalty Program**: Every `COMPLETED` order automatically awards the customer **Loyalty Points**. Kofi can see which customers are "High-Value" based on their points balance.
+- **Engagement History**: Kofi accesses a customer's full order history, total lifetime spend, and address labels (Home, Work, etc.).
+- **Feedback Loop**: He reviews **Ratings & Comments**. If a customer leaves a sub-4-star review, he gets an immediate notification to address the service gap.
 
 ---
 
-## 10. Daily Workflow Scenario (A Day in the Life)
+## 6. Workforce & Logistics Management
+
+Kofi optimizes his team’s efficiency through role-based assignment and real-time tracking:
+
+### Specialized Staff Roles
+Instead of a generic staff list, Kofi manages a team with granular responsibilities:
+- **Receptionist**: Handles intake and initial order tagging.
+- **Washer & Ironer**: Assigned to processing orders (Moves status to `IN_PROCESS`).
+- **Driver**: Exclusively assigned to `DeliveryAssignment` tasks (Pickup or Delivery).
+- **Invite Workflow**: Kofi sends invites via email. Only once a staff member accepts do they gain access to the shop's control panel.
+
+### Logistic Assignments
+Kofi oversees the field force with a bird's-eye view:
+- **Driver Queue**: He assigns specific drivers to specific orders for pickup and delivery.
+- **Real-Time Status**: Drivers mark assignments as `ASSIGNED` → `IN_TRANSIT` → `COMPLETED`, which instantly notifies the customer and updates Kofi’s dashboard.
+
+---
+
+## 7. Financial Ecosystem (The Payout Pivot)
+
+Kofi maintains tight control over his shop’s liquidity and transaction history:
+
+### Automated Revenue Splitting
+Every order transaction processed via **Paystack** is subject to rules:
+- **Platform Fees**: The system automatically deducts a pre-configured platform fee.
+- **Taxes**: VAT and other taxes are calculated in the `FinanceService` and displayed in the order breakdown.
+- **Coupons**: If a customer uses a promo code, the system validates eligibility based on Kofi's shop (e.g., first-time user, min order value).
+
+### Bank Linkage & Payout Requests
+Unlike a simple digital wallet, the platform uses a structured settlement system:
+- **Linked Bank Accounts**: Kofi adds his business bank account, including his **Paystack Bank Code** for instant settlement.
+- **Payout Trigger**: Kofi reviews his "Available Balance" (Revenue from `COMPLETED` orders minus previous payouts).
+- **Audit Cycle**: He submits a **Payout Request**. This request follows a strict lifecycle: `PENDING` → `PROCESSING` → `COMPLETED`. Kofi can track every request in his "Payout History."
+
+---
+
+## 8. Proactive Notification Intelligence
+
+## 8. Proactive Notification Intelligence
+
+Kofi’s shop is automated by custom signals and background tasks:
+- **Transactional Notifications**: Triggered by the `order_status_changed` signal, the system sends immediate updates to the `CUSTOMER` via the Connect app while Kofi’s dashboard flashes a real-time event.
+- **Priority Alerts**: If a pickup slot is approaching, a Celery task generates an "Urgent" message to Kofi to ensure a driver is assigned.
+- **Payment Verification**: Kofi receives a persistent notification the moment a **Paystack Webhook** confirms a payment, indicating he can safely move an order to `CONFIRMED`.
+
+---
+
+## 9. Security & Resilience
+
+- **Idempotency**: The platform’s payment and status transition logic is designed to prevent "double-charging" or "duplicate statuses." Kofi can refresh his browser or lose internet connection without risking his data’s integrity.
+- **Audit Trails**: Every order has an associated `OrderStatusHistory`. Kofi can click into any order to see an immutable timeline of who moved it and when (e.g., "Owner moved to IN_PROCESS," "Driver moved to OUT_FOR_DELIVERY").
+- **Soft-Delete (Deactivation)**: If Kofi needs to temporarily step away, he can "Deactivate" his shop with a reason. This preserves his history while hiding him from the active marketplace.
+
+---
+
+## 10. Daily Workflow Scenario (Expert Edition)
 
 ### Morning Routine (08:00 AM)
+Kofi logs into the **Command Center**. The dashboard shows 4 `PENDING` orders. He checks the **Machine List** – two washers are `IDLE`. He reviews the `pickup_date` and `service_type` for each order, then shifts them to `CONFIRMED`. He assigns his **Driver**, Emeka, to the morning pickup queue.
 
-Kofi arrives at the shop and logs into the Web App. He checks the **Dashboard** for orders placed overnight. He sees 3 `PENDING` orders. He reviews their locations and accepts all three. He assigns his driver, Emeka, to pick up the items during his morning route.
+### Mid-Day Weighed Operations (12:00 PM)
+Emeka returns with the first load. Kofi weighs the items and enters **5.5Kg** into the order detail. The system instantly calculates the `final_price` and sends a "Balance Due" notification to the customer. Once the **Paystack Webhook** marks the payment as `SUCCESS`, Kofi moves the load to `IN_PROCESS`.
 
-### Mid-Day Operations (12:00 PM)
-
-The app notifies him that the morning orders are now `PICKED_UP`. He moves them to `IN_PROCESS` as the laundry team starts washing. He receives a new order for "Express Dry Cleaning" and prioritizes it in the queue.
-
-### Afternoon & Closing (05:00 PM)
-
-Kofi reviews the "Ready for Delivery" list. He marks 5 orders as `OUT_FOR_DELIVERY`. At 6:00 PM, he checks the **Earnings** tab to see today's revenue. He sees total sales of N55,000. He logs out, knowing the system has automatically notified customers of their successful deliveries.
+### Afternoon Logistics (05:00 PM)
+The shop's **Washer** staff marks items as ready. Kofi marks 5 orders as `OUT_FOR_DELIVERY`. He reviews the **Earnings Tab**, filtering for "Today." He sees a net revenue of N75,000, with platform commissions clearly deducted. He checks for new **Payout Requests** to ensure his cash flow stays fluid.
 
 ---
 
-## 🎨 Suggested Frontend Screens
+## 🎨 Expert Interface Breakdown
 
-1. **Login Page**: Clean, minimalist JWT-based entry.
-2. **Dashboard**: Grid layout with big metric cards and a centralized "Active Orders" table.
-3. **Order Queue**: List view with status-colored badges (Yellow for Pending, Green for Completed).
-4. **Order Detail View**: Modal or sidebar showing item breakdown and lifecycle transition buttons.
-5. **Business Profile**: Form-heavy page for hours, pricing, and logo uploads.
-6. **Earnings Page**: Data table with date filters and "Export" button.
-7. **Staff List**: Simple cards showing staff names, roles, and current assignments.
-8. **Settings**: Tabbed interface for account/security/notifications.
+| Module | Core Logic & Features |
+| :--- | :--- |
+| **Authentication** | JWT Login, Secure Password Reset, UUID Integrity. |
+| **Storefront** | GIS Map Picker, Opening Hours Manager, Machine State Toggle. |
+| **Pricing Engine** | Per-Item vs Per-Kg Toggle, Price Snapshots, Delivery/Pickup Fees. |
+| **Order Lifecycle** | State Machine Transitions, Weight-Entry, Audit Trail Logs. |
+| **Finances** | Paystack Initialization, Coupon Validation, Payout Lifecycle. |
+| **Logistics** | Driver Assignment, Pickup vs Delivery Address support, Tracking. |
+| **CRM & Retention** | Loyalty Point Rewards, Customer Feedback reviews, Order History. |
+| **Intelligence** | Real-time Dashboard KPIs, Celery-driven Priority Alerts. |
 
 ---
 
-## 📋 Core Feature List
+## 📋 Technical Checklist for Frontend Completion
 
-| Page               | Core Features                                                    |
-| :----------------- | :--------------------------------------------------------------- |
-| **Authentication** | Login, Password Reset, Registration Wizard.                      |
-| **Dashboard**      | Revenue Cards, Order Volume Chart, Quick Notifications.          |
-| **Orders**         | Status Filtering, Detail View, Staff Assignment, Status Toggles. |
-| **Profile**        | Opening Hours Manager, Logo Upload, Address/Map Picker.          |
-| **Services**       | Add/Edit Items, Price Management, Availability Toggle.           |
-| **Finance**        | Transaction History, Date Filtering, CSV Export.                 |
-| **Staff**          | Role Assignment, Driver Status Tracking.                         |
+- [ ] Implement **`actual_weight`** entry field for Per-Kg orders.
+- [ ] Display **`OrderStatusHistory`** as a timeline in the Order Detail view.
+- [ ] Build **`MachineManagement`** screen for inventory and status tracking.
+- [ ] Implement **`PayoutRequest`** form with Bank Account selection.
+- [ ] Ensure **`LoyaltyPoints`** are visible in the Customer Profile view within CRM.
