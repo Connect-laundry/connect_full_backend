@@ -70,8 +70,11 @@ def authenticated_user(db):
 
 
 @pytest.fixture
-def auth_client(client, authenticated_user):
-    client.force_login(authenticated_user)
+def auth_client(authenticated_user):
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_authenticate(user=authenticated_user)
     return client
 
 
@@ -89,6 +92,7 @@ def sample_laundry(db, authenticated_user):
         status="APPROVED",
         is_active=True,
         pricing_methods=["PER_KG"],
+        price_per_kg=Decimal("10.00"),
     )
 
 
