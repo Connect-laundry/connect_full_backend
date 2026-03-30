@@ -32,7 +32,7 @@ def seed_booking_data():
             service, created = Category.objects.get_or_create(
                 name=name, defaults={"type": "SERVICE_TYPE"}
             )
-        
+
         if not created and service.type != "SERVICE_TYPE":
             service.type = "SERVICE_TYPE"
             service.save()
