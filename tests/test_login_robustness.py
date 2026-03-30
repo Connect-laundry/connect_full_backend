@@ -34,7 +34,7 @@ class TestLoginRobustness:
         """Inactive user should return 400 with specific message."""
         authenticated_user.is_active = False
         authenticated_user.save()
-        
+
         r = client.post(
             reverse("login"),
             {"email": authenticated_user.email, "password": "password123"},
@@ -82,7 +82,7 @@ class TestLoginRobustness:
         )
         assert r.status_code == status.HTTP_200_OK
         assert r.json()["success"] is True
-        
+
         data = r.json()["data"]
         assert "accessToken" in data
         assert "refreshToken" in data
@@ -98,7 +98,7 @@ class TestLoginRobustness:
         )
         assert r.status_code == status.HTTP_200_OK
         assert r.json()["success"] is True
-        
+
         data = r.json()["data"]
         assert "accessToken" in data
         assert "refreshToken" in data
@@ -111,12 +111,12 @@ class TestLoginRobustness:
             {"email": authenticated_user.email, "password": "password123"},
             format="json",
         )
-        
+
         json_data = r.json()
         assert "success" in json_data
         assert "message" in json_data
         assert "data" in json_data
-        
+
         if r.status_code == status.HTTP_200_OK:
             assert json_data["success"] is True
             assert "accessToken" in json_data["data"]

@@ -87,7 +87,7 @@ def run_tests():
         "admin_email": ADMIN_EMAIL,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
-    
+
     owner_email = f"owner_{uuid.uuid4().hex[:6]}@test.com"
     customer_email = f"customer_{uuid.uuid4().hex[:6]}@test.com"
 
@@ -100,12 +100,12 @@ def run_tests():
             f"{BASE_URL}/auth/login/", json=ADMIN_CREDENTIALS, timeout=30
         )
         assert_status(r_admin, 200, "1.1 Admin Authentication")
-        
+
         # Validate response structure and extract token
         admin_token = validate_token_response(r_admin, "1.1 Admin Authentication - Token Extraction")
         if not admin_token:
             raise CriticalTestFailure("Admin token extraction failed")
-        
+
         store["admin_token"] = admin_token
         a_client = requests.Session()
         a_client.headers.update({"Authorization": f"Bearer {store['admin_token']}"})
