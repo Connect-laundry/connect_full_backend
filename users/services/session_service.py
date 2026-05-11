@@ -237,6 +237,7 @@ def rotate_refresh_token(submitted_refresh: str, request):
                 refresh.blacklist()
             except AttributeError:
                 # Blacklist support is optional (e.g., blacklist app not installed); continue rotation.
+                pass
 
         refresh.set_jti()
         refresh.set_exp()
