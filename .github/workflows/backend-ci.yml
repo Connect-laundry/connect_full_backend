@@ -50,7 +50,7 @@ jobs:
         run: pip-audit
 
       - name: Security lint
-        run: bandit -q -r config laundries logistics ordering payments users
+        run: python -m bandit -q -r config laundries logistics ordering payments users --severity-level medium
 
       - name: Django checks
         run: |

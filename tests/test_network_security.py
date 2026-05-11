@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from config.middleware.idempotency import IdempotencyMiddleware
+from config.middleware.security import SecurityHeadersMiddleware
 from users.models import User
 
 
@@ -81,3 +82,27 @@ class TestNetworkSecurity:
         assert json.loads(response.content)['message'] == (
             'This idempotency key was already used for a different request.'
         )
+
+    def test_local_schema_docs_get_dev_only_csp_for_swagger_assets(self):
+        request_factory = RequestFactory()
+        middleware = SecurityHeadersMiddleware(lambda request: JsonResponse({'ok': True}))
+        request = request_factory.get('/api/schema/swagger-ui/')
+
+        with override_settings(DEBUG=True):
+            response = middleware.process_response(request, JsonResponse({'ok': True}))
+
+        csp = response['Content-Security-Policy']
+        assert "default-src 'self'" in csp
+        assert 'cdn.jsdelivr.net' in csp
+        assert "frame-ancestors 'none'" in csp
+        assert csp != "default-src 'none'; frame-ancestors 'none'"
+
+    def test_production_api_csp_stays_locked_down(self):
+        request_factory = RequestFactory()
+        middleware = SecurityHeadersMiddleware(lambda request: JsonResponse({'ok': True}))
+        request = request_factory.get('/api/v1/orders/')
+
+        with override_settings(DEBUG=False):
+            response = middleware.process_response(request, JsonResponse({'ok': True}))
+
+        assert response['Content-Security-Policy'] == "default-src 'none'; frame-ancestors 'none'"

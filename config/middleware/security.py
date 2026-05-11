@@ -1,5 +1,25 @@
+from django.conf import settings
 # pyre-ignore[missing-module]
 from django.utils.deprecation import MiddlewareMixin
+
+
+DOCS_PATH_PREFIXES = (
+    '/api/schema/',
+)
+
+API_CSP = "default-src 'none'; frame-ancestors 'none'"
+DEV_DOCS_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com; "
+    "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com fonts.googleapis.com; "
+    "img-src 'self' data:; "
+    "font-src 'self' data: fonts.gstatic.com cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "frame-ancestors 'none'"
+)
+
 
 class SecurityHeadersMiddleware(MiddlewareMixin):
     """
@@ -14,8 +34,13 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         response['Cross-Origin-Opener-Policy'] = 'same-origin'
         response['Cross-Origin-Resource-Policy'] = 'same-origin'
         content_type = response.get('Content-Type', '')
-        if request.path.startswith('/api/') or request.path == '/health/' or 'application/json' in content_type:
-            response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
+        is_dev_docs = settings.DEBUG and any(
+            request.path.startswith(prefix) for prefix in DOCS_PATH_PREFIXES
+        )
+        if is_dev_docs:
+            response['Content-Security-Policy'] = DEV_DOCS_CSP
+        elif request.path.startswith('/api/') or request.path == '/health/' or 'application/json' in content_type:
+            response['Content-Security-Policy'] = API_CSP
 
         # Hide tech stack details
         if 'Server' in response:

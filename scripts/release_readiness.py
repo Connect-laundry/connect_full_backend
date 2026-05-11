@@ -49,11 +49,38 @@ def ensure_text_contains(relative_path: str, snippet: str, message: str) -> None
         fail(message)
 
 
+def is_allowed_env_template(path: str) -> bool:
+    name = Path(path).name.lower()
+    return (
+        name in {'.env.example', '.env.sample', 'env.example', 'env.sample'}
+        or name.endswith('.example')
+        or name.endswith('.sample')
+        or name.endswith('.template')
+        or name.endswith('.dist')
+    )
+
+
+def is_secret_env_candidate(path: str) -> bool:
+    name = Path(path).name.lower()
+    return (
+        name == '.env'
+        or name.startswith('.env.')
+        or name.endswith('.env')
+        or '.env.' in name
+    )
+
+
 ensure_file('.env.example')
 ensure_file('security_prod.env.template')
 ensure_file('.github/workflows/backend-ci.yml')
 
-tracked_env = [path for path in git_ls_files('.env', '.env.*') if (ROOT / path).exists()]
+tracked_env = [
+    path
+    for path in git_ls_files('.')
+    if (ROOT / path).exists()
+    and is_secret_env_candidate(path)
+    and not is_allowed_env_template(path)
+]
 if tracked_env:
     fail(f'Tracked env files must be removed from git: {", ".join(tracked_env)}')
 
