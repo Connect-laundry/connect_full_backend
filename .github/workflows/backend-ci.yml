@@ -39,9 +39,14 @@ jobs:
         run: python scripts/release_readiness.py
 
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          format: table
+          exit-code: '1'
+          skip-dirs: .git,.pytest_cache,__pycache__,staticfiles,media
 
       - name: Static security scan
         run: semgrep --error --config=p/python --config=p/django config laundries logistics marketplace ordering payments users
