@@ -292,6 +292,7 @@ def revoke_current_session(user: User, *, submitted_refresh: str | None, request
         except TokenError:
             pass
         except AttributeError:
+            # Blacklist support may be unavailable; session revocation still proceeds.
             pass
     else:
         session_id = get_request_session_id(request)
