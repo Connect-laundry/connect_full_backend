@@ -1,5 +1,4 @@
 import logging
-import json
 # pyre-ignore[missing-module]
 from pythonjsonlogger import jsonlogger
 
@@ -22,9 +21,9 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
             log_record['path'] = request.path
             log_record['method'] = request.method
             log_record['request_id'] = getattr(request, 'request_id', 'N/A')
-            if request.user.is_authenticated:
-                log_record['user_id'] = str(request.user.id)
-                log_record['user_email'] = request.user.email
+            user = getattr(request, 'user', None)
+            if getattr(user, 'is_authenticated', False):
+                log_record['user_id'] = str(user.id)
             else:
                 log_record['user_id'] = 'Anonymous'
         

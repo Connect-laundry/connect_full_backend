@@ -18,4 +18,4 @@ class FailedTaskAdmin(admin.ModelAdmin):
     list_display = ('task_name', 'task_id', 'failed_at', 'retry_count')
     list_filter = ('failed_at', 'task_name')
     search_fields = ('task_name', 'task_id', 'exception')
-    readonly_fields = ('task_id', 'task_name', 'args', 'kwargs', 'exception', 'stack_trace', 'retry_count', 'failed_at')
+    readonly_fields = ('task_id', 'task_name', 'exception', 'retry_count', 'failed_at')

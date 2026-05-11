@@ -24,8 +24,7 @@ class TestForgotPassword:
 
     def test_forgot_password_success(self, client):
         """Known email: creates token, returns 200, sends email."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
@@ -51,15 +50,15 @@ class TestForgotPassword:
 
     def test_reset_password_success(self, client):
         """Valid token resets password and marks token as used."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
-        raw_token = PasswordResetToken.create_for_user(user)
+        token_record, raw_token = PasswordResetToken.create_for_user(user)
 
         url = reverse('auth_reset_password')
         response = client.post(url, {
+            "reset_id": str(token_record.id),
             "token": raw_token,
             "new_password": "NewStrongPass123!",
             "confirm_password": "NewStrongPass123!"
@@ -100,12 +99,11 @@ class TestForgotPassword:
 
     def test_reset_password_expired_token(self, client):
         """Expired token returns 400."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
-        raw_token = PasswordResetToken.create_for_user(user)
+        token_record, raw_token = PasswordResetToken.create_for_user(user)
 
         # Force expire the token
         token_record = PasswordResetToken.objects.get(user=user)
@@ -114,6 +112,7 @@ class TestForgotPassword:
 
         url = reverse('auth_reset_password')
         response = client.post(url, {
+            "reset_id": str(token_record.id),
             "token": raw_token,
             "new_password": "NewStrongPass123!",
             "confirm_password": "NewStrongPass123!"
@@ -124,12 +123,11 @@ class TestForgotPassword:
 
     def test_reset_password_already_used_token(self, client):
         """Already-used token returns 400."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
-        raw_token = PasswordResetToken.create_for_user(user)
+        token_record, raw_token = PasswordResetToken.create_for_user(user)
 
         # Mark as already used
         token_record = PasswordResetToken.objects.get(user=user)
@@ -138,6 +136,7 @@ class TestForgotPassword:
 
         url = reverse('auth_reset_password')
         response = client.post(url, {
+            "reset_id": str(token_record.id),
             "token": raw_token,
             "new_password": "NewStrongPass123!",
             "confirm_password": "NewStrongPass123!"

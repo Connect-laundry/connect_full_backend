@@ -48,9 +48,9 @@ def trigger_order_notifications(sender, order, from_status, to_status, **kwargs)
         
         # Create persistent notification
         Notification.objects.create(
-            recipient=order.user,
+            user=order.user,
             title=title,
-            message=message,
+            body=message,
             type=Notification.Type.ORDER,
             related_order=order
         )

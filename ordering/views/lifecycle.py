@@ -26,7 +26,9 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOrderParticipant, CanManageLifecycle]
 
     def get_order(self):
-        return get_object_or_404(Order, id=self.kwargs['pk'])
+        obj = get_object_or_404(Order, id=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def _handle_transition(self, request, to_status):
         order = self.get_order()

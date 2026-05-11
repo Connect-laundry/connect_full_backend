@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from marketplace.models import Notification
 # pyre-ignore[missing-module]
 from django.core.exceptions import ObjectDoesNotExist
+from config.redaction import summarize_exception
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -37,12 +38,15 @@ def create_notification(self, user_id, title, body, notification_type='SYSTEM', 
         # Placeholder for real Push Service integration
         # send_real_push.delay(notification.id)
         
-        logger.info(f"Notification created for user {user.email}: {title}")
+        logger.info(
+            "Notification created",
+            extra={"user_id": str(user.id), "notification_id": str(notification.id)},
+        )
         return str(notification.id)
     except User.DoesNotExist:
-        logger.error(f"Failed to create notification: User {user_id} not found.")
+        logger.error("Failed to create notification: user not found", extra={"user_id": str(user_id)})
     except Exception as e:
-        logger.error(f"Error creating notification: {e}")
+        logger.error("Error creating notification", extra={"error": summarize_exception(e)})
     return None
 
 @shared_task(
@@ -54,11 +58,10 @@ def create_notification(self, user_id, title, body, notification_type='SYSTEM', 
 )
 def send_real_push(self, notification_id):
     """
-    Placeholder for calling external push services like Firebase or OneSignal.
+    Integration hook for external push services like Firebase or OneSignal.
     """
     try:
         notification = Notification.objects.get(id=notification_id)
-        # Integration logic here
-        logger.info(f"Simulating real push for notification {notification_id}")
+        logger.info("Push delivery hook invoked", extra={"notification_id": str(notification.id)})
     except Notification.DoesNotExist:
         pass

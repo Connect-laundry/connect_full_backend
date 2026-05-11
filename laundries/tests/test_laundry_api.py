@@ -11,14 +11,12 @@ User = get_user_model()
 class LaundryAPITests(APITestCase):
     def setUp(self):
         Laundry.objects.all().delete()
-        self.user = User.objects.create_user(
-            email='test@example.com',
+        self.user = User.objects.create_user(email='test@example.com',
             password='password123',
             phone='0123456789',
             role='CUSTOMER'
         )
-        self.owner = User.objects.create_user(
-            email='owner@example.com',
+        self.owner = User.objects.create_user(email='owner@example.com',
             password='password123',
             phone='0987654321',
             role='OWNER'

@@ -11,7 +11,8 @@ class IsOrderParticipant(permissions.BasePermission):
         return (
             obj.user == request.user or 
             obj.laundry.owner == request.user or
-            request.user.is_staff
+            request.user.is_staff or
+            request.user.role == 'ADMIN'
         )
 
 class CanManageLifecycle(permissions.BasePermission):
@@ -22,7 +23,7 @@ class CanManageLifecycle(permissions.BasePermission):
         user = request.user
         
         # Admin can do anything
-        if user.is_staff:
+        if user.is_staff or user.role == 'ADMIN':
             return True
             
         # Customer can only cancel

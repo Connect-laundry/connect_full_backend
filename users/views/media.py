@@ -8,6 +8,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.files.storage import default_storage
 # pyre-ignore[missing-module]
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 import uuid
 import os
 
@@ -19,7 +20,9 @@ class MediaUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     throttle_scope = 'burst_user'
+    serializer_class = MediaUploadSerializer
 
+    @extend_schema(request=MediaUploadSerializer)
     def post(self, request):
         # pyre-ignore[6]: Pyre doesn't understand DRF serializer initialization
         serializer = MediaUploadSerializer(data=request.data)
