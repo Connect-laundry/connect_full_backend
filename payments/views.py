@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 
 from .models import Payment
 from .services.paystack import PaystackService
@@ -78,6 +79,7 @@ class PaymentInitializeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentCreateThrottle]
 
+    @extend_schema(request=None)
     def post(self, request):
         order_id = request.data.get('order_id')
         payment_method = _normalize_payment_method(request.data.get('payment_method', 'CARD'))
@@ -179,6 +181,7 @@ class PaymentVerifyView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(request=None)
     def get(self, request, reference):
         paystack = PaystackService()
         verify_data = paystack.verify_transaction(reference)

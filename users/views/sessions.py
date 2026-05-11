@@ -1,9 +1,10 @@
 # pyre-ignore[missing-module]
-from rest_framework import permissions, status
+from rest_framework import permissions, status, serializers
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from users.models import DeviceSession
 from users.serializers.session import DeviceSessionSerializer, RefreshTokenRequestSerializer
@@ -16,7 +17,9 @@ from users.services.session_service import (
 
 class ActiveSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DeviceSessionSerializer
 
+    @extend_schema(request=None, responses=DeviceSessionSerializer(many=True))
     def get(self, request):
         sessions = DeviceSession.objects.filter(
             user=request.user,
@@ -32,7 +35,9 @@ class ActiveSessionsView(APIView):
 
 class RevokeCurrentSessionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = RefreshTokenRequestSerializer
 
+    @extend_schema(request=RefreshTokenRequestSerializer)
     def post(self, request):
         serializer = RefreshTokenRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -48,6 +53,10 @@ class RevokeCurrentSessionView(APIView):
 class RevokeAllSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={200: inline_serializer(name='RevokeAllResponse', fields={'detail': serializers.CharField()})}
+    )
     def post(self, request):
         revoke_all_sessions_for_user(request.user, reason='logout_all')
         return Response({'detail': 'All sessions revoked.'}, status=status.HTTP_200_OK)

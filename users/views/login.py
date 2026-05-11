@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from rest_framework.permissions import AllowAny
+from drf_spectacular.utils import extend_schema
 # pyre-ignore[missing-module]
 from ..serializers.login import LoginSerializer
 # pyre-ignore[missing-module]
@@ -15,7 +16,9 @@ from config.throttling import LoginAccountThrottle, LoginIPThrottle
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [LoginIPThrottle, LoginAccountThrottle]
-    
+    serializer_class = LoginSerializer
+
+    @extend_schema(request=LoginSerializer)
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from drf_spectacular.utils import extend_schema
 from django.db import connection, connections
 from django.conf import settings
 
@@ -8,6 +9,7 @@ class DiagnosisView(APIView):
     permission_classes = [IsAdminUser]
     http_method_names = ['get']
     
+    @extend_schema(request=None)
     def get(self, request):
         if not settings.DEBUG:
             return Response(

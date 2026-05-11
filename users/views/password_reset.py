@@ -1,4 +1,5 @@
 from rest_framework import status, response, views, permissions
+from drf_spectacular.utils import extend_schema
 from django.conf import settings
 from django.utils import timezone
 from ..models import User, PasswordResetToken
@@ -17,7 +18,9 @@ class ForgotPasswordView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [PasswordResetIPThrottle, PasswordResetAccountThrottle]
+    serializer_class = ForgotPasswordSerializer
 
+    @extend_schema(request=ForgotPasswordSerializer)
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -39,7 +42,9 @@ class ResetPasswordView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ResetPasswordIPThrottle]
+    serializer_class = ResetPasswordSerializer
 
+    @extend_schema(request=ResetPasswordSerializer)
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

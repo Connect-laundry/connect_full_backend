@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from rest_framework import views, permissions, status, serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
@@ -12,7 +13,9 @@ class ReferralApplySerializer(serializers.Serializer):
 
 class ReferralApplyView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ReferralApplySerializer
     
+    @extend_schema(request=ReferralApplySerializer)
     def post(self, request):
         # pyre-ignore
         serializer = ReferralApplySerializer(data=request.data)
@@ -57,6 +60,10 @@ class ReferralApplyView(views.APIView):
 class ReferralStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=None,
+        responses={200: inline_serializer(name='ReferralStatsResponse', fields={'status': serializers.CharField(), 'data': serializers.JSONField()})}
+    )
     def get(self, request):
         referrals = request.user.referrals.count()
         # Potential future expansion: Earnings from referrals

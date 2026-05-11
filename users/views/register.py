@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from rest_framework.permissions import AllowAny
+from drf_spectacular.utils import extend_schema
 # pyre-ignore[missing-module]
 from ..serializers.register import RegisterSerializer
 # pyre-ignore[missing-module]
@@ -16,7 +17,9 @@ from config.throttling import RegisterAccountThrottle, RegisterIPThrottle
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [RegisterIPThrottle, RegisterAccountThrottle]
-    
+    serializer_class = RegisterSerializer
+
+    @extend_schema(request=RegisterSerializer)
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

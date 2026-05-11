@@ -1,12 +1,12 @@
-# pyre-ignore[missing-module]
-# pyre-ignore[missing-module]
-from rest_framework import generics, permissions, viewsets, status
+import uuid
+from rest_framework import generics, permissions, viewsets, status, serializers
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, inline_serializer
 # pyre-ignore[missing-module]
 from ..models import Address
 # pyre-ignore[missing-module]
@@ -39,17 +39,27 @@ class ProfileView(generics.RetrieveUpdateAPIView):
             "user": serializer.data
         })
 
+
+@extend_schema_view(
+    retrieve=extend_schema(parameters=[OpenApiParameter("id", type=uuid.UUID, location=OpenApiParameter.PATH)]),
+    update=extend_schema(parameters=[OpenApiParameter("id", type=uuid.UUID, location=OpenApiParameter.PATH)]),
+    partial_update=extend_schema(parameters=[OpenApiParameter("id", type=uuid.UUID, location=OpenApiParameter.PATH)]),
+    destroy=extend_schema(parameters=[OpenApiParameter("id", type=uuid.UUID, location=OpenApiParameter.PATH)]),
+)
 class AddressViewSet(viewsets.ModelViewSet):
     """CRUD for user addresses."""
     serializer_class = AddressSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'id'
 
     def get_queryset(self):
         return Address.objects.filter(user=self.request.user)
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = RefreshTokenRequestSerializer
 
+    @extend_schema(request=RefreshTokenRequestSerializer)
     def post(self, request):
         serializer = RefreshTokenRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -65,6 +75,10 @@ class LogoutView(APIView):
 class DeleteAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={200: inline_serializer(name='DeleteAccountResponse', fields={'status': serializers.CharField(), 'message': serializers.CharField(), 'data': serializers.JSONField()})}
+    )
     def delete(self, request):
         user = request.user
         reason = request.data.get('reason') or 'self_service_deletion'
@@ -107,6 +121,10 @@ class SupportedCitiesView(APIView):
     """Returns a list of unique cities where laundries are available."""
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        request=None,
+        responses={200: inline_serializer(name='SupportedCitiesResponse', fields={'status': serializers.CharField(), 'cities': serializers.ListField(child=serializers.CharField())})}
+    )
     def get(self, request):
         # pyre-ignore[missing-module]
         from laundries.models.laundry import Laundry
