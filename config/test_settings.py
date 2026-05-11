@@ -12,9 +12,18 @@ AUTH_USER_MODEL = 'users.User'
 
 DEBUG = False
 ROOT_URLCONF = 'config.test_urls'
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Silence security warnings that are irrelevant for CI / test environments
+SILENCED_SYSTEM_CHECKS = [
+    'security.W004',  # SECURE_HSTS_SECONDS
+    'security.W008',  # SECURE_SSL_REDIRECT
+    'security.W012',  # SESSION_COOKIE_SECURE
+    'security.W016',  # CSRF_COOKIE_SECURE
+]
 
 TEMPLATES = [
     {
@@ -63,9 +72,21 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'config.middleware.deactivation.DeactivationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'config.middleware.request_id.RequestIDMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
+}
 
 DATABASES = {
     'default': {
