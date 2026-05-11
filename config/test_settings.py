@@ -2,7 +2,7 @@ import os
 
 os.environ.setdefault('DISABLE_SENTRY', 'True')
 
-from .settings import *  # noqa: F401,F403
+from .settings import BASE_DIR
 
 
 DEBUG = False
