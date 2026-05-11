@@ -2,8 +2,10 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security updates are provided only for the release lines marked as supported
+in the table below. Security fixes are applied to actively maintained versions;
+if you are using a version marked unsupported, upgrade to the latest supported
+release line before requesting a security fix.
 
 | Version | Supported          |
 | ------- | ------------------ |
