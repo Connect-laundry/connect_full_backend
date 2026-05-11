@@ -24,8 +24,7 @@ class TestForgotPassword:
 
     def test_forgot_password_success(self, client):
         """Known email: creates token, returns 200, sends email."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
@@ -51,8 +50,7 @@ class TestForgotPassword:
 
     def test_reset_password_success(self, client):
         """Valid token resets password and marks token as used."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
@@ -101,8 +99,7 @@ class TestForgotPassword:
 
     def test_reset_password_expired_token(self, client):
         """Expired token returns 400."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )
@@ -126,8 +123,7 @@ class TestForgotPassword:
 
     def test_reset_password_already_used_token(self, client):
         """Already-used token returns 400."""
-        user = User.objects.create_user(
-            email="test@example.com",
+        user = User.objects.create_user(email="test@example.com",
             phone="1234567890",
             password="old-password"
         )

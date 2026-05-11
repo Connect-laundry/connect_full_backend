@@ -28,14 +28,12 @@ def _auth_client(user: User):
 
 
 def _build_order():
-    owner = User.objects.create_user(
-      email='owner-payments@example.com',
+    owner = User.objects.create_user(email='owner-payments@example.com',
       phone='233555900001',
       password='StrongPass123!',
       role=User.Role.OWNER,
     )
-    customer = User.objects.create_user(
-      email='customer-payments@example.com',
+    customer = User.objects.create_user(email='customer-payments@example.com',
       phone='233555900002',
       password='StrongPass123!',
     )

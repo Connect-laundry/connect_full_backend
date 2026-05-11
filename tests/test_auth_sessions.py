@@ -16,8 +16,7 @@ def _device_headers(device_id='device-1'):
 
 
 def _create_user():
-    return User.objects.create_user(
-        email='customer@example.com',
+    return User.objects.create_user(email='customer@example.com',
         phone='233555000001',
         password='StrongPass123!',
         first_name='Test',

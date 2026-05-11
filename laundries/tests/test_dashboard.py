@@ -17,9 +17,9 @@ User = get_user_model()
 
 class DashboardTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(email="owner@example.com", password="password", role='OWNER')
-        self.customer = User.objects.create_user(email="cust@example.com", password="password", role='CUSTOMER')
-        self.laundry = Laundry.objects.create(name="Store 1", owner=self.owner, address="Addr")
+        self.owner = User.objects.create_user(email="owner@example.com", phone="233111111111", password="password", role='OWNER')
+        self.customer = User.objects.create_user(email="cust@example.com", phone="233222222222", password="password", role='CUSTOMER')
+        self.laundry = Laundry.objects.create(name="Store 1", owner=self.owner, address="Addr", latitude=5.6, longitude=-0.1, phone_number="0123456789")
         
         # Create some orders
         Order.objects.create(user=self.customer, laundry=self.laundry, status='PENDING', pickup_date=timezone.now(), total_amount=50.0)

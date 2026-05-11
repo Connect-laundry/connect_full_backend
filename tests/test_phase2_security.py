@@ -48,24 +48,21 @@ class TestPhase2Security:
             assert client.get('/api/schema/swagger-ui/').status_code == status.HTTP_404_NOT_FOUND
 
     def test_logistics_queries_are_role_scoped(self):
-        owner = User.objects.create_user(
-            email='owner@example.com',
+        owner = User.objects.create_user(email='owner@example.com',
             phone='233555100001',
             password='StrongPass123!',
             first_name='Owner',
             last_name='One',
             role=User.Role.OWNER,
         )
-        driver = User.objects.create_user(
-            email='driver@example.com',
+        driver = User.objects.create_user(email='driver@example.com',
             phone='233555100002',
             password='StrongPass123!',
             first_name='Driver',
             last_name='One',
             role=User.Role.DRIVER,
         )
-        customer = User.objects.create_user(
-            email='customer@example.com',
+        customer = User.objects.create_user(email='customer@example.com',
             phone='233555100003',
             password='StrongPass123!',
             first_name='Customer',
@@ -147,14 +144,12 @@ class TestPhase2Security:
             assert len(_unwrap_collection(driver_tracking.data)) == 1
 
     def test_order_detail_exposes_backend_price_breakdown(self):
-        owner = User.objects.create_user(
-            email='owner2@example.com',
+        owner = User.objects.create_user(email='owner2@example.com',
             phone='233555200001',
             password='StrongPass123!',
             role=User.Role.OWNER,
         )
-        customer = User.objects.create_user(
-            email='customer2@example.com',
+        customer = User.objects.create_user(email='customer2@example.com',
             phone='233555200002',
             password='StrongPass123!',
         )
@@ -213,8 +208,7 @@ class TestPhase2Security:
             assert breakdown['total'] == '127.00'
 
     def test_account_deletion_revokes_sessions_and_anonymizes_user(self):
-        user = User.objects.create_user(
-            email='delete@example.com',
+        user = User.objects.create_user(email='delete@example.com',
             phone='233555300001',
             password='StrongPass123!',
             first_name='Delete',

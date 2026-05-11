@@ -10,6 +10,7 @@ from ordering.models import Order
 from laundries.models import Laundry
 # pyre-ignore[missing-module]
 from users.models import User
+from django.utils import timezone
 
 @pytest.mark.django_db
 class TestOrderStateTransitions:
@@ -27,7 +28,8 @@ class TestOrderStateTransitions:
             laundry=sample_laundry,
             total_amount=100.00,
             status='PENDING',
-            order_no='ORD-123'
+            order_no='ORD-123',
+            pickup_date=timezone.now()
         )
         
         assert order.status == 'PENDING'

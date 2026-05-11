@@ -86,7 +86,35 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'config.throttling.BurstUserThrottle',
+        'config.throttling.SustainedUserThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'burst_user': '6000/minute',
+        'sustained_user': '10000/day',
+        'review': '500/hour',
+        'feedback': '3/hour',
+        'anon': '1000/day',
+        'auth_login_ip': '10/minute',
+        'auth_login_account': '5/minute',
+        'auth_register_ip': '5/minute',
+        'auth_register_account': '300/hour',
+        'auth_refresh_ip': '2000/minute',
+        'password_reset_ip': '3/hour',
+        'password_reset_account': '3/hour',
+        'reset_password_ip': '3/hour',
+        'payment_create': '10/minute',
+    }
 }
+
+TAX_RATE = 0.07
+DELIVERY_FEE_BASE = 10.00
+PLATFORM_FEE_RATE = 0.05
+FRONTEND_URL = 'http://localhost:3000'
+PAYSTACK_SECRET_KEY = 'test-paystack-secret'
+PASSWORD_RESET_TOKEN_EXPIRY_HOURS = 24
+PAYMENT_CURRENCY = 'GHS'
 
 DATABASES = {
     'default': {

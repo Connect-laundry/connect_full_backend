@@ -9,6 +9,7 @@ def mock_order():
     order = MagicMock()
     order.items.aggregate.return_value = {'total': Decimal('100.00')}
     order.laundry.delivery_fee = Decimal('10.00')
+    order.laundry.pickup_fee = Decimal('0.00')
     order.coupon = None
     return order
 
@@ -48,6 +49,7 @@ def test_calculate_price_breakdown_with_coupon(mock_order):
     coupon = MagicMock()
     coupon.discount_type = 'FIXED'
     coupon.discount_value = Decimal('20.00')
+    coupon.is_valid.return_value = (True, None)
     
     breakdown = FinanceService.calculate_price_breakdown(mock_order, coupon=coupon)
     
