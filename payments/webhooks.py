@@ -1,41 +1,64 @@
-# pyre-ignore[missing-module]
-import hmac
-# pyre-ignore[missing-module]
 import hashlib
-# pyre-ignore[missing-module]
+import hmac
 import json
-# pyre-ignore[missing-module]
 import logging
-# pyre-ignore[missing-module]
+
 from django.conf import settings
-# pyre-ignore[missing-module]
-from django.http import HttpResponse
-# pyre-ignore[missing-module]
-from django.views.decorators.csrf import csrf_exempt
-# pyre-ignore[missing-module]
-from django.views.decorators.http import require_POST
-# pyre-ignore[missing-module]
-from payments.models import Payment
-# pyre-ignore[missing-module]
-from ordering.models import Order
-
-logger = logging.getLogger(__name__)
-
-# pyre-ignore[missing-module]
 from django.db import transaction
-# pyre-ignore[missing-module]
+from django.http import HttpResponse
 from django.utils import timezone
-# pyre-ignore[missing-module]
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
+from ordering.models import Order
 from .models import Payment, WebhookEvent
-# pyre-ignore[missing-module]
-import hmac
-# pyre-ignore[missing-module]
-import hashlib
-# pyre-ignore[missing-module]
-import json
-import logging
+from config.redaction import mask_reference, summarize_exception
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_webhook_payload(payload, reference):
+    data = payload if isinstance(payload, dict) else {}
+    return {
+        "reference": reference,
+        "status": data.get('status'),
+        "gateway_status": data.get('gateway_response') or data.get('gateway_status'),
+        "amount": data.get('amount'),
+        "currency": data.get('currency', 'GHS'),
+    }
+
+
+def _to_minor_units(amount):
+    try:
+        from decimal import Decimal
+
+        return int((Decimal(str(amount)) * 100).quantize(Decimal('1')))
+    except Exception:
+        return None
+
+
+def _validate_webhook_payment(payment, payload):
+    data = payload if isinstance(payload, dict) else {}
+    amount_minor = data.get('amount')
+    currency = str(data.get('currency') or '').upper()
+    metadata = data.get('metadata') if isinstance(data.get('metadata'), dict) else {}
+
+    expected_minor = _to_minor_units(payment.amount)
+    expected_currency = str(payment.currency or settings.PAYMENT_CURRENCY).upper()
+
+    if expected_minor is None or amount_minor != expected_minor:
+        return False, 'amount_mismatch'
+    if currency != expected_currency:
+        return False, 'currency_mismatch'
+
+    metadata_order_id = str(metadata.get('order_id') or '')
+    metadata_user_id = str(metadata.get('user_id') or '')
+    if metadata_order_id and metadata_order_id != str(payment.order_id):
+        return False, 'order_mismatch'
+    if metadata_user_id and metadata_user_id != str(payment.user_id):
+        return False, 'user_mismatch'
+
+    return True, None
 
 @csrf_exempt
 @require_POST
@@ -60,7 +83,7 @@ def paystack_webhook(request):
     ).hexdigest()
 
     if hash_computed != signature:
-        logger.warning(f"Invalid Paystack webhook signature detected.")
+        logger.warning("Invalid Paystack webhook signature detected.")
         return HttpResponse(status=401)
 
     # 2. Parse event data
@@ -75,7 +98,7 @@ def paystack_webhook(request):
     # 3. Webhook Replay Protection
     if event_id:
         if WebhookEvent.objects.filter(event_id=event_id).exists():
-            logger.info(f"Duplicate webhook event ignored: {event_id}")
+            logger.info("Duplicate webhook event ignored", extra={"event_id": str(event_id)})
             return HttpResponse(status=200)
         
         WebhookEvent.objects.create(event_id=event_id)
@@ -94,28 +117,49 @@ def paystack_webhook(request):
                 payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
                 
                 if not payment:
-                    logger.error(f"Payment record not found for webhook reference: {reference}")
+                    logger.error(
+                        "Payment record not found for webhook reference",
+                        extra={"reference": mask_reference(reference)},
+                    )
                     return HttpResponse(status=200) # Safe exit
 
                 # 6. Idempotency Check
                 if payment.status == Payment.Status.SUCCESS:
-                    logger.info(f"Payment {reference} already marked as SUCCESS. Skipping.")
+                    logger.info(
+                        "Payment already marked as success; skipping webhook replay",
+                        extra={"reference": mask_reference(reference)},
+                    )
                     return HttpResponse(status=200)
+
+                is_valid, failure_reason = _validate_webhook_payment(payment, event_data.get('data', {}))
+                if not is_valid:
+                    payment.status = Payment.Status.FAILED
+                    payment.raw_response = _sanitize_webhook_payload(event_data.get('data', {}), reference)
+                    payment.save(update_fields=['status', 'raw_response', 'updated_at'])
+                    logger.warning(
+                        "Webhook rejected",
+                        extra={"reference": mask_reference(reference), "reason": failure_reason},
+                    )
+                    return HttpResponse(status=400)
 
                 # 7. Update Status
                 payment.status = Payment.Status.SUCCESS
-                payment.raw_response = event_data # Store raw payload
+                payment.raw_response = _sanitize_webhook_payload(event_data.get('data', {}), reference)
                 payment.paid_at = timezone.now()
                 payment.save()
                 
                 # Update order
                 order = payment.order
                 order.status = Order.Status.CONFIRMED
-                order.save()
+                order.payment_status = Order.PaymentStatus.PAID
+                order.save(update_fields=['status', 'payment_status', 'updated_at'])
                 
-                logger.info(f"Webhook Success: Reference {reference} confirmed.")
+                logger.info("Webhook success confirmed", extra={"reference": mask_reference(reference)})
         except Exception as e:
-            logger.error(f"Error processing webhook for reference {reference}: {e}")
+            logger.error(
+                "Error processing webhook",
+                extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
+            )
             # We return 500 to let Paystack retry if it's a transient failure
             return HttpResponse(status=500)
 

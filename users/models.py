@@ -160,15 +160,82 @@ class PasswordResetToken(models.Model):
         from django.conf import settings
         expiry_hours = getattr(settings, 'PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1)
         
-        cls.objects.create(
+        token_record = cls.objects.create(
             user=user,
             token_hash=token_hash,
             expires_at=timezone.now() + timedelta(hours=expiry_hours)
         )
-        return raw_token
+        return token_record, raw_token
 
     def is_valid(self):
         return self.used_at is None and self.expires_at > timezone.now()
 
     def __str__(self):
         return f"Token for {self.user.email} (Valid: {self.is_valid()})"
+
+
+class DeviceSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='device_sessions')
+    session_family_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    device_id = models.CharField(max_length=128, db_index=True)
+    platform = models.CharField(max_length=32, blank=True)
+    app_version = models.CharField(max_length=32, blank=True)
+    user_agent = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    current_refresh_jti = models.CharField(max_length=255, blank=True, db_index=True)
+    current_refresh_expires_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        verbose_name = _('device session')
+        verbose_name_plural = _('device sessions')
+        ordering = ['-last_used_at']
+        indexes = [
+            models.Index(fields=['user', 'revoked_at']),
+            models.Index(fields=['session_family_id', 'revoked_at']),
+        ]
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None
+
+    def __str__(self):
+        return f"{self.user.email} on {self.platform or 'unknown'} ({self.device_id})"
+
+
+class SessionRefreshToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(DeviceSession, on_delete=models.CASCADE, related_name='refresh_tokens')
+    jti = models.CharField(max_length=255, unique=True, db_index=True)
+    issued_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    rotated_at = models.DateTimeField(null=True, blank=True)
+    replaced_by_jti = models.CharField(max_length=255, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=64, blank=True)
+    reuse_detected_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('session refresh token')
+        verbose_name_plural = _('session refresh tokens')
+        ordering = ['-issued_at']
+        indexes = [
+            models.Index(fields=['session', 'revoked_at']),
+            models.Index(fields=['session', 'expires_at']),
+        ]
+
+    @property
+    def is_active(self):
+        return (
+            self.revoked_at is None
+            and self.replaced_by_jti == ''
+            and self.reuse_detected_at is None
+            and self.expires_at > timezone.now()
+        )
+
+    def __str__(self):
+        return f"{self.session.user.email} refresh {self.jti}"

@@ -6,7 +6,15 @@ from rest_framework.response import Response
 from rest_framework import status
 # pyre-ignore[missing-module]
 from rest_framework.exceptions import Throttled
-from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_message(value):
+    if isinstance(value, str):
+        return value.replace('<', '').replace('>', '').strip()
+    return value
 
 def custom_exception_handler(exc, context):
     """
@@ -14,41 +22,47 @@ def custom_exception_handler(exc, context):
     return a consistent JSON envelope.
     """
     response = exception_handler(exc, context)
+    request = context.get('request')
+    request_id = getattr(request, 'request_id', None)
 
     if response is None:
-        import traceback
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"DRF Exception at {context['request'].path}: {str(exc)}", exc_info=True)
+        path = getattr(request, 'path', 'unknown')
+        logger.error("DRF Exception at %s", path, exc_info=True, extra={'request': request})
 
         data = {
             "status": "error",
             "message": "An internal server error occurred.",
             "data": {}
         }
+        if request_id:
+            data["request_id"] = request_id
         return Response(data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # ... existing processing ...
     if response is not None:
-        # If it's a throttle exception, customize the message
         if isinstance(exc, Throttled):
             custom_data = {
                 "status": "error",
                 "message": f"Too many requests. Please try again in {exc.wait} seconds.",
                 "data": {}
             }
+            if request_id:
+                custom_data["request_id"] = request_id
             response.data = custom_data
         else:
-            # Handle other errors to fit the envelope if they don't already
             if not ('status' in response.data and 'message' in response.data):
                 message = "An error occurred."
                 if 'detail' in response.data:
-                    message = response.data['detail']
-                
+                    message = _sanitize_message(response.data['detail'])
+
                 response.data = {
                     "status": "error",
                     "message": message,
                     "data": response.data
                 }
+            elif isinstance(response.data, dict) and 'message' in response.data:
+                response.data['message'] = _sanitize_message(response.data['message'])
+
+            if request_id and isinstance(response.data, dict):
+                response.data.setdefault('request_id', request_id)
 
     return response

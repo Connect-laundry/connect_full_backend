@@ -11,7 +11,12 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         response['X-Frame-Options'] = 'DENY'
         response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-        
+        response['Cross-Origin-Opener-Policy'] = 'same-origin'
+        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        content_type = response.get('Content-Type', '')
+        if request.path.startswith('/api/') or request.path == '/health/' or 'application/json' in content_type:
+            response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
+
         # Hide tech stack details
         if 'Server' in response:
             del response['Server']

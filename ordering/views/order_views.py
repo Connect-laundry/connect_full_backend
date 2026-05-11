@@ -101,7 +101,7 @@ class BookingViewSet(viewsets.GenericViewSet):
         from laundries.models.service import LaundryService
         from ordering.models import OrderItem
         
-        # We'll create a mock Order and mock OrderItems in memory
+        # Build a transient order-like object in memory for preview pricing only.
         temp_order = Order(laundry=laundry, user=request.user)
         
         total_items_price = Decimal('0.00')
@@ -161,10 +161,11 @@ class BookingViewSet(viewsets.GenericViewSet):
     def create(self, request):
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
+            payment_method = serializer.validated_data.get('payment_method', 'CARD')
             order = serializer.save()
             
-            # Initiate mock payment
-            payment_info = PaymentService.create_payment_intent(order)
+            # Initiate payment using the production payment service
+            payment_info = PaymentService.create_payment_intent(order, payment_method=payment_method)
             
             response_data = OrderDetailSerializer(order).data
             response_data['payment_intent'] = payment_info

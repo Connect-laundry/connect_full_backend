@@ -10,8 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 # pyre-ignore[import]
 import dj_database_url
 
@@ -23,10 +23,16 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
 # pyre-ignore[missing-module]
 from dotenv import load_dotenv
+from config.redaction import redact_value
 
-load_dotenv()
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+if (BASE_DIR / '.env').exists():
+    load_dotenv(BASE_DIR / '.env', override=False)
+
+
+def _parse_csv_env(name: str, default: str = '') -> list[str]:
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(',') if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
@@ -38,7 +44,9 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = [host for host in _parse_csv_env('ALLOWED_HOSTS', 'localhost,127.0.0.1') if host != '*']
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost'] if DEBUG else []
 
 #
 AUTH_USER_MODEL = 'users.User'
@@ -63,6 +71,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'corsheaders',
     'cloudinary',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 # Add GIS support only if USE_POSTGIS is enabled
@@ -250,6 +259,9 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'laundries.renderers.StandardResponseRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
+    ) if DEBUG else (
+        'laundries.renderers.StandardResponseRenderer',
+        'rest_framework.renderers.JSONRenderer',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
@@ -260,11 +272,18 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'burst_user': os.getenv('THROTTLE_BURST_USER', '60/minute'),
         'sustained_user': os.getenv('THROTTLE_SUSTAINED_USER', '1000/day'),
-        'auth': os.getenv('THROTTLE_AUTH', '5/minute'),
         'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
         'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
         'anon': os.getenv('THROTTLE_ANON', '100/day'),
-        'password_reset': os.getenv('THROTTLE_PASSWORD_RESET', '3/hour'),
+        'auth_login_ip': os.getenv('THROTTLE_AUTH_LOGIN_IP', '10/minute'),
+        'auth_login_account': os.getenv('THROTTLE_AUTH_LOGIN_ACCOUNT', '5/minute'),
+        'auth_register_ip': os.getenv('THROTTLE_AUTH_REGISTER_IP', '10/hour'),
+        'auth_register_account': os.getenv('THROTTLE_AUTH_REGISTER_ACCOUNT', '3/hour'),
+        'auth_refresh_ip': os.getenv('THROTTLE_AUTH_REFRESH_IP', '20/minute'),
+        'password_reset_ip': os.getenv('THROTTLE_PASSWORD_RESET_IP', '5/hour'),
+        'password_reset_account': os.getenv('THROTTLE_PASSWORD_RESET_ACCOUNT', '3/hour'),
+        'reset_password_ip': os.getenv('THROTTLE_RESET_PASSWORD_IP', '10/hour'),
+        'payment_create': os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
     },
 }
 
@@ -279,25 +298,39 @@ SPECTACULAR_SETTINGS = {
 
 
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'clerk-jwks-cache',
+CACHE_LOCATION = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL', '')
+if CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.startswith('rediss://'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': CACHE_LOCATION,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'connect-auth-cache',
+        }
+    }
 
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_TOKEN_MINUTES', 10))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_DAYS', 14))),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'UPDATE_LAST_LOGIN': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': False,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
+    'CHECK_REVOKE_TOKEN': True,
+    'REVOKE_TOKEN_CLAIM': 'hash_password',
 }
 
 # Celery Configuration
@@ -320,7 +353,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # Password Reset Settings
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <noreply@connectlaundry.com>')
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000' if DEBUG else 'https://app.connectlaundry.com')
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
 
@@ -329,18 +362,43 @@ PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_H
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# --- Observability ---    
+# --- Observability ---
+
+
+def _before_send_sentry(event, hint):
+    event = redact_value(event)
+    if isinstance(event, dict):
+        request = event.get('request')
+        if isinstance(request, dict):
+            request.pop('data', None)
+            request.pop('cookies', None)
+            request.pop('headers', None)
+            request.pop('env', None)
+        user = event.get('user')
+        if isinstance(user, dict):
+            for field in ('email', 'ip_address', 'username', 'phone'):
+                if field in user:
+                    user[field] = '[REDACTED]'
+    return event
+
 
 SENTRY_DSN = os.getenv('SENTRY_DSN')
-if SENTRY_DSN and SENTRY_DSN.startswith('http') and 'your_real_dsn' not in SENTRY_DSN:
+SENTRY_TRACES_SAMPLE_RATE = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '1.0' if DEBUG else '0.05'))
+if (
+    SENTRY_DSN
+    and SENTRY_DSN.startswith('http')
+    and 'your_real_dsn' not in SENTRY_DSN
+    and os.getenv('DISABLE_SENTRY', 'False') != 'True'
+):
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
             DjangoIntegration(),
             CeleryIntegration(),
         ],
-        traces_sample_rate=1.0,
-        send_default_pii=True
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        send_default_pii=False,
+        before_send=_before_send_sentry,
     )
 
 LOGGING_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'INFO')
@@ -366,7 +424,7 @@ LOGGING = {
         },
         'django.db.backends': {
             'handlers': ['console'],
-            'level': 'DEBUG', # Used for slow query detection via DB instrumentation
+            'level': 'DEBUG' if DEBUG else 'WARNING',
             'propagate': False,
         },
     },
@@ -384,6 +442,7 @@ CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
+PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
 
 # Financial Settings
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%

@@ -1,4 +1,3 @@
-import json
 from django.http import JsonResponse
 from django.conf import settings
 import logging
@@ -17,20 +16,24 @@ class JSONErrorMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
-        import traceback
-        traceback.print_exc()  # Force traceback to stdout for Render logs
-        logger.error(f"Unhandled exception at {request.path}: {exception}", exc_info=True)
-        
-        # In production, we don't leak the exact exception string for security reasons.
-        # We only show it if DEBUG is True.
+        logger.error(
+            "Unhandled exception at %s",
+            request.path,
+            exc_info=True,
+            extra={'request': request},
+        )
+
         message = "An internal server error occurred."
         if settings.DEBUG:
             message = f"Server Error: {str(exception)}"
-            
+
         data = {
             "status": "error",
             "message": message,
             "data": {}
         }
-        
+
+        if hasattr(request, 'request_id'):
+            data["request_id"] = request.request_id
+
         return JsonResponse(data, status=500)

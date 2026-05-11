@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 # pyre-ignore[missing-module]
 from ..models import User
+from users.services.session_service import revoke_all_sessions_for_user
 
 class UserDeactivateView(views.APIView):
     """
@@ -29,8 +30,7 @@ class UserDeactivateView(views.APIView):
         user.deactivated_at = timezone.now()
         user.deactivation_reason = reason
         user.save()
-
-        # Revoke tokens (optional logic depending on JWT blacklist setup)
+        revoke_all_sessions_for_user(user, reason='account_deactivated')
         
         return Response({
             "status": "success",

@@ -25,18 +25,25 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
+    price_breakdown = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = [
             'id', 'order_no', 'laundryName', 
             'status', 'payment_status', 'total_amount', 
+            'price_breakdown',
             'pickup_date', 'delivery_date', 
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'address', 
             'special_instructions', 'items', 'created_at'
         ]
+
+    def get_price_breakdown(self, obj):
+        from ..services.finance_service import FinanceService
+
+        return FinanceService.calculate_price_breakdown(obj, coupon=obj.coupon)
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     # pyre-ignore[missing-module]

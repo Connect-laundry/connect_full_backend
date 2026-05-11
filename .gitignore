@@ -14,6 +14,9 @@ ENV/
 .env.local
 .env.production
 .env.dev
+.env.*
+!.env.example
+
 # IDE
 .vscode/
 .idea/
@@ -23,8 +26,21 @@ ENV/
 # Django
 *.log
 db.sqlite3
+test_db.sqlite3
 staticfiles/
 media/
+tmp/
+.pytest_cache/
+*.sqlite3
+check_output.txt
+check_error*.log
+clean_error*.log
+*_error*.txt
+*results.txt
+result*.txt
+inspect_out.txt
+mock_findings.txt
+db_tables.txt
 
 # OS
 .DS_Store

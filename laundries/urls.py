@@ -1,10 +1,11 @@
 # pyre-ignore[missing-module]
 from django.urls import path, include
 # pyre-ignore[missing-module]
+from django.conf import settings
+# pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 # pyre-ignore[missing-module]
 from .views.laundry import LaundryViewSet, CategoryViewSet
-from .views.diagnosis import DiagnosisView
 # pyre-ignore[missing-module]
 from .views.favorite import FavoriteListView
 # pyre-ignore[missing-module]
@@ -28,7 +29,6 @@ router.register(r'admin/services', AdminServiceViewSet, basename='admin-service'
 
 urlpatterns = [
     path('featured/', LaundryViewSet.as_view({'get': 'featured'}), name='laundry-featured-top'),
-    path('diagnosis/', DiagnosisView.as_view(), name='diagnosis'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),
@@ -36,3 +36,8 @@ urlpatterns = [
     path('<uuid:laundry_id>/reviews/', ReviewCreateView.as_view(), name='review_create'),
     path('', include(router.urls)),
 ]
+
+if settings.DEBUG:
+    from .views.diagnosis import DiagnosisView
+
+    urlpatterns.insert(1, path('diagnosis/', DiagnosisView.as_view(), name='diagnosis'))

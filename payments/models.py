@@ -23,7 +23,7 @@ class Payment(models.Model):
     order = models.OneToOneField('ordering.Order', on_delete=models.CASCADE, related_name='payment')
     
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=3, default='NGN')
+    currency = models.CharField(max_length=3, default='GHS')
     
     payment_method = models.CharField(max_length=20, choices=Method.choices, default=Method.CARD)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)

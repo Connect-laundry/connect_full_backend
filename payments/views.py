@@ -1,18 +1,74 @@
 import uuid
 import logging
+from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from .models import Payment
 from .services.paystack import PaystackService
 from ordering.models import Order
+from config.throttling import PaymentCreateThrottle
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_payment_response(payload, reference):
+    data = payload if isinstance(payload, dict) else {}
+    return {
+        "reference": reference,
+        "status": data.get("status"),
+        "gateway_status": data.get("gateway_response") or data.get("gateway_status"),
+        "amount": data.get("amount"),
+        "currency": data.get("currency", "GHS"),
+    }
+
+
+def _to_minor_units(amount):
+    try:
+        return int((Decimal(str(amount)) * 100).quantize(Decimal('1')))
+    except Exception:
+        return None
+
+
+def _validate_verified_payment(payment, payload):
+    data = payload if isinstance(payload, dict) else {}
+    amount_minor = data.get('amount')
+    currency = str(data.get('currency') or '').upper()
+    metadata = data.get('metadata') if isinstance(data.get('metadata'), dict) else {}
+
+    expected_minor = _to_minor_units(payment.amount)
+    expected_currency = str(payment.currency or settings.PAYMENT_CURRENCY).upper()
+
+    if expected_minor is None or amount_minor != expected_minor:
+        return False, 'Payment amount verification failed.'
+
+    if currency != expected_currency:
+        return False, 'Payment currency verification failed.'
+
+    metadata_order_id = str(metadata.get('order_id') or '')
+    metadata_user_id = str(metadata.get('user_id') or '')
+    if metadata_order_id and metadata_order_id != str(payment.order_id):
+        return False, 'Payment order verification failed.'
+    if metadata_user_id and metadata_user_id != str(payment.user_id):
+        return False, 'Payment user verification failed.'
+
+    return True, None
+
+
+def _normalize_payment_method(payment_method):
+    normalized = str(payment_method or 'CARD').strip().upper()
+    if normalized in {'PAYSTACK', 'CARD'}:
+        return Payment.Method.CARD
+    if normalized in {'CASH', 'CASH_ON_DELIVERY'}:
+        return Payment.Method.CASH
+    if normalized in {'BANK_TRANSFER', 'TRANSFER'}:
+        return Payment.Method.TRANS
+    return Payment.Method.CARD
 
 class PaymentInitializeView(APIView):
     """
@@ -20,11 +76,11 @@ class PaymentInitializeView(APIView):
     Initiates a new payment session with Paystack.
     """
     permission_classes = [permissions.IsAuthenticated]
-    throttle_scope = 'burst_user'
+    throttle_classes = [PaymentCreateThrottle]
 
     def post(self, request):
         order_id = request.data.get('order_id')
-        payment_method = request.data.get('payment_method', 'CARD')
+        payment_method = _normalize_payment_method(request.data.get('payment_method', 'CARD'))
         
         # 1. Validate order existence and ownership
         order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -47,6 +103,30 @@ class PaymentInitializeView(APIView):
 
         # 4. Generate unique reference
         reference = f"ORD-{uuid.uuid4().hex[:10].upper()}"
+
+        if payment_method == Payment.Method.CASH:
+            with transaction.atomic():
+                Payment.objects.update_or_create(
+                    order=order,
+                    defaults={
+                        'user': request.user,
+                        'amount': order.total_amount,
+                        'currency': settings.PAYMENT_CURRENCY,
+                        'transaction_reference': f"COD-{uuid.uuid4().hex[:10].upper()}",
+                        'payment_method': Payment.Method.CASH,
+                        'status': Payment.Status.PENDING,
+                        'paystack_reference': None,
+                    },
+                )
+
+            return Response({
+                "status": "success",
+                "message": "Cash payment recorded successfully",
+                "data": {
+                    "authorization_url": None,
+                    "reference": None,
+                }
+            }, status=status.HTTP_200_OK)
         
         paystack = PaystackService()
         metadata = {
@@ -70,7 +150,7 @@ class PaymentInitializeView(APIView):
                     user=request.user,
                     order=order,
                     amount=order.total_amount,
-                    currency='NGN',
+                    currency=settings.PAYMENT_CURRENCY,
                     transaction_reference=reference,
                     payment_method=payment_method,
                     status=Payment.Status.PENDING,
@@ -116,22 +196,35 @@ class PaymentVerifyView(APIView):
                     }, status=status.HTTP_404_NOT_FOUND)
 
                 if payment.status != Payment.Status.SUCCESS:
+                    is_valid, validation_error = _validate_verified_payment(payment, verify_data.get('data', {}))
+                    if not is_valid:
+                        payment.status = Payment.Status.FAILED
+                        payment.raw_response = _sanitize_payment_response(verify_data.get('data', {}), reference)
+                        payment.save(update_fields=['status', 'raw_response', 'updated_at'])
+                        return Response({
+                            "status": "error",
+                            "message": validation_error,
+                            "data": {}
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
                     payment.status = Payment.Status.SUCCESS
-                    payment.raw_response = verify_data['data']
+                    payment.raw_response = _sanitize_payment_response(verify_data.get('data', {}), reference)
                     payment.paid_at = timezone.now()
                     payment.save()
                     
                     # Update order status
                     order = payment.order
                     order.status = Order.Status.CONFIRMED
-                    order.save()
+                    order.payment_status = Order.PaymentStatus.PAID
+                    order.save(update_fields=['status', 'payment_status', 'updated_at'])
             
             return Response({
                 "status": "success", 
                 "message": "Payment verified and order confirmed.",
                 "data": {
                     "payment_status": payment.status,
-                    "order_status": payment.order.status
+                    "order_status": payment.order.status,
+                    "order_payment_status": payment.order.payment_status,
                 }
             }, status=status.HTTP_200_OK)
             

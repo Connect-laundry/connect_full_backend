@@ -1,23 +1,25 @@
 # pyre-ignore[missing-module]
-from rest_framework_simplejwt.views import TokenRefreshView
-# pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
-from rest_framework import status
+from rest_framework import permissions, status
+# pyre-ignore[missing-module]
+from rest_framework.views import APIView
 
-class CustomTokenRefreshView(TokenRefreshView):
-    """
-    Custom Refresh View to return 'accessToken' instead of 'access' 
-    to match our project's standardized auth response format.
-    """
+from config.throttling import RefreshIPThrottle
+from users.serializers.session import RefreshTokenRequestSerializer
+from users.services.session_service import rotate_refresh_token
+
+
+class CustomTokenRefreshView(APIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [RefreshIPThrottle]
+
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-
-        try:
-            serializer.is_valid(raise_exception=True)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        serializer = RefreshTokenRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tokens = rotate_refresh_token(serializer.validated_data['refresh'], request)
 
         return Response({
-            "accessToken": serializer.validated_data.get('access'),
+            "accessToken": tokens['access'],
+            "refreshToken": tokens['refresh'],
         }, status=status.HTTP_200_OK)

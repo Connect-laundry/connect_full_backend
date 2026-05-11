@@ -1,4 +1,5 @@
 import logging
+import os
 # pyre-ignore[missing-module]
 from django.db import connections
 # pyre-ignore[missing-module]
@@ -15,8 +16,14 @@ logger = logging.getLogger(__name__)
 def health_check(request):
     """
     Production health check endpoint.
+
+    Public callers only receive a minimal liveness signal.
+    Internal callers may opt into component details with a shared token.
     """
-    # Explicitly typing as dict to satisfy some linting environments
+    internal_token = os.getenv('INTERNAL_HEALTH_TOKEN', '').strip()
+    provided_token = request.headers.get('X-Health-Token', '').strip()
+    include_components = bool(internal_token) and provided_token == internal_token
+
     components_status = {
         "database": "down",
         "redis": "down",
@@ -56,4 +63,12 @@ def health_check(request):
         logger.error(f"Health Check: Celery Broker is DOWN - {str(e)}")
 
     status_code = 200 if health_status['status'] == "healthy" else 503
-    return JsonResponse(health_status, status=status_code)
+    response_payload = {
+        "status": health_status["status"],
+    }
+    if include_components:
+        response_payload["components"] = components_status
+
+    response = JsonResponse(response_payload, status=status_code)
+    response["Cache-Control"] = "no-store"
+    return response
