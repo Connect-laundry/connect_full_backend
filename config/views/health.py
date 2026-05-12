@@ -46,18 +46,29 @@ def health_check(request):
 
     # 2. Check Redis
     try:
-        redis_conn = get_redis_connection("default")
-        redis_conn.ping()
-        components_status['redis'] = "up"
+        from django.core.cache import cache
+        from django_redis.cache import RedisCache
+        
+        if isinstance(cache, RedisCache):
+            redis_conn = get_redis_connection("default")
+            redis_conn.ping()
+            components_status['redis'] = "up"
+        else:
+            components_status['redis'] = "not_configured"
+            logger.info("Health Check: Redis is not configured (using fallback cache)")
     except Exception as e:
         health_status['status'] = "degraded"
         logger.error(f"Health Check: Redis is DOWN - {str(e)}")
 
     # 3. Check Celery Broker
     try:
-        with celery_app.broker_connection() as conn:
-            conn.ensure_connection(max_retries=1)
-            components_status['celery'] = "up"
+        if os.getenv('CELERY_BROKER_URL'):
+            with celery_app.broker_connection() as conn:
+                conn.ensure_connection(max_retries=1)
+                components_status['celery'] = "up"
+        else:
+            components_status['celery'] = "not_configured"
+            logger.info("Health Check: Celery Broker URL not set")
     except Exception as e:
         health_status['status'] = "degraded"
         logger.error(f"Health Check: Celery Broker is DOWN - {str(e)}")
