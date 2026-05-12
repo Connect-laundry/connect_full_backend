@@ -58,6 +58,12 @@ AUTH_USER_MODEL = 'users.User'
 USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
 
 INSTALLED_APPS = [
+    'unfold',
+    'unfold.contrib.filters',
+    'unfold.contrib.forms',
+    'unfold.contrib.import_export',
+    'unfold.contrib.guardian',
+    'unfold.contrib.simple_history',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -449,3 +455,92 @@ TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
 DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
 PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
 
+# Unfold Admin Configuration
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
+
+UNFOLD = {
+    "SITE_TITLE": "Connect Laundry Admin",
+    "SITE_HEADER": "Connect Laundry",
+    "SITE_URL": "/",
+    "SITE_SYMBOL": "local_laundry_service",
+    "DASHBOARD_CALLBACK": "config.admin_dashboard.dashboard_callback",
+    "SEARCH": {
+        "users.user": ["email", "first_name", "last_name"],
+        "ordering.order": ["order_no", "user__email"],
+        "laundries.laundry": ["name", "address"],
+        "payments.payment": ["transaction_reference", "paystack_reference"],
+    },
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+    "THEME": "light",
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+        "navigation": [
+            {
+                "title": _("Operations"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Dashboard"),
+                        "icon": "dashboard",
+                        "link": reverse_lazy("admin:index"),
+                    },
+                    {
+                        "title": _("Orders"),
+                        "icon": "shopping_cart",
+                        "link": reverse_lazy("admin:ordering_order_changelist"),
+                    },
+                    {
+                        "title": _("Laundries"),
+                        "icon": "store",
+                        "link": reverse_lazy("admin:laundries_laundry_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Users & Security"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Users"),
+                        "icon": "people",
+                        "link": reverse_lazy("admin:users_user_changelist"),
+                    },
+                    {
+                        "title": _("Sessions"),
+                        "icon": "devices",
+                        "link": reverse_lazy("admin:users_devicesession_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Finance"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Payments"),
+                        "icon": "payments",
+                        "link": reverse_lazy("admin:payments_payment_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
+}
