@@ -13,7 +13,6 @@ from rest_framework.test import APIClient
 
 from config.middleware.idempotency import IdempotencyMiddleware
 from config.middleware.security import SecurityHeadersMiddleware
-from users.models import User
 
 
 @pytest.mark.django_db
