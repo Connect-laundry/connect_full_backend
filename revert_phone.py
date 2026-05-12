@@ -18,4 +18,4 @@ for root, _, files in os.walk('c:\\projects\\CONNECT\\connect_new_backend'):
             try:
                 process_file(os.path.join(root, file))
             except Exception as e:
-                pass
+                print(f"Failed to process {os.path.join(root, file)}: {e}")

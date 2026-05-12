@@ -290,6 +290,7 @@ def revoke_current_session(user: User, *, submitted_refresh: str | None, request
         try:
             RefreshToken(submitted_refresh).blacklist()
         except TokenError:
+            # Token may be invalid/expired/already handled; session revocation still proceeds.
             pass
         except AttributeError:
             # Blacklist support may be unavailable; session revocation still proceeds.
