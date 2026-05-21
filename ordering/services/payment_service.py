@@ -96,7 +96,12 @@ class PaymentService:
         logger.error(f"Paystack init failed for Order {order.id}: {response}")
         return {
             "transaction_id": reference,
+            "amount": str(amount),
+            "currency": settings.PAYMENT_CURRENCY,
             "status": "FAILED",
+            "payment_method": normalized_method,
+            "authorization_url": None,
+            "access_code": None,
             "message": "Payment initialization failed."
         }
 

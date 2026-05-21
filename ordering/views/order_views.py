@@ -20,6 +20,8 @@ from ordering.serializers import (
 from ..services.payment_service import PaymentService
 from decimal import Decimal
 import logging
+import hashlib
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +165,30 @@ class BookingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['post'])
     def create(self, request):
+        idempotency_key = request.headers.get("X-Idempotency-Key")
+        cache_key = None
+        if idempotency_key:
+            body = getattr(getattr(request, '_request', request), 'body', b'') or b''
+            request_hash = hashlib.sha256(body).hexdigest()
+            fingerprint = hashlib.sha256(
+                f"{request.method}:{request.path}:{request_hash}".encode("utf-8")
+            ).hexdigest()
+            cache_key = f"booking_create_{request.user.id}_{idempotency_key}"
+            cached_response = cache.get(cache_key)
+            if cached_response:
+                if cached_response.get("fingerprint") != fingerprint:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "This idempotency key was already used for a different booking request.",
+                            "data": {},
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                response = Response(cached_response["data"], status=cached_response["status_code"])
+                response["X-Idempotency-Cache"] = "HIT"
+                return response
+
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             payment_method = serializer.validated_data.get('payment_method', 'CARD')
@@ -191,7 +217,18 @@ class BookingViewSet(viewsets.GenericViewSet):
 
             response_data = OrderDetailSerializer(order).data
             response_data['payment_intent'] = payment_info
-            
+
+            if cache_key:
+                cache.set(
+                    cache_key,
+                    {
+                        "fingerprint": fingerprint,
+                        "status_code": status.HTTP_201_CREATED,
+                        "data": response_data,
+                    },
+                    86400,
+                )
+
             return Response(response_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -5,6 +5,8 @@ from decimal import Decimal
 from django.db import transaction
 # pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
+from laundries.models.category import Category
+from laundries.models.laundry import Laundry
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
@@ -23,6 +25,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ['id', 'item', 'service_type', 'name', 'quantity', 'price']
         read_only_fields = ['id', 'name', 'price']
+
+
+class OrderItemCreateSerializer(serializers.Serializer):
+    item = serializers.PrimaryKeyRelatedField(queryset=LaunderableItem.objects.filter(is_active=True))
+    service_type = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.filter(type=Category.CategoryType.SERVICE_TYPE)
+    )
+    quantity = serializers.IntegerField(min_value=1, max_value=99)
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
@@ -48,8 +58,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         return FinanceService.calculate_price_breakdown(obj, coupon=obj.coupon)
 
 class OrderCreateSerializer(serializers.ModelSerializer):
-    # pyre-ignore[missing-module]
-    items = OrderItemSerializer(many=True)
+    items = OrderItemCreateSerializer(many=True, allow_empty=False)
+    laundry = serializers.PrimaryKeyRelatedField(queryset=Laundry.objects.all())
     coupon_code = serializers.CharField(required=False, write_only=True)
 
     # Accept GPS coords and payment_method from frontend
@@ -70,11 +80,68 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'payment_method',
         ]
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            allowed_fields = set(self.fields)
+            unsupported_fields = sorted(set(data) - allowed_fields)
+            if unsupported_fields:
+                raise serializers.ValidationError({
+                    "non_field_errors": [
+                        f"Unsupported booking fields: {', '.join(unsupported_fields)}."
+                    ]
+                })
+        return super().to_internal_value(data)
+
     def validate(self, data):
         laundry = data.get('laundry')
         if laundry and (laundry.status != 'APPROVED' or not laundry.is_active):
-            raise serializers.ValidationError("This laundry is not approved or is currently inactive.")
-            
+            raise serializers.ValidationError({"laundry": "This laundry is not approved or is currently inactive."})
+
+        pickup_address = str(data.get('pickup_address') or '').strip()
+        delivery_address = str(data.get('delivery_address') or '').strip()
+        if not pickup_address:
+            raise serializers.ValidationError({"pickup_address": "Pickup address is required."})
+        if not delivery_address:
+            raise serializers.ValidationError({"delivery_address": "Delivery address is required."})
+        data['pickup_address'] = pickup_address
+        data['delivery_address'] = delivery_address
+
+        payment_method = str(data.get('payment_method') or 'CARD').strip().upper()
+        if payment_method in {'PAYSTACK', 'CARD'}:
+            payment_method = 'CARD'
+        elif payment_method in {'CASH', 'CASH_ON_DELIVERY'}:
+            payment_method = 'CASH'
+        elif payment_method in {'BANK_TRANSFER', 'TRANSFER'}:
+            payment_method = 'BANK_TRANSFER'
+        else:
+            raise serializers.ValidationError({
+                "payment_method": "Unsupported payment method. Use CARD, CASH, or BANK_TRANSFER."
+            })
+        data['payment_method'] = payment_method
+
+        items = data.get('items') or []
+        if laundry and items:
+            # pyre-ignore[missing-module]
+            from laundries.models.service import LaundryService
+            offered_pairs = set(
+                LaundryService.objects.filter(
+                    laundry=laundry,
+                    is_available=True,
+                    item_id__in=[item_data['item'].id for item_data in items],
+                    service_type_id__in=[item_data['service_type'].id for item_data in items],
+                ).values_list('item_id', 'service_type_id')
+            )
+            item_errors = {}
+            for index, item_data in enumerate(items):
+                item = item_data['item']
+                service_type = item_data['service_type']
+                if (item.id, service_type.id) not in offered_pairs:
+                    item_errors[str(index)] = (
+                        f"{laundry.name} does not offer {service_type.name} for {item.name}."
+                    )
+            if item_errors:
+                raise serializers.ValidationError({"items": item_errors})
+
         coupon_code = data.get('coupon_code')
         if coupon_code:
             # pyre-ignore[missing-module]
@@ -90,7 +157,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 data['coupon_obj'] = coupon
             except Coupon.DoesNotExist:
                 raise serializers.ValidationError({"coupon_code": "Invalid coupon code."})
-                
+
         return data
 
     def create(self, validated_data):
@@ -113,26 +180,22 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             from laundries.models.service import LaundryService
 
             for item_data in items_data:
-                item_instance = item_data.get('item')
-                service_type_instance = item_data.get('service_type')
+                item_instance = item_data['item']
+                service_type_instance = item_data['service_type']
                 quantity = item_data.get('quantity', 1)
-
-                if not item_instance:
-                    raise serializers.ValidationError("Item is required.")
-                if not service_type_instance:
-                    raise serializers.ValidationError(f"Service type is required for {item_instance.name}")
 
                 try:
                     l_service = LaundryService.objects.get(
                         laundry=order.laundry,
                         item=item_instance,
-                        service_type=service_type_instance
+                        service_type=service_type_instance,
+                        is_available=True,
                     )
-                    if not l_service.is_available:
-                        raise serializers.ValidationError(f"{item_instance.name} is not available for {service_type_instance.name}.")
-                    item_price = l_service.price
-                except LaundryService.DoesNotExist:
-                    raise serializers.ValidationError(f"Laundry does not offer {service_type_instance.name} for {item_instance.name}")
+                except LaundryService.DoesNotExist as exc:
+                    raise serializers.ValidationError({
+                        "items": f"{order.laundry.name} does not offer {service_type_instance.name} for {item_instance.name}."
+                    }) from exc
+                item_price = l_service.price
 
                 OrderItem.objects.create(
                     order=order,
