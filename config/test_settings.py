@@ -16,6 +16,16 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'test-staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
 
 # Silence security warnings that are irrelevant for CI / test environments
 SILENCED_SYSTEM_CHECKS = [
@@ -41,6 +51,12 @@ TEMPLATES = [
 ]
 
 INSTALLED_APPS = [
+    'unfold',
+    'unfold.contrib.filters',
+    'unfold.contrib.forms',
+    'unfold.contrib.import_export',
+    'unfold.contrib.guardian',
+    'unfold.contrib.simple_history',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
