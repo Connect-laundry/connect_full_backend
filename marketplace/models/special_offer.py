@@ -1,12 +1,13 @@
 import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from laundries.utils.validators import validate_file_upload
 
 class SpecialOffer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(_('title'), max_length=255)
     description = models.TextField(_('description'), blank=True)
-    image = models.ImageField(_('image'), upload_to='special_offers/')
+    image = models.ImageField(_('image'), upload_to='special_offers/', validators=[validate_file_upload])
     
     # Metadata
     is_active = models.BooleanField(default=True)
