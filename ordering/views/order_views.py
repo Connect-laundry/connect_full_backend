@@ -4,6 +4,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 # pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, Coupon
 from ordering.serializers import (
@@ -18,6 +19,9 @@ from ordering.serializers import (
 # pyre-ignore[missing-module]
 from ..services.payment_service import PaymentService
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -162,11 +166,29 @@ class BookingViewSet(viewsets.GenericViewSet):
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             payment_method = serializer.validated_data.get('payment_method', 'CARD')
-            order = serializer.save()
-            
-            # Initiate payment using the production payment service
-            payment_info = PaymentService.create_payment_intent(order, payment_method=payment_method)
-            
+            try:
+                order = serializer.save()
+            except ValidationError as exc:
+                return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payment_info = PaymentService.create_payment_intent(order, payment_method=payment_method)
+            except Exception:
+                logger.exception(
+                    "Payment initialization failed during booking create",
+                    extra={"order_id": str(order.id), "request": request},
+                )
+                payment_info = {
+                    "transaction_id": None,
+                    "amount": str(order.total_amount),
+                    "currency": "GHS",
+                    "status": "FAILED",
+                    "payment_method": payment_method,
+                    "authorization_url": None,
+                    "access_code": None,
+                    "message": "Order created, but payment could not be initialized. Please retry payment from the receipt.",
+                }
+
             response_data = OrderDetailSerializer(order).data
             response_data['payment_intent'] = payment_info
             

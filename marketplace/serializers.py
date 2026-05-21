@@ -1,7 +1,7 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 # pyre-ignore[missing-module]
-from .models import Notification, Feedback
+from .models import Notification, Feedback, PushDevice
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -17,3 +17,10 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = ['id', 'subject', 'message', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class PushDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushDevice
+        fields = ['id', 'token', 'device_id', 'platform', 'app_version', 'is_active', 'last_registered_at']
+        read_only_fields = ['id', 'is_active', 'last_registered_at']

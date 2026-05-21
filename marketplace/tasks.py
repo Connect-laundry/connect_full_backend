@@ -2,10 +2,12 @@
 from celery import shared_task
 # pyre-ignore[missing-module]
 import logging
+import requests
+from django.conf import settings
 # pyre-ignore[missing-module]
 from django.contrib.auth import get_user_model
 # pyre-ignore[missing-module]
-from marketplace.models import Notification
+from marketplace.models import Notification, PushDevice
 # pyre-ignore[missing-module]
 from django.core.exceptions import ObjectDoesNotExist
 from config.redaction import summarize_exception
@@ -35,8 +37,7 @@ def create_notification(self, user_id, title, body, notification_type='SYSTEM', 
             related_order_id=related_order_id
         )
         
-        # Placeholder for real Push Service integration
-        # send_real_push.delay(notification.id)
+        send_real_push.delay(str(notification.id))
         
         logger.info(
             "Notification created",
@@ -58,10 +59,48 @@ def create_notification(self, user_id, title, body, notification_type='SYSTEM', 
 )
 def send_real_push(self, notification_id):
     """
-    Integration hook for external push services like Firebase or OneSignal.
+    Sends the notification to registered Expo push tokens.
     """
     try:
-        notification = Notification.objects.get(id=notification_id)
-        logger.info("Push delivery hook invoked", extra={"notification_id": str(notification.id)})
+        notification = Notification.objects.select_related('user').get(id=notification_id)
+        if not getattr(settings, 'EXPO_PUSH_ENABLED', False):
+            return 0
+
+        devices = PushDevice.objects.filter(user=notification.user, is_active=True)
+        messages = [
+            {
+                "to": device.token,
+                "sound": "default",
+                "title": notification.title,
+                "body": notification.body,
+                "data": {
+                    "notificationId": str(notification.id),
+                    "type": notification.type,
+                    "relatedOrder": str(notification.related_order_id) if notification.related_order_id else None,
+                },
+            }
+            for device in devices
+            if device.token.startswith('ExponentPushToken[') or device.token.startswith('ExpoPushToken[')
+        ]
+
+        if not messages:
+            return 0
+
+        response = requests.post(
+            "https://exp.host/--/api/v2/push/send",
+            json=messages,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        logger.info(
+            "Push notifications sent",
+            extra={"notification_id": str(notification.id), "count": len(messages)},
+        )
+        return len(messages)
     except Notification.DoesNotExist:
         pass
+    except requests.RequestException as e:
+        logger.error("Push delivery failed", extra={"error": summarize_exception(e)})
+        raise
+    return 0

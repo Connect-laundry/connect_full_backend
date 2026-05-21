@@ -449,6 +449,7 @@ PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
+EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
 
 # Financial Settings
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%

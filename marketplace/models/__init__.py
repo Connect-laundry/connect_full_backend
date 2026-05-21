@@ -5,7 +5,7 @@ from .feedback import Feedback
 # pyre-ignore[missing-module]
 from .failed_task import FailedTask
 # pyre-ignore[missing-module]
-from .notification import Notification
+from .notification import Notification, PushDevice
 # pyre-ignore[missing-module]
 from .legal import LegalDocument
 # pyre-ignore[missing-module]
@@ -16,6 +16,7 @@ __all__ = [
     'Feedback',
     'FailedTask',
     'Notification',
+    'PushDevice',
     'LegalDocument',
     'SpecialOffer',
 ]

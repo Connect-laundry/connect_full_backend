@@ -53,3 +53,34 @@ class Notification(models.Model):
         self.is_read = True
         self.read_at = timezone.now()
         self.save()
+
+
+class PushDevice(models.Model):
+    class Platform(models.TextChoices):
+        IOS = 'ios', _('iOS')
+        ANDROID = 'android', _('Android')
+        WEB = 'web', _('Web')
+        UNKNOWN = 'unknown', _('Unknown')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='push_devices',
+    )
+    token = models.CharField(max_length=255, unique=True, db_index=True)
+    device_id = models.CharField(max_length=128, blank=True, db_index=True)
+    platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.UNKNOWN)
+    app_version = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_registered_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['device_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.platform} push device for {self.user_id}"

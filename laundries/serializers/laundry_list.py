@@ -32,7 +32,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
             'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice'
+            'minOrder', 'deliveryFee', 'avgPrice', 'latitude', 'longitude'
         )
 
     def get_avgPrice(self, obj):

@@ -38,6 +38,40 @@ services:
         value: ".onrender.com"
       - key: DJANGO_LOG_LEVEL
         value: INFO
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: PAYMENT_CURRENCY
+        value: GHS
+      - key: EXPO_PUSH_ENABLED
+        value: "True"
+      - key: SENTRY_DSN
+        sync: false
+      - key: INTERNAL_HEALTH_TOKEN
+        sync: false
 
   - type: worker
     name: connect-laundry-worker
@@ -65,3 +99,23 @@ services:
           type: web
           name: connect-laundry-backend
           property: envVar:SECRET_KEY
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: PAYMENT_CURRENCY
+        value: GHS
+      - key: EXPO_PUSH_ENABLED
+        value: "True"
+      - key: SENTRY_DSN
+        sync: false
