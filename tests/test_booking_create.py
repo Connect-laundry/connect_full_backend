@@ -11,6 +11,7 @@ from laundries.models.category import Category
 from laundries.models.laundry import Laundry
 from laundries.models.service import LaundryService
 from ordering.models import LaunderableItem, Order
+from payments.models import Payment
 from users.models import User
 
 
@@ -95,6 +96,32 @@ def _booking_payload(laundry, item, service_type):
 @pytest.mark.django_db
 class TestBookingCreate:
     @patch('ordering.views.order_views.PaymentService.create_payment_intent')
+    def test_booking_create_successfully_creates_order(self, mock_payment):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('Success')
+        mock_payment.return_value = {
+            'transaction_id': 'ORD-success-123',
+            'amount': '72.50',
+            'currency': 'GHS',
+            'status': 'PENDING',
+            'payment_method': 'CARD',
+            'authorization_url': 'https://paystack.test/authorize',
+            'access_code': 'access-123',
+        }
+        client = _auth_client(customer)
+
+        response = client.post(
+            reverse('booking-create'),
+            _booking_payload(laundry, item, service_type),
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['id']
+        assert response.data['items'][0]['quantity'] == 2
+        assert response.data['payment_intent']['authorization_url'] == 'https://paystack.test/authorize'
+        assert Order.objects.filter(id=response.data['id'], user=customer).count() == 1
+
+    @patch('ordering.views.order_views.PaymentService.create_payment_intent')
     def test_booking_create_returns_order_when_payment_initialization_raises(self, mock_payment):
         customer, laundry, item, service_type, _ = _build_booking_catalog('PaymentFail')
         mock_payment.side_effect = RuntimeError('Paystack temporarily unavailable')
@@ -121,3 +148,145 @@ class TestBookingCreate:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_invalid_address_before_order_creation(self):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('InvalidAddress')
+        client = _auth_client(customer)
+        payload = _booking_payload(laundry, item, service_type)
+        payload['pickup_address'] = ''
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'pickup_address' in response.data
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_invalid_laundry(self):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('InvalidLaundry')
+        laundry.is_active = False
+        laundry.save(update_fields=['is_active'])
+        client = _auth_client(customer)
+
+        response = client.post(
+            reverse('booking-create'),
+            _booking_payload(laundry, item, service_type),
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'laundry' in response.data
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_invalid_item(self):
+        customer, laundry, _, service_type, _ = _build_booking_catalog('InvalidItem')
+        other_category = Category.objects.create(
+            name='InvalidItem Other Category',
+            type=Category.CategoryType.ITEM_CATEGORY,
+        )
+        other_item = LaunderableItem.objects.create(
+            name='InvalidItem Other Shirt',
+            item_category=other_category,
+        )
+        client = _auth_client(customer)
+        payload = _booking_payload(laundry, other_item, service_type)
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'items' in response.data
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_empty_cart(self):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('EmptyCart')
+        client = _auth_client(customer)
+        payload = _booking_payload(laundry, item, service_type)
+        payload['items'] = []
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'items' in response.data
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_unsupported_schedule_payload_shape(self):
+        customer, laundry, _, _, _ = _build_booking_catalog('ScheduleShape')
+        client = _auth_client(customer)
+        payload = {
+            'laundry': str(laundry.id),
+            'pickup_date': (timezone.now() + timedelta(days=1)).isoformat(),
+            'pickup_address_id': 'saved-address-id',
+            'is_recurring': True,
+            'frequency': 'weekly',
+            'special_instructions': 'Leave with reception.',
+        }
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'non_field_errors' in response.data
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    @patch('ordering.views.order_views.PaymentService.create_payment_intent')
+    def test_booking_create_idempotency_returns_cached_success(self, mock_payment):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('Idempotent')
+        mock_payment.return_value = {
+            'transaction_id': 'ORD-idempotent-123',
+            'amount': '72.50',
+            'currency': 'GHS',
+            'status': 'PENDING',
+            'payment_method': 'CARD',
+            'authorization_url': 'https://paystack.test/authorize',
+            'access_code': 'access-123',
+        }
+        client = _auth_client(customer)
+        payload = _booking_payload(laundry, item, service_type)
+
+        first = client.post(
+            reverse('booking-create'),
+            payload,
+            format='json',
+            HTTP_X_IDEMPOTENCY_KEY='booking-idempotency-key',
+        )
+        second = client.post(
+            reverse('booking-create'),
+            payload,
+            format='json',
+            HTTP_X_IDEMPOTENCY_KEY='booking-idempotency-key',
+        )
+
+        assert first.status_code == status.HTTP_201_CREATED
+        assert second.status_code == status.HTTP_201_CREATED
+        assert second.headers['X-Idempotency-Cache'] == 'HIT'
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 1
+        assert mock_payment.call_count == 1
+
+    def test_booking_create_requires_authentication(self):
+        _, laundry, item, service_type, _ = _build_booking_catalog('Unauthenticated')
+        client = APIClient()
+
+        response = client.post(
+            reverse('booking-create'),
+            _booking_payload(laundry, item, service_type),
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @patch('payments.services.paystack.PaystackService.initialize_transaction')
+    def test_booking_create_payment_provider_failure_is_retryable(self, mock_initialize):
+        customer, laundry, item, service_type, _ = _build_booking_catalog('ProviderFailure')
+        mock_initialize.return_value = {'status': False, 'message': 'Provider unavailable'}
+        client = _auth_client(customer)
+
+        response = client.post(
+            reverse('booking-create'),
+            _booking_payload(laundry, item, service_type),
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['payment_intent']['status'] == 'FAILED'
+        assert response.data['payment_intent']['authorization_url'] is None
+        order = Order.objects.get(id=response.data['id'])
+        assert order.payment_status == Order.PaymentStatus.UNPAID
+        assert not Payment.objects.filter(order=order).exists()
