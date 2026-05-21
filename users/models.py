@@ -13,6 +13,7 @@ from django.contrib.auth.models import (
 from django.utils import timezone
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
+from laundries.utils.validators import validate_file_upload
 
 
 class UserManager(BaseUserManager):
@@ -78,7 +79,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     deactivated_at = models.DateTimeField(null=True, blank=True)
     deactivation_reason = models.TextField(null=True, blank=True)
     
-    avatar = models.ImageField(_('avatar'), upload_to='avatars/', null=True, blank=True)
+    avatar = models.ImageField(
+        _('avatar'),
+        upload_to='avatars/',
+        null=True,
+        blank=True,
+        validators=[validate_file_upload],
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

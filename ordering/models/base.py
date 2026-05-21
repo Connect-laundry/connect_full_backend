@@ -5,6 +5,7 @@ from django.db import models
 from django.conf import settings
 # pyre-ignore[missing-module]
 from django.utils.translation import gettext_lazy as _
+from laundries.utils.validators import validate_file_upload
 
 class LaunderableItem(models.Model):
     """Global catalog of items that can be laundered (e.g., Shirt, Trouser)."""
@@ -18,7 +19,7 @@ class LaunderableItem(models.Model):
         null=True,
         blank=True
     )
-    image = models.ImageField(upload_to='items/', null=True, blank=True)
+    image = models.ImageField(upload_to='items/', null=True, blank=True, validators=[validate_file_upload])
     is_active = models.BooleanField(default=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

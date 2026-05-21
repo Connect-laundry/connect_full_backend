@@ -9,12 +9,23 @@ from django.core.files.storage import default_storage
 # pyre-ignore[missing-module]
 from django.conf import settings
 from drf_spectacular.utils import extend_schema
+from laundries.utils.validators import validate_file_upload
 import uuid
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MediaUploadSerializer(serializers.Serializer):
     file = serializers.ImageField()
     folder = serializers.CharField(required=False, default='uploads')
+
+    def validate_file(self, value):
+        request = self.context.get('request')
+        if request and hasattr(request, 'request_id'):
+            setattr(value, 'request_id', request.request_id)
+        validate_file_upload(value)
+        return value
 
 class MediaUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -25,7 +36,7 @@ class MediaUploadView(views.APIView):
     @extend_schema(request=MediaUploadSerializer)
     def post(self, request):
         # pyre-ignore[6]: Pyre doesn't understand DRF serializer initialization
-        serializer = MediaUploadSerializer(data=request.data)
+        serializer = MediaUploadSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             uploaded_file = serializer.validated_data['file']
             folder = serializer.validated_data['folder']
@@ -52,5 +63,9 @@ class MediaUploadView(views.APIView):
                     "type": uploaded_file.content_type
                 }
             })
-            
+
+        logger.info(
+            "Media upload validation failed",
+            extra={"request": request, "errors": serializer.errors},
+        )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
