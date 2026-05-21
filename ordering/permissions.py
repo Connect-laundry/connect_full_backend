@@ -34,8 +34,8 @@ class CanManageLifecycle(permissions.BasePermission):
         if user.role == 'OWNER' and obj.laundry.owner == user:
             return True
             
-        # Rider can mark picked up and delivered
-        if user.role == 'RIDER':
+        # Driver can mark pickup and delivery milestones
+        if user.role == 'DRIVER':
             return view.action in ['mark_picked_up', 'mark_delivered']
             
         return False

@@ -12,7 +12,7 @@ class PaystackService:
     Handles payment initialization and verification.
     """
     def __init__(self):
-        self.secret_key = settings.PAYSTACK_SECRET_KEY
+        self.secret_key = getattr(settings, 'PAYSTACK_SECRET_KEY', None)
         self.base_url = 'https://api.paystack.co'
         self.headers = {
             'Authorization': f'Bearer {self.secret_key}',
@@ -30,9 +30,12 @@ class PaystackService:
             'amount': int(float(amount) * 100),
             'currency': 'GHS',
             'reference': reference,
-            'callback_url': settings.PAYSTACK_CALLBACK_URL,
             'metadata': metadata or {}
         }
+
+        callback_url = getattr(settings, 'PAYSTACK_CALLBACK_URL', None)
+        if callback_url:
+            payload['callback_url'] = callback_url
         
         try:
             response = requests.post(
@@ -41,7 +44,14 @@ class PaystackService:
                 headers=self.headers, 
                 timeout=15
             )
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(
+                    "Paystack initialization returned non-JSON response",
+                    extra={"status_code": response.status_code, "reference": mask_reference(reference)},
+                )
+                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
             if not response.ok:
                 logger.error(
                     "Paystack initialization failed",
@@ -64,7 +74,14 @@ class PaystackService:
                 headers=self.headers, 
                 timeout=15
             )
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(
+                    "Paystack verification returned non-JSON response",
+                    extra={"status_code": response.status_code, "reference": mask_reference(reference)},
+                )
+                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
             if not response.ok:
                 logger.error(
                     "Paystack verification failed",

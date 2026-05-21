@@ -5,9 +5,9 @@ from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
-from marketplace.models import Notification
+from marketplace.models import Notification, PushDevice
 # pyre-ignore[missing-module]
-from ..serializers import NotificationSerializer
+from ..serializers import NotificationSerializer, PushDeviceSerializer
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -77,3 +77,35 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             "status": "success",
             "message": "All notifications marked as read"
         })
+
+    @decorators.action(detail=False, methods=['post', 'delete'], url_path='push-device')
+    def push_device(self, request):
+        """Register, refresh, or deactivate the user's Expo push token."""
+        if request.method == 'DELETE':
+            token = request.data.get('token')
+            qs = PushDevice.objects.filter(user=request.user, is_active=True)
+            if token:
+                qs = qs.filter(token=token)
+            qs.update(is_active=False)
+            return Response({
+                "status": "success",
+                "message": "Push device unregistered",
+            })
+
+        serializer = PushDeviceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token = serializer.validated_data['token']
+        defaults = {
+            'user': request.user,
+            'device_id': serializer.validated_data.get('device_id', ''),
+            'platform': serializer.validated_data.get('platform', PushDevice.Platform.UNKNOWN),
+            'app_version': serializer.validated_data.get('app_version', ''),
+            'is_active': True,
+        }
+        device, _ = PushDevice.objects.update_or_create(token=token, defaults=defaults)
+        return Response({
+            "status": "success",
+            "message": "Push device registered",
+            "data": PushDeviceSerializer(device).data,
+        }, status=status.HTTP_200_OK)

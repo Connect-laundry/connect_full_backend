@@ -2,6 +2,8 @@
 from rest_framework import serializers
 from decimal import Decimal
 # pyre-ignore[missing-module]
+from django.db import transaction
+# pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
@@ -92,75 +94,66 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        items_data = validated_data.pop('items')
-        coupon_obj = validated_data.pop('coupon_obj', None)
-        # Discard frontend-only fields not stored on Order model
-        validated_data.pop('payment_method', None)
-        validated_data.pop('coupon_code', None)
-        user = self.context['request'].user
-        
-        # Temporary order object to pass to FinanceService
-        temp_order = Order(
-            user=user,
-            laundry=validated_data.get('laundry')
-        )
-        # We need to add items to temp_order for FinanceService
-        # But FinanceService uses DB queries. So we must create the order first then update amount?
-        # Or better: FinanceService should take items_total directly if needed.
-        # Let's create the order with total=0 first, then calculate.
-        
-        order = Order.objects.create(
-            user=user,
-            total_amount=0, # Placeholder
-            coupon=coupon_obj,
-            **validated_data
-        )
-        
-        # pyre-ignore[missing-module]
-        from laundries.models.service import LaundryService
+        with transaction.atomic():
+            items_data = validated_data.pop('items')
+            coupon_obj = validated_data.pop('coupon_obj', None)
+            # Discard frontend-only fields not stored on Order model
+            validated_data.pop('payment_method', None)
+            validated_data.pop('coupon_code', None)
+            user = self.context['request'].user
 
-        for item_data in items_data:
-            item_instance = item_data.get('item')
-            service_type_instance = item_data.get('service_type')
-            quantity = item_data.get('quantity', 1)
-            
-            if not service_type_instance:
-                 raise serializers.ValidationError(f"Service type is required for {item_instance.name}")
-
-            try:
-                l_service = LaundryService.objects.get(
-                    laundry=order.laundry,
-                    item=item_instance,
-                    service_type=service_type_instance
-                )
-                if not l_service.is_available:
-                      raise serializers.ValidationError(f"{item_instance.name} is not available for {service_type_instance.name}.")
-                item_price = l_service.price
-            except LaundryService.DoesNotExist:
-                raise serializers.ValidationError(f"Laundry does not offer {service_type_instance.name} for {item_instance.name}")
-
-            OrderItem.objects.create(
-                order=order, 
-                item=item_instance,
-                service_type=service_type_instance,
-                name=item_instance.name,
-                quantity=quantity,
-                price=item_price
+            order = Order.objects.create(
+                user=user,
+                total_amount=0,
+                coupon=coupon_obj,
+                **validated_data
             )
-            
-        # Now calculate real total
-        # pyre-ignore[missing-module]
-        from ..services.finance_service import FinanceService
-        price_breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon_obj)
-        order.total_amount = Decimal(price_breakdown['total'])
-        order.save()
-        
-        # Record Coupon Usage
-        if coupon_obj:
+
             # pyre-ignore[missing-module]
-            from ..models.coupons import CouponUsage
-            CouponUsage.objects.create(user=user, coupon=coupon_obj, order=order)
-            coupon_obj.current_usage += 1
-            coupon_obj.save()
-            
-        return order
+            from laundries.models.service import LaundryService
+
+            for item_data in items_data:
+                item_instance = item_data.get('item')
+                service_type_instance = item_data.get('service_type')
+                quantity = item_data.get('quantity', 1)
+
+                if not item_instance:
+                    raise serializers.ValidationError("Item is required.")
+                if not service_type_instance:
+                    raise serializers.ValidationError(f"Service type is required for {item_instance.name}")
+
+                try:
+                    l_service = LaundryService.objects.get(
+                        laundry=order.laundry,
+                        item=item_instance,
+                        service_type=service_type_instance
+                    )
+                    if not l_service.is_available:
+                        raise serializers.ValidationError(f"{item_instance.name} is not available for {service_type_instance.name}.")
+                    item_price = l_service.price
+                except LaundryService.DoesNotExist:
+                    raise serializers.ValidationError(f"Laundry does not offer {service_type_instance.name} for {item_instance.name}")
+
+                OrderItem.objects.create(
+                    order=order,
+                    item=item_instance,
+                    service_type=service_type_instance,
+                    name=item_instance.name,
+                    quantity=quantity,
+                    price=item_price
+                )
+
+            # pyre-ignore[missing-module]
+            from ..services.finance_service import FinanceService
+            price_breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon_obj)
+            order.total_amount = Decimal(price_breakdown['total'])
+            order.save(update_fields=['total_amount', 'updated_at'])
+
+            if coupon_obj:
+                # pyre-ignore[missing-module]
+                from ..models.coupons import CouponUsage
+                CouponUsage.objects.create(user=user, coupon=coupon_obj, order=order)
+                coupon_obj.current_usage += 1
+                coupon_obj.save(update_fields=['current_usage'])
+
+            return order

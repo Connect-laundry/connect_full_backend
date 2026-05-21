@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 # pyre-ignore[import]
 import dj_database_url
 
@@ -38,11 +39,15 @@ def _parse_csv_env(name: str, default: str = '') -> list[str]:
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured('SECRET_KEY must be set.')
+if not DEBUG and len(SECRET_KEY) < 50:
+    raise ImproperlyConfigured('Production SECRET_KEY must be at least 50 characters.')
 
 ALLOWED_HOSTS = [host for host in _parse_csv_env('ALLOWED_HOSTS', 'localhost,127.0.0.1') if host != '*']
 if not ALLOWED_HOSTS:
@@ -449,6 +454,7 @@ PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
+EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
 
 # Financial Settings
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%

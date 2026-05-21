@@ -1,7 +1,7 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
-from .models import FAQ, Feedback, FailedTask
+from .models import FAQ, Feedback, FailedTask, PushDevice
 
 
 @admin.register(FAQ)
@@ -31,3 +31,11 @@ class FailedTaskAdmin(ModelAdmin):
     list_filter = ('failed_at', 'task_name')
     search_fields = ('task_name', 'task_id', 'exception')
     readonly_fields = ('task_id', 'task_name', 'exception', 'retry_count', 'failed_at')
+
+
+@admin.register(PushDevice)
+class PushDeviceAdmin(ModelAdmin):
+    list_display = ('user', 'platform', 'is_active', 'last_registered_at')
+    list_filter = ('platform', 'is_active')
+    search_fields = ('user__email', 'device_id', 'token')
+    readonly_fields = ('token', 'device_id', 'platform', 'app_version', 'last_registered_at', 'created_at')

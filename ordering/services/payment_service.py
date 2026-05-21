@@ -28,7 +28,6 @@ class PaymentService:
         """
         from payments.models import Payment
         normalized_method = PaymentService._normalize_payment_method(payment_method)
-        paystack = PaystackService()
         email = order.user.email
         amount = order.total_amount
         # Safe string conversion for UUID
@@ -59,6 +58,7 @@ class PaymentService:
                 "access_code": None,
             }
         
+        paystack = PaystackService()
         metadata = {
             'order_id': str(order.id),
             'user_id': str(order.user_id),

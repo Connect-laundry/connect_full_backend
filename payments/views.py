@@ -148,15 +148,17 @@ class PaymentInitializeView(APIView):
         if response.get('status'):
             # 6. Atomic creation of Payment record
             with transaction.atomic():
-                Payment.objects.create(
-                    user=request.user,
+                Payment.objects.update_or_create(
                     order=order,
-                    amount=order.total_amount,
-                    currency=settings.PAYMENT_CURRENCY,
-                    transaction_reference=reference,
-                    payment_method=payment_method,
-                    status=Payment.Status.PENDING,
-                    paystack_reference=response['data']['access_code']
+                    defaults={
+                        'user': request.user,
+                        'amount': order.total_amount,
+                        'currency': settings.PAYMENT_CURRENCY,
+                        'transaction_reference': reference,
+                        'payment_method': payment_method,
+                        'status': Payment.Status.PENDING,
+                        'paystack_reference': response['data']['access_code'],
+                    },
                 )
             
             return Response({
