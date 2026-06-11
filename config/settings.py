@@ -347,8 +347,6 @@ if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.
             },
         }
     }
-    # Surface ignored cache errors in logs so outages remain observable.
-    DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 else:
     CACHES = {
         'default': {
