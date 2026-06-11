@@ -22,10 +22,10 @@ class Migration(migrations.Migration):
             model_name='coupon',
             name='ordering_co_is_acti_f554d0_idx',
         ),
-        migrations.RemoveIndex(
-            model_name='coupon',
-            name='ordering_co_expires_e55a2f_idx',
-        ),
+        # NOTE: the removal of 'ordering_co_expires_e55a2f_idx' was moved up into
+        # 0003 (before the expires_at -> valid_to rename) so a from-scratch
+        # migrate works on SQLite. Databases that already applied 0004 keep the
+        # same final schema; removing it here avoids a double-drop on fresh DBs.
         migrations.AlterField(
             model_name='coupon',
             name='max_usage',

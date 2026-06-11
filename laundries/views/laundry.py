@@ -134,12 +134,17 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
             lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
             radius_km = 10
+            MAX_RADIUS_KM = 100
             try:
                 radius_param = self.request.query_params.get('radius')
                 if radius_param:
                     radius_km = float(radius_param)
             except (ValueError, TypeError):
                 pass
+            # Clamp to a sane range to avoid expensive/degenerate spatial scans.
+            if radius_km <= 0:
+                radius_km = 10
+            radius_km = min(radius_km, MAX_RADIUS_KM)
 
             if nearby and lat and lng:
                 try:

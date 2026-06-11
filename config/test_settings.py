@@ -111,6 +111,7 @@ REST_FRAMEWORK = {
         'sustained_user': '10000/day',
         'review': '500/hour',
         'feedback': '3/hour',
+        'legal_public': '1000/hour',
         'anon': '1000/day',
         'auth_login_ip': '10/minute',
         'auth_login_account': '5/minute',
@@ -121,6 +122,7 @@ REST_FRAMEWORK = {
         'password_reset_account': '3/hour',
         'reset_password_ip': '3/hour',
         'payment_create': '10/minute',
+        'admin_search': '1000/minute',
     }
 }
 

@@ -1,5 +1,6 @@
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 from marketplace.models import Feedback
 from marketplace.serializers import FeedbackSerializer
 from config.throttling import FeedbackThrottle
@@ -9,6 +10,7 @@ class FeedbackView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [FeedbackThrottle]
     
+    @extend_schema(request=FeedbackSerializer, responses=FeedbackSerializer)
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
         if serializer.is_valid():

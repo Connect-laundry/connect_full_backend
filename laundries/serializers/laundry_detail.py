@@ -10,6 +10,8 @@ from ..models.service import LaundryService
 from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
 from .review import ReviewSerializer
+# pyre-ignore[missing-module]
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
@@ -28,6 +30,7 @@ class LaundryServiceSerializer(serializers.ModelSerializer):
             'price', 'estimated_duration', 'is_available'
         )
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_itemImage(self, obj):
         if not obj.item.image:
             return None
@@ -56,6 +59,7 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
             'minOrder', 'deliveryFee'
         )
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
         if not obj.image:
             return None
@@ -64,16 +68,19 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url
 
+    @extend_schema_field(LaundryServiceSerializer(many=True))
     def get_services(self, obj):
         services = obj.laundry_services.filter(is_available=True).select_related('item', 'service_type')
         # pyre-ignore[missing-module]
         return LaundryServiceSerializer(services, many=True, context=self.context).data
 
+    @extend_schema_field(ReviewSerializer(many=True))
     def get_reviews(self, obj):
         reviews = obj.reviews.all()[:5]
         # pyre-ignore[missing-module]
         return ReviewSerializer(reviews, many=True).data
 
+    @extend_schema_field(OpenApiTypes.BOOL)
     def get_isFavorite(self, obj):
         user = self.context.get('request').user
         if user.is_authenticated:

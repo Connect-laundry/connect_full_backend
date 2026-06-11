@@ -4,7 +4,7 @@ import json
 import logging
 
 from django.conf import settings
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -94,14 +94,18 @@ def paystack_webhook(request):
 
     event_id = event_data.get('data', {}).get('id')
     event_type = event_data.get('event')
-    
-    # 3. Webhook Replay Protection
-    if event_id:
-        if WebhookEvent.objects.filter(event_id=event_id).exists():
-            logger.info("Duplicate webhook event ignored", extra={"event_id": str(event_id)})
-            return HttpResponse(status=200)
-        
-        WebhookEvent.objects.create(event_id=event_id)
+
+    # 3. Webhook Replay Protection.
+    # Prefer Paystack's event id; fall back to a deterministic hash of the
+    # verified payload so replay protection still applies when id is missing.
+    dedup_key = str(event_id) if event_id else 'sha512:' + hash_computed
+    try:
+        _, created = WebhookEvent.objects.get_or_create(event_id=dedup_key)
+    except IntegrityError:
+        created = False
+    if not created:
+        logger.info("Duplicate webhook event ignored", extra={"event_id": dedup_key})
+        return HttpResponse(status=200)
 
     # 4. Only handle charge.success
     if event_type == 'charge.success':

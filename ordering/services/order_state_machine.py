@@ -112,4 +112,20 @@ class OrderStateMachine:
             metadata=metadata
         )
 
+        # Audit the transition (best-effort; never break the state machine).
+        try:
+            from marketplace.services.audit import record_audit
+            from marketplace.models import AuditLog
+            record_audit(
+                action=AuditLog.Action.ORDER_STATUS_CHANGED,
+                actor=user,
+                target_type='Order',
+                target_id=str(order.id),
+                target_repr=order.order_no,
+                metadata={'from': from_status, 'to': to_status, 'reason': reason},
+            )
+        except Exception:  # pragma: no cover - defensive
+            pass
+
         return order, True
+

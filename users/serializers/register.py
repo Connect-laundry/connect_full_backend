@@ -12,7 +12,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         write_only=True, required=True, validators=[validate_password]
     )
     password_confirm = serializers.CharField(write_only=True, required=True)
-    
+
     email = serializers.EmailField(
         required=True,
         validators=[UniqueValidator(queryset=User.objects.all())]
@@ -21,12 +21,19 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=True,
         validators=[UniqueValidator(queryset=User.objects.all())]
     )
+    # Only CUSTOMER and OWNER may self-register. ADMIN/DRIVER are provisioned
+    # internally and must never be assignable from a public request.
+    role = serializers.ChoiceField(
+        choices=[User.Role.CUSTOMER, User.Role.OWNER],
+        required=False,
+        default=User.Role.CUSTOMER,
+    )
 
     class Meta:
         model = User
         fields = (
-            'email', 'phone', 'first_name', 'last_name', 
-            'password', 'password_confirm'
+            'email', 'phone', 'first_name', 'last_name',
+            'password', 'password_confirm', 'role'
         )
 
     def validate(self, attrs):
