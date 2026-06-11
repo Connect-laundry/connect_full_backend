@@ -19,7 +19,7 @@ from django.contrib import admin
 # pyre-ignore[missing-module]
 from django.urls import path, include
 # pyre-ignore[missing-module]
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
@@ -33,6 +33,20 @@ root_target = '/api/schema/swagger-ui/' if settings.DEBUG else '/health/'
 urlpatterns = [
     path('', RedirectView.as_view(url=root_target, permanent=False), name='root'),
     path('health/', health_check, name='health_check'),
+    path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
+    path('manifest.webmanifest', TemplateView.as_view(
+        template_name='pwa/manifest.html',
+        content_type='application/manifest+json'
+    ), name='pwa_manifest'),
+    path('service-worker.js', TemplateView.as_view(
+        template_name='pwa/service-worker.js',
+        content_type='application/javascript',
+        extra_context={'pwa_version': settings.PWA_VERSION}
+    ), name='pwa_service_worker'),
+    path('offline/', TemplateView.as_view(
+        template_name='pwa/offline.html',
+        content_type='text/html'
+    ), name='pwa_offline'),
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('users.urls')),

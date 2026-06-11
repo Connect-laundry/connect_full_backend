@@ -1,0 +1,30 @@
+{% load static %}
+{
+  "name": "Connect Laundry Admin",
+  "short_name": "Connect Admin",
+  "start_url": "/dashboard/",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#9333ea",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "{% static 'pwa/icons/icon-192x192.png' %}",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'pwa/icons/icon-512x512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'pwa/icons/maskable-icon-512x512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

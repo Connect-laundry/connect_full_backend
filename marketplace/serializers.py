@@ -23,8 +23,31 @@ class FeedbackSerializer(serializers.ModelSerializer):
 class PushDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PushDevice
-        fields = ['id', 'token', 'device_id', 'platform', 'app_version', 'is_active', 'last_registered_at']
+        fields = [
+            'id', 'token', 'device_id', 'platform', 'app_version', 
+            'is_active', 'last_registered_at', 'web_endpoint', 
+            'web_p256dh', 'web_auth'
+        ]
         read_only_fields = ['id', 'is_active', 'last_registered_at']
+
+
+class WebPushSubscriptionKeysSerializer(serializers.Serializer):
+    p256dh = serializers.CharField(max_length=255)
+    auth = serializers.CharField(max_length=255)
+
+
+class WebPushSubscriptionSerializer(serializers.Serializer):
+    endpoint = serializers.CharField()
+    keys = WebPushSubscriptionKeysSerializer()
+
+
+class WebPushDeviceDeleteSerializer(serializers.Serializer):
+    endpoint = serializers.CharField(required=False, allow_blank=True)
+
+
+class WebPushDeviceDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
 
 
 class LegalPageSerializer(serializers.ModelSerializer):

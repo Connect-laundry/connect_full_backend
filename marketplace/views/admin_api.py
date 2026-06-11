@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
-from rest_framework import serializers
+from rest_framework import serializers, status
 # pyre-ignore[missing-module]
 from rest_framework.authentication import SessionAuthentication
 # pyre-ignore[missing-module]
@@ -35,9 +35,15 @@ from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_datetime
 
 from config.throttling import AdminSearchThrottle
-from marketplace.models import Notification, AuditLog
+from marketplace.models import Notification, AuditLog, PushDevice
 from marketplace.permissions import IsPlatformAdmin
-from marketplace.serializers import NotificationSerializer
+from marketplace.serializers import (
+    NotificationSerializer,
+    PushDeviceSerializer,
+    WebPushSubscriptionSerializer,
+    WebPushDeviceDeleteSerializer,
+    WebPushDeviceDeleteResponseSerializer,
+)
 from marketplace.services.audit import record_audit
 
 logger = logging.getLogger(__name__)
@@ -462,3 +468,67 @@ class AdminAuditLogView(_AdminBase):
             'message': 'Audit log retrieved.',
             'data': {'results': results, 'total': total, 'limit': limit, 'offset': offset},
         })
+
+
+import hashlib
+
+class AdminNotificationPushDeviceView(_AdminBase):
+    """
+    Endpoint to register or unregister the admin's Web Push subscription.
+    """
+    @extend_schema(
+        request=WebPushSubscriptionSerializer,
+        responses={200: PushDeviceSerializer, 201: PushDeviceSerializer}
+    )
+    def post(self, request):
+        serializer = WebPushSubscriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        endpoint = serializer.validated_data['endpoint']
+        keys = serializer.validated_data['keys']
+        p256dh = keys['p256dh']
+        auth = keys['auth']
+
+        # Generate a unique stable token based on a SHA-256 hash of the endpoint.
+        # This keeps the token under 255 chars and unique.
+        token = hashlib.sha256(endpoint.encode('utf-8')).hexdigest()
+
+        defaults = {
+            'user': request.user,
+            'device_id': 'web-browser',
+            'platform': PushDevice.Platform.WEB,
+            'web_endpoint': endpoint,
+            'web_p256dh': p256dh,
+            'web_auth': auth,
+            'is_active': True,
+        }
+
+        device, created = PushDevice.objects.update_or_create(
+            token=token,
+            defaults=defaults
+        )
+
+        return Response({
+            'status': 'success',
+            'message': 'Web push device registered successfully.',
+            'data': PushDeviceSerializer(device).data
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @extend_schema(
+        request=WebPushDeviceDeleteSerializer,
+        responses={200: WebPushDeviceDeleteResponseSerializer}
+    )
+    def delete(self, request):
+        # Unregister by endpoint
+        endpoint = request.data.get('endpoint')
+        if endpoint:
+            token = hashlib.sha256(endpoint.encode('utf-8')).hexdigest()
+            PushDevice.objects.filter(token=token, user=request.user).update(is_active=False)
+        else:
+            # If no endpoint provided, deactivate all web devices for this user
+            PushDevice.objects.filter(user=request.user, platform=PushDevice.Platform.WEB).update(is_active=False)
+
+        return Response({
+            'status': 'success',
+            'message': 'Web push device deactivated successfully.'
+        }, status=status.HTTP_200_OK)

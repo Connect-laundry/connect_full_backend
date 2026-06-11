@@ -26,15 +26,19 @@ def _columns(schema_editor, table):
         }
 
 
+def _execute_sql(schema_editor, sql_string):
+    schema_editor.execute(sql_string)
+
+
 def rename_total_amount_to_final_price(apps, schema_editor):
     table = 'ordering_order'
     columns = _columns(schema_editor, table)
     if 'total_amount' in columns and 'final_price' not in columns:
         qn = schema_editor.quote_name
-        schema_editor.execute(
-            'ALTER TABLE %s RENAME COLUMN %s TO %s'
-            % (qn(table), qn('total_amount'), qn('final_price'))
+        sql_string = 'ALTER TABLE %s RENAME COLUMN %s TO %s' % (
+            qn(table), qn('total_amount'), qn('final_price')
         )
+        _execute_sql(schema_editor, sql_string)
 
 
 def rename_final_price_to_total_amount(apps, schema_editor):
@@ -42,10 +46,10 @@ def rename_final_price_to_total_amount(apps, schema_editor):
     columns = _columns(schema_editor, table)
     if 'final_price' in columns and 'total_amount' not in columns:
         qn = schema_editor.quote_name
-        schema_editor.execute(
-            'ALTER TABLE %s RENAME COLUMN %s TO %s'
-            % (qn(table), qn('final_price'), qn('total_amount'))
+        sql_string = 'ALTER TABLE %s RENAME COLUMN %s TO %s' % (
+            qn(table), qn('final_price'), qn('total_amount')
         )
+        _execute_sql(schema_editor, sql_string)
 
 
 class Migration(migrations.Migration):

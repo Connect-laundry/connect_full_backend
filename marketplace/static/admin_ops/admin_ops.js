@@ -27,16 +27,11 @@
     var m = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
     return m ? decodeURIComponent(m.pop()) : "";
   }
-  function el(tag, cls, html) {
+  function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (html != null) e.innerHTML = html;
+    if (text != null) e.textContent = text;
     return e;
-  }
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
   }
   function api(path, opts) {
     opts = opts || {};
@@ -52,7 +47,10 @@
     });
   }
   function icon(name) {
-    return '<span class="material-symbols-outlined">' + name + "</span>";
+    var s = document.createElement("span");
+    s.className = "material-symbols-outlined";
+    s.textContent = name;
+    return s;
   }
 
   // ====================================================================== //
@@ -62,13 +60,19 @@
 
   var searchBtn = el("button", "aops-btn");
   searchBtn.type = "button";
-  searchBtn.innerHTML = icon("search") +
-    '<span class="aops-label">Search</span><span class="aops-kbd">⌘K</span>';
+  searchBtn.appendChild(icon("search"));
+  var searchLabel = el("span", "aops-label", "Search");
+  var searchKbd = el("span", "aops-kbd", "⌘K");
+  searchBtn.appendChild(searchLabel);
+  searchBtn.appendChild(searchKbd);
   searchBtn.title = "Search records (Ctrl/Cmd+K)";
 
   var bellBtn = el("button", "aops-btn");
   bellBtn.type = "button";
-  bellBtn.innerHTML = icon("notifications") + '<span class="aops-badge" id="aops-badge">0</span>';
+  bellBtn.appendChild(icon("notifications"));
+  var badgeSpan = el("span", "aops-badge", "0");
+  badgeSpan.id = "aops-badge";
+  bellBtn.appendChild(badgeSpan);
   bellBtn.title = "Notifications";
 
   header.appendChild(searchBtn);
@@ -76,9 +80,10 @@
 
   // ---- notification panel ----
   var panel = el("div"); panel.id = "aops-bell-panel";
-  var panelHead = el("div", "aops-panel-head",
-    "<span>Notifications</span>");
+  var panelHead = el("div", "aops-panel-head");
+  var panelTitle = el("span", null, "Notifications");
   var markAll = el("span", "aops-link", "Mark all read");
+  panelHead.appendChild(panelTitle);
   panelHead.appendChild(markAll);
   var list = el("div", "aops-list"); list.id = "aops-bell-list";
   panel.appendChild(panelHead);
@@ -87,14 +92,31 @@
   // ---- command palette ----
   var overlay = el("div"); overlay.id = "aops-search-overlay";
   var modal = el("div"); modal.id = "aops-search-modal";
-  var inputWrap = el("div", "aops-search-inputwrap", icon("search"));
+  var inputWrap = el("div", "aops-search-inputwrap");
+  inputWrap.appendChild(icon("search"));
   var input = el("input"); input.id = "aops-search-input";
   input.type = "text"; input.placeholder = "Search users, orders, laundries, payments, reviews, coupons…";
   input.setAttribute("autocomplete", "off");
   inputWrap.appendChild(input);
   var results = el("div", "aops-results"); results.id = "aops-results";
-  var foot = el("div", "aops-search-foot",
-    "<span><b>↑↓</b> navigate</span><span><b>↵</b> open</span><span><b>esc</b> close</span>");
+  
+  var foot = el("div", "aops-search-foot");
+  var navSpan = el("span");
+  var navB = el("b", null, "↑↓");
+  navSpan.appendChild(navB);
+  navSpan.appendChild(document.createTextNode(" navigate"));
+  var openSpan = el("span");
+  var openB = el("b", null, "↵");
+  openSpan.appendChild(openB);
+  openSpan.appendChild(document.createTextNode(" open"));
+  var closeSpan = el("span");
+  var closeB = el("b", null, "esc");
+  closeSpan.appendChild(closeB);
+  closeSpan.appendChild(document.createTextNode(" close"));
+  foot.appendChild(navSpan);
+  foot.appendChild(openSpan);
+  foot.appendChild(closeSpan);
+
   modal.appendChild(inputWrap);
   modal.appendChild(results);
   modal.appendChild(foot);
@@ -122,7 +144,7 @@
       .catch(function () {});
   }
   function renderNotifs(items) {
-    list.innerHTML = "";
+    list.textContent = "";
     if (!items || !items.length) {
       list.appendChild(el("div", "aops-empty", "You're all caught up 🎉"));
       return;
@@ -130,16 +152,26 @@
     items.forEach(function (n) {
       var item = el("div", "aops-item" + (n.is_read ? "" : " unread"));
       var pri = (n.priority || "NORMAL");
-      item.innerHTML =
-        '<span class="aops-dot"></span>' +
-        '<div class="aops-item-body">' +
-          '<div class="aops-item-title">' + esc(n.title) + "</div>" +
-          '<div class="aops-item-text">' + esc(n.body) + "</div>" +
-          '<div class="aops-item-meta">' +
-            '<span class="aops-pri aops-pri-' + esc(pri) + '">' + esc(pri) + "</span>" +
-            "<span>" + esc((n.category || "").replace(/_/g, " ")) + "</span>" +
-          "</div>" +
-        "</div>";
+      
+      var dot = el("span", "aops-dot");
+      var bodyDiv = el("div", "aops-item-body");
+      var titleDiv = el("div", "aops-item-title", n.title);
+      var textDiv = el("div", "aops-item-text", n.body);
+      
+      var metaDiv = el("div", "aops-item-meta");
+      var priSpan = el("span", "aops-pri aops-pri-" + pri, pri);
+      var catSpan = el("span", null, (n.category || "").replace(/_/g, " "));
+      
+      metaDiv.appendChild(priSpan);
+      metaDiv.appendChild(catSpan);
+      
+      bodyDiv.appendChild(titleDiv);
+      bodyDiv.appendChild(textDiv);
+      bodyDiv.appendChild(metaDiv);
+      
+      item.appendChild(dot);
+      item.appendChild(bodyDiv);
+
       item.addEventListener("click", function () {
         var go = function () { if (n.action_url) window.location.href = n.action_url; };
         if (!n.is_read) {
@@ -151,13 +183,17 @@
     });
   }
   function loadNotifs() {
-    list.innerHTML = '<div class="aops-empty">Loading…</div>';
+    list.textContent = "";
+    list.appendChild(el("div", "aops-empty", "Loading…"));
     api("/notifications/?limit=15")
       .then(function (j) {
         renderNotifs(j.data && j.data.results);
         setBadge((j.data && j.data.unread) || 0);
       })
-      .catch(function () { list.innerHTML = '<div class="aops-empty">Failed to load.</div>'; });
+      .catch(function () {
+        list.textContent = "";
+        list.appendChild(el("div", "aops-empty", "Failed to load."));
+      });
   }
   function toggleBell() {
     var show = !panel.classList.contains("show");
@@ -187,7 +223,7 @@
   function openSearch() {
     overlay.classList.add("show");
     input.value = "";
-    results.innerHTML = "";
+    results.textContent = "";
     flat = []; activeIdx = -1;
     setTimeout(function () { input.focus(); }, 10);
   }
@@ -206,7 +242,7 @@
   function navigate(url) { if (url) window.location.href = url; }
 
   function renderResults(data) {
-    results.innerHTML = "";
+    results.textContent = "";
     flat = []; activeIdx = -1;
     var total = data.total || 0;
     if (!total) {
@@ -219,11 +255,15 @@
       results.appendChild(el("div", "aops-group-label", g.label + " (" + items.length + ")"));
       items.forEach(function (it) {
         var row = el("div", "aops-res");
-        row.innerHTML = icon(g.icon) +
-          '<div class="aops-res-main">' +
-            '<div class="aops-res-label">' + esc(it.label) + "</div>" +
-            '<div class="aops-res-sub">' + esc(it.sublabel || "") + "</div>" +
-          "</div>";
+        row.appendChild(icon(g.icon));
+        var mainDiv = el("div", "aops-res-main");
+        var labelDiv = el("div", "aops-res-label", it.label);
+        var subDiv = el("div", "aops-res-sub", it.sublabel || "");
+        
+        mainDiv.appendChild(labelDiv);
+        mainDiv.appendChild(subDiv);
+        row.appendChild(mainDiv);
+
         row.addEventListener("click", function () { navigate(it.action_url); });
         var idx = flat.length;
         row.addEventListener("mouseenter", function () { setActive(idx); });
@@ -235,9 +275,10 @@
   }
 
   function runSearch(q) {
-    if (q.trim().length < 2) { results.innerHTML = ""; flat = []; return; }
+    if (q.trim().length < 2) { results.textContent = ""; flat = []; return; }
     var reqId = ++lastReqId;
-    results.innerHTML = '<div class="aops-empty">Searching…</div>';
+    results.textContent = "";
+    results.appendChild(el("div", "aops-empty", "Searching…"));
     api("/search/?q=" + encodeURIComponent(q))
       .then(function (j) {
         if (reqId !== lastReqId) return; // stale response
@@ -245,7 +286,8 @@
       })
       .catch(function () {
         if (reqId !== lastReqId) return;
-        results.innerHTML = '<div class="aops-empty">Search failed.</div>';
+        results.textContent = "";
+        results.appendChild(el("div", "aops-empty", "Search failed."));
       });
   }
 
