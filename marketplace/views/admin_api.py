@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
-from rest_framework import serializers, status
+from rest_framework import serializers
 # pyre-ignore[missing-module]
 from rest_framework.authentication import SessionAuthentication
 # pyre-ignore[missing-module]
