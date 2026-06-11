@@ -7,7 +7,7 @@ urlpatterns = [
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
     path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
     path('manifest.webmanifest', TemplateView.as_view(
-        template_name='pwa/manifest.webmanifest',
+        template_name='pwa/manifest.html',
         content_type='application/manifest+json'
     ), name='pwa_manifest'),
     path('service-worker.js', TemplateView.as_view(

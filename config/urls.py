@@ -35,7 +35,7 @@ urlpatterns = [
     path('health/', health_check, name='health_check'),
     path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
     path('manifest.webmanifest', TemplateView.as_view(
-        template_name='pwa/manifest.webmanifest',
+        template_name='pwa/manifest.html',
         content_type='application/manifest+json'
     ), name='pwa_manifest'),
     path('service-worker.js', TemplateView.as_view(
