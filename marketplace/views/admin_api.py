@@ -37,7 +37,13 @@ from django.utils.dateparse import parse_datetime
 from config.throttling import AdminSearchThrottle
 from marketplace.models import Notification, AuditLog, PushDevice
 from marketplace.permissions import IsPlatformAdmin
-from marketplace.serializers import NotificationSerializer, PushDeviceSerializer, WebPushSubscriptionSerializer
+from marketplace.serializers import (
+    NotificationSerializer,
+    PushDeviceSerializer,
+    WebPushSubscriptionSerializer,
+    WebPushDeviceDeleteSerializer,
+    WebPushDeviceDeleteResponseSerializer,
+)
 from marketplace.services.audit import record_audit
 
 logger = logging.getLogger(__name__)
@@ -509,8 +515,8 @@ class AdminNotificationPushDeviceView(_AdminBase):
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @extend_schema(
-        request=serializers.Serializer,
-        responses={200: serializers.Serializer}
+        request=WebPushDeviceDeleteSerializer,
+        responses={200: WebPushDeviceDeleteResponseSerializer}
     )
     def delete(self, request):
         # Unregister by endpoint
