@@ -1,0 +1,17 @@
+/* Connect Laundry PWA Styles */
+
+.aops-btn-install {
+  background-color: var(--aops-primary-600) !important;
+  color: #ffffff !important;
+  border-color: var(--aops-primary) !important;
+  font-weight: 600;
+  display: none; /* Hidden by default, shown by JS when install prompt is available */
+}
+
+.aops-btn-install:hover {
+  background-color: var(--aops-primary) !important;
+}
+
+.aops-btn-install .material-symbols-outlined {
+  color: #ffffff !important;
+}

@@ -233,6 +233,9 @@ USE_TZ = True
 
 STATIC_URL = os.getenv('STATIC_URL', '/static/')
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
@@ -483,6 +486,14 @@ PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
 
+# Web Push (VAPID) Settings
+WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2')
+WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
+WEBPUSH_VAPID_CLAIMS = {
+    'sub': os.getenv('WEBPUSH_VAPID_SUB', 'mailto:admin@connectlaundry.com')
+}
+PWA_VERSION = os.getenv('PWA_VERSION', '1.0.0')
+
 # Financial Settings
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
 DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
@@ -500,8 +511,14 @@ UNFOLD = {
     "SITE_SYMBOL": "local_laundry_service",
     "DASHBOARD_CALLBACK": "config.admin_dashboard.dashboard_callback",
     # Admin Operations Center UI (global ⌘K search + notification bell).
-    "STYLES": [lambda request: _static("admin_ops/admin_ops.css")],
-    "SCRIPTS": [lambda request: _static("admin_ops/admin_ops.js")],
+    "STYLES": [
+        lambda request: _static("admin_ops/admin_ops.css"),
+        lambda request: _static("pwa/css/pwa.css"),
+    ],
+    "SCRIPTS": [
+        lambda request: _static("admin_ops/admin_ops.js"),
+        lambda request: _static("pwa/js/pwa-init.js"),
+    ],
     "SEARCH": {
         "users.user": ["email", "first_name", "last_name"],
         "ordering.order": ["order_no", "user__email"],
