@@ -132,6 +132,7 @@ class LegalDocumentListView(APIView):
     throttle_classes = [LegalPublicThrottle]
 
     @extend_schema(
+        operation_id='legal_documents_list',
         parameters=[
             OpenApiParameter('q', OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter('document_type', OpenApiTypes.STR, OpenApiParameter.QUERY),
@@ -164,6 +165,7 @@ class LegalDocumentDetailView(APIView):
     throttle_classes = [LegalPublicThrottle]
 
     @extend_schema(
+        operation_id='legal_documents_retrieve',
         parameters=[
             OpenApiParameter('slug', OpenApiTypes.STR, OpenApiParameter.PATH),
             OpenApiParameter('version', OpenApiTypes.STR, OpenApiParameter.QUERY),
@@ -386,3 +388,35 @@ def _current_versions_for_user(user):
         item['needs_reacceptance'] = bool(page.requires_user_reacceptance and not accepted)
         data.append(item)
     return data
+
+
+class SupportLegalDocumentListView(LegalDocumentListView):
+    """Alias of LegalDocumentListView mounted at /api/v1/support/legal/."""
+
+    @extend_schema(
+        operation_id='support_legal_documents_list',
+        parameters=[
+            OpenApiParameter('q', OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter('document_type', OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter('language', OpenApiTypes.STR, OpenApiParameter.QUERY),
+        ],
+        responses=LegalListResponseSerializer,
+    )
+    def get(self, request):
+        return super().get(request)
+
+
+class SupportLegalDocumentDetailView(LegalDocumentDetailView):
+    """Alias of LegalDocumentDetailView mounted at /api/v1/support/legal/<type>/."""
+
+    @extend_schema(
+        operation_id='support_legal_documents_retrieve',
+        parameters=[
+            OpenApiParameter('slug', OpenApiTypes.STR, OpenApiParameter.PATH),
+            OpenApiParameter('version', OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter('language', OpenApiTypes.STR, OpenApiParameter.QUERY),
+        ],
+        responses=LegalDetailResponseSerializer,
+    )
+    def get(self, request, slug=None, type=None):
+        return super().get(request, slug=slug, type=type)
