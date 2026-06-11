@@ -259,9 +259,6 @@ class UserLegalAcceptanceAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    def has_delete_permission(self, request, obj=None):
-        return False
-
 
 @admin.register(FAQ)
 class FAQAdmin(ModelAdmin):
