@@ -39,8 +39,6 @@ class WebPushSubscriptionKeysSerializer(serializers.Serializer):
 class WebPushSubscriptionSerializer(serializers.Serializer):
     endpoint = serializers.CharField()
     keys = WebPushSubscriptionKeysSerializer()
-
-
 class LegalPageSerializer(serializers.ModelSerializer):
     public_url = serializers.CharField(source='public_path', read_only=True)
 
