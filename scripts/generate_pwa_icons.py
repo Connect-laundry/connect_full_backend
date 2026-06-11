@@ -1,6 +1,6 @@
 import os
 import sys
-from PIL import Image, ImageOps
+from PIL import Image
 
 def process_icons(source_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
