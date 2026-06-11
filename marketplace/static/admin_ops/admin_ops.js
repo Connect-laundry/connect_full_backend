@@ -52,6 +52,39 @@
     s.textContent = name;
     return s;
   }
+  function timeAgo(dateStr) {
+    if (!dateStr) return "";
+    var date = new Date(dateStr);
+    var now = new Date();
+    var seconds = Math.floor((now - date) / 1000);
+    if (seconds < 0) seconds = 0; // prevent negative offsets
+
+    var interval = Math.floor(seconds / 31536000);
+    if (interval >= 1) {
+      return interval === 1 ? "1 year ago" : interval + " years ago";
+    }
+    interval = Math.floor(seconds / 2592000);
+    if (interval >= 1) {
+      return interval === 1 ? "1 month ago" : interval + " months ago";
+    }
+    interval = Math.floor(seconds / 604800);
+    if (interval >= 1) {
+      return interval === 1 ? "1 week ago" : interval + " weeks ago";
+    }
+    interval = Math.floor(seconds / 86400);
+    if (interval >= 1) {
+      return interval === 1 ? "1 day ago" : interval + " days ago";
+    }
+    interval = Math.floor(seconds / 3600);
+    if (interval >= 1) {
+      return interval === 1 ? "1 hour ago" : interval + " hours ago";
+    }
+    interval = Math.floor(seconds / 60);
+    if (interval >= 1) {
+      return interval === 1 ? "1 minute ago" : interval + " minutes ago";
+    }
+    return "just now";
+  }
 
   // ====================================================================== //
   // Header widget (search trigger + bell)
@@ -154,22 +187,58 @@
       var pri = (n.priority || "NORMAL");
       
       var dot = el("span", "aops-dot");
+
+      // Icon badge based on type/category
+      var iconContainer = el("div", "aops-icon-container");
+      var sym = "info";
+      var typeClass = "system";
+      
+      if (n.type === "ORDER") {
+        sym = "shopping_bag";
+        typeClass = "order";
+      } else if (n.type === "PROMO") {
+        sym = "local_offer";
+        typeClass = "promo";
+      }
+      
+      var catLower = (n.category || "").toLowerCase();
+      if (catLower.indexOf("owner") !== -1 || catLower.indexOf("user") !== -1) {
+        sym = "person_add";
+        typeClass = "user-add";
+      }
+      
+      iconContainer.classList.add(typeClass);
+      iconContainer.appendChild(icon(sym));
+      
       var bodyDiv = el("div", "aops-item-body");
+      
+      // Title row with relative time
+      var titleRow = el("div", "aops-item-title-row");
       var titleDiv = el("div", "aops-item-title", n.title);
+      
+      var relativeTime = timeAgo(n.created_at);
+      var timeSpan = el("span", "aops-item-time", relativeTime);
+      if (n.created_at) {
+        timeSpan.title = new Date(n.created_at).toLocaleString();
+      }
+      titleRow.appendChild(titleDiv);
+      titleRow.appendChild(timeSpan);
+
       var textDiv = el("div", "aops-item-text", n.body);
       
       var metaDiv = el("div", "aops-item-meta");
       var priSpan = el("span", "aops-pri aops-pri-" + pri, pri);
-      var catSpan = el("span", null, (n.category || "").replace(/_/g, " "));
-      
+      var catSpan = el("span", "aops-category", (n.category || "").replace(/_/g, " "));
+
       metaDiv.appendChild(priSpan);
       metaDiv.appendChild(catSpan);
-      
-      bodyDiv.appendChild(titleDiv);
+
+      bodyDiv.appendChild(titleRow);
       bodyDiv.appendChild(textDiv);
       bodyDiv.appendChild(metaDiv);
       
       item.appendChild(dot);
+      item.appendChild(iconContainer);
       item.appendChild(bodyDiv);
 
       item.addEventListener("click", function () {
