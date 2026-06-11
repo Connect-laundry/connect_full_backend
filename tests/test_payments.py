@@ -300,6 +300,24 @@ class TestPaystackWebhookAbuse:
         assert payment.raw_response['amount'] == 2500
         assert order.payment_status == Order.PaymentStatus.PAID
 
+    def test_webhook_replay_protected_when_event_id_missing(self):
+        # When Paystack omits data.id, replay protection must fall back to a
+        # content hash so a replayed payload is still ignored.
+        _, order, payment = _build_pending_payment('ORD-WEBHOOK-NOID')
+        client = APIClient()
+        payload = _webhook_payload(payment, event_id=None)
+
+        first = _post_signed_webhook(client, payload)
+        second = _post_signed_webhook(client, payload)
+
+        assert first.status_code == status.HTTP_200_OK
+        assert second.status_code == status.HTTP_200_OK
+        # Exactly one dedup record created, keyed by the payload hash.
+        assert WebhookEvent.objects.count() == 1
+        assert WebhookEvent.objects.first().event_id.startswith('sha512:')
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.SUCCESS
+
     def test_webhook_rejects_amount_mismatch(self):
         _, order, payment = _build_pending_payment('ORD-WEBHOOK-AMOUNT')
         client = APIClient()

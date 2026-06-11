@@ -285,6 +285,7 @@ REST_FRAMEWORK = {
         'sustained_user': os.getenv('THROTTLE_SUSTAINED_USER', '1000/day'),
         'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
         'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
+        'legal_public': os.getenv('THROTTLE_LEGAL_PUBLIC', '300/hour'),
         'anon': os.getenv('THROTTLE_ANON', '100/day'),
         'auth_login_ip': os.getenv('THROTTLE_AUTH_LOGIN_IP', '10/minute'),
         'auth_login_account': os.getenv('THROTTLE_AUTH_LOGIN_ACCOUNT', '5/minute'),
@@ -295,6 +296,7 @@ REST_FRAMEWORK = {
         'password_reset_account': os.getenv('THROTTLE_PASSWORD_RESET_ACCOUNT', '3/hour'),
         'reset_password_ip': os.getenv('THROTTLE_RESET_PASSWORD_IP', '10/hour'),
         'payment_create': os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
+        'admin_search': os.getenv('THROTTLE_ADMIN_SEARCH', '120/minute'),
     },
 }
 
@@ -305,21 +307,48 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_PATCH': True,
     'COMPONENT_SPLIT_REQUEST': True,
+    'ENUM_NAME_OVERRIDES': {
+        'LaundryApprovalStatusEnum': [
+            ('PENDING', 'Pending'),
+            ('APPROVED', 'Approved'),
+            ('REJECTED', 'Rejected'),
+            ('SUSPENDED', 'Suspended'),
+        ],
+        'OrderStatusEnum': [
+            ('PENDING', 'Pending'),
+            ('CONFIRMED', 'Confirmed'),
+            ('REJECTED', 'Rejected'),
+            ('PICKED_UP', 'Picked Up'),
+            ('IN_PROCESS', 'In Process'),
+            ('OUT_FOR_DELIVERY', 'Out for Delivery'),
+            ('DELIVERED', 'Delivered'),
+            ('COMPLETED', 'Completed'),
+            ('CANCELLED', 'Cancelled'),
+        ],
+    },
 }
 
 
 
+USE_REDIS_CACHE = os.getenv('USE_REDIS_CACHE', 'False' if DEBUG else 'True') == 'True'
 CACHE_LOCATION = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL', '')
-if CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.startswith('rediss://'):
+if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.startswith('rediss://')):
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': CACHE_LOCATION,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                # Fail open: if Redis is unreachable, cache reads return the
+                # default (None) and writes no-op instead of raising. This keeps
+                # the API (and throttling, which is cache-backed) serving during
+                # a Redis outage rather than returning 500 on every request.
+                'IGNORE_EXCEPTIONS': True,
             },
         }
     }
+    # Surface ignored cache errors in logs so outages remain observable.
+    DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 else:
     CACHES = {
         'default': {
@@ -464,6 +493,7 @@ PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% c
 # Unfold Admin Configuration
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.templatetags.static import static as _static
 
 UNFOLD = {
     "SITE_TITLE": "Connect Laundry Admin",
@@ -471,6 +501,9 @@ UNFOLD = {
     "SITE_URL": "/",
     "SITE_SYMBOL": "local_laundry_service",
     "DASHBOARD_CALLBACK": "config.admin_dashboard.dashboard_callback",
+    # Admin Operations Center UI (global ⌘K search + notification bell).
+    "STYLES": [lambda request: _static("admin_ops/admin_ops.css")],
+    "SCRIPTS": [lambda request: _static("admin_ops/admin_ops.js")],
     "SEARCH": {
         "users.user": ["email", "first_name", "last_name"],
         "ordering.order": ["order_no", "user__email"],

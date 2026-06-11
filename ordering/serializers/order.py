@@ -3,10 +3,13 @@ from rest_framework import serializers
 from decimal import Decimal
 # pyre-ignore[missing-module]
 from django.db import transaction
+from django.db.models import F
 # pyre-ignore[missing-module]
 from ordering.models import LaunderableItem, BookingSlot, Order, OrderItem
 from laundries.models.category import Category
 from laundries.models.laundry import Laundry
+# pyre-ignore[missing-module]
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 
 class LaunderableItemSerializer(serializers.ModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
@@ -52,6 +55,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'special_instructions', 'items', 'created_at'
         ]
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_price_breakdown(self, obj):
         from ..services.finance_service import FinanceService
 
@@ -214,9 +218,20 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
             if coupon_obj:
                 # pyre-ignore[missing-module]
-                from ..models.coupons import CouponUsage
-                CouponUsage.objects.create(user=user, coupon=coupon_obj, order=order)
-                coupon_obj.current_usage += 1
-                coupon_obj.save(update_fields=['current_usage'])
+                from ..models.coupons import Coupon, CouponUsage
+                # Lock the coupon row to enforce usage limits atomically and
+                # prevent concurrent redemptions from exceeding max_usage.
+                locked_coupon = Coupon.objects.select_for_update().get(pk=coupon_obj.pk)
+                if (
+                    locked_coupon.max_usage is not None
+                    and locked_coupon.current_usage >= locked_coupon.max_usage
+                ):
+                    raise serializers.ValidationError(
+                        {"coupon_code": "Coupon has reached its usage limit."}
+                    )
+                CouponUsage.objects.create(user=user, coupon=locked_coupon, order=order)
+                Coupon.objects.filter(pk=locked_coupon.pk).update(
+                    current_usage=F('current_usage') + 1
+                )
 
             return order

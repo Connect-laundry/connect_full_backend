@@ -66,6 +66,7 @@ class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""
     permission_classes = [permissions.IsAuthenticated]
     throttle_scope = 'burst_user'
+    serializer_class = OrderCreateSerializer
 
     @action(detail=False, methods=['get'])
     def schedule(self, request):
@@ -234,6 +235,7 @@ class BookingViewSet(viewsets.GenericViewSet):
 
 class OrderViewSet(viewsets.ModelViewSet):
     """Viewset for managing and tracking orders."""
+    queryset = Order.objects.none()
     permission_classes = [permissions.IsAuthenticated]
     throttle_scope = 'burst_user'
 

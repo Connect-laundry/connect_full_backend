@@ -1,15 +1,31 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from rest_framework import serializers
 from drf_spectacular.utils import extend_schema
 from django.db import connection, connections
 from django.conf import settings
+
+
+class DiagnosisDataSerializer(serializers.Serializer):
+    db_connection = serializers.JSONField()
+    postgis = serializers.BooleanField()
+    debug_mode = serializers.BooleanField()
+    pending_migrations_count = serializers.IntegerField()
+
+
+class DiagnosisResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    diagnosis_version = serializers.CharField()
+    message = serializers.CharField()
+    data = DiagnosisDataSerializer()
+
 
 class DiagnosisView(APIView):
     permission_classes = [IsAdminUser]
     http_method_names = ['get']
     
-    @extend_schema(request=None)
+    @extend_schema(request=None, responses=DiagnosisResponseSerializer)
     def get(self, request):
         if not settings.DEBUG:
             return Response(

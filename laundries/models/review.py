@@ -34,6 +34,12 @@ class Review(models.Model):
         indexes = [
             models.Index(fields=['laundry', 'rating']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['laundry', 'user'],
+                name='unique_review_per_user_per_laundry',
+            ),
+        ]
 
     def __str__(self):
         return f"Review by {self.user.email} for {self.laundry.name}"

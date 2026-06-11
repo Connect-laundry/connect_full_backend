@@ -1,0 +1,37 @@
+.legal-preview {
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  max-width: 820px;
+  padding: 24px;
+}
+
+.legal-preview.empty {
+  color: #6b7280;
+}
+
+.legal-preview h1,
+.legal-preview h2,
+.legal-preview h3 {
+  line-height: 1.25;
+  margin: 1.2em 0 0.5em;
+}
+
+.legal-preview p,
+.legal-preview li,
+.legal-preview td {
+  line-height: 1.65;
+}
+
+.legal-preview table {
+  border-collapse: collapse;
+  margin: 18px 0;
+  width: 100%;
+}
+
+.legal-preview td {
+  border: 1px solid #d1d5db;
+  padding: 10px;
+  vertical-align: top;
+}

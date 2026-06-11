@@ -17,6 +17,7 @@ from .views.dashboard import (
     ServiceStatusUpdateView
 # pyre-ignore[missing-module]
 )
+from .views.my_laundry import MyLaundryView, MyLaundryDetailView
 # pyre-ignore[missing-module]
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
@@ -31,6 +32,8 @@ urlpatterns = [
     path('featured/', LaundryViewSet.as_view({'get': 'featured'}), name='laundry-featured-top'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
+    path('dashboard/my-laundry/', MyLaundryView.as_view(), name='dashboard-my-laundry'),
+    path('dashboard/my-laundry/<uuid:id>/', MyLaundryDetailView.as_view(), name='dashboard-my-laundry-detail'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),
     path('favorites/', FavoriteListView.as_view(), name='favorite_list'),
     path('<uuid:laundry_id>/reviews/', ReviewCreateView.as_view(), name='review_create'),

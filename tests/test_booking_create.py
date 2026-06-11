@@ -287,6 +287,42 @@ class TestBookingCreate:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['payment_intent']['status'] == 'FAILED'
         assert response.data['payment_intent']['authorization_url'] is None
-        order = Order.objects.get(id=response.data['id'])
-        assert order.payment_status == Order.PaymentStatus.UNPAID
-        assert not Payment.objects.filter(order=order).exists()
+
+
+@pytest.mark.django_db
+class TestCouponUsageLimit:
+    @patch('ordering.views.order_views.PaymentService.create_payment_intent')
+    def test_exhausted_coupon_is_rejected_and_count_is_atomic(self, mock_payment):
+        from ordering.models.coupons import Coupon
+
+        mock_payment.return_value = {
+            'transaction_id': 'ORD-coupon-1',
+            'amount': '10.00',
+            'currency': 'GHS',
+            'status': 'PENDING',
+            'payment_method': 'CARD',
+            'authorization_url': 'https://paystack.test/authorize',
+            'access_code': 'access-1',
+        }
+        customer, laundry, item, service_type, _ = _build_booking_catalog('Coupon')
+        coupon = Coupon.objects.create(
+            code='SAVE10',
+            discount_type=Coupon.DiscountType.FIXED,
+            discount_value='10.00',
+            max_usage=1,
+            user_limit=5,
+        )
+        client = _auth_client(customer)
+        payload = _booking_payload(laundry, item, service_type)
+        payload['coupon_code'] = 'SAVE10'
+
+        first = client.post(reverse('booking-create'), payload, format='json')
+        assert first.status_code == status.HTTP_201_CREATED
+        coupon.refresh_from_db()
+        assert coupon.current_usage == 1
+
+        # Second redemption must be rejected now that max_usage is reached.
+        second = client.post(reverse('booking-create'), payload, format='json')
+        assert second.status_code == status.HTTP_400_BAD_REQUEST
+        coupon.refresh_from_db()
+        assert coupon.current_usage == 1

@@ -21,6 +21,8 @@ from ..serializers.dashboard import (
     DashboardEarningsSerializer,
     ServiceStatusUpdateSerializer
 )
+# pyre-ignore[missing-module]
+from drf_spectacular.utils import extend_schema
 
 class IsLaundryOwner(permissions.BasePermission):
     """
@@ -39,6 +41,7 @@ class DashboardOrderViewSet(viewsets.ReadOnlyModelViewSet, DashboardBaseView):
     """
     Paginated list of orders for the laundry owner.
     """
+    queryset = Order.objects.none()
     serializer_class = DashboardOrderSerializer
     permission_classes = [IsLaundryOwner]
 
@@ -54,6 +57,7 @@ class DashboardStatsView(views.APIView, DashboardBaseView):
     """
     permission_classes = [IsLaundryOwner]
 
+    @extend_schema(responses=DashboardStatsSerializer)
     def get(self, request):
         laundry = self.get_laundry(request)
         if not laundry:
@@ -78,6 +82,7 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
     """
     permission_classes = [IsLaundryOwner]
 
+    @extend_schema(responses=DashboardEarningsSerializer)
     def get(self, request):
         laundry = self.get_laundry(request)
         if not laundry:

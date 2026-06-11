@@ -5,21 +5,24 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import display
 from .models import DeviceSession, SessionRefreshToken, User
 from django.utils.html import format_html
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
     ordering = ('email',)
     list_display = (
-        'display_email', 
-        'phone', 
-        'display_role', 
+        'display_email',
+        'phone',
+        'display_role',
         'display_status',
-        'is_staff', 
+        'is_staff',
     )
     list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'is_verified')
     search_fields = ('email', 'phone', 'first_name', 'last_name')
-    
+
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal Info'), {'fields': ('first_name', 'last_name', 'phone', 'role')}),
@@ -28,8 +31,65 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         }),
         (_('Important dates'), {'fields': ('last_login', 'created_at', 'updated_at')}),
     )
-    
+
     readonly_fields = ('created_at', 'updated_at')
+
+    def save_model(self, request, obj, form, change):
+        """Audit role changes made through the admin panel.
+
+        `role == ADMIN` confers broad API authority (manage any order, all
+        logistics, dashboards), so escalations are logged at WARNING level with
+        the acting admin, the target user, and the old -> new role. The log is
+        emitted as a structured JSON record (see config.logging_formatters) and
+        therefore reaches the console/log aggregation and Sentry.
+        """
+        previous_role = None
+        if change and obj.pk:
+            previous_role = (
+                User.objects.filter(pk=obj.pk)
+                .values_list('role', flat=True)
+                .first()
+            )
+
+        super().save_model(request, obj, form, change)
+
+        new_role = obj.role
+        if previous_role == new_role:
+            return
+
+        actor = getattr(request, 'user', None)
+        context = {
+            'event': 'admin_user_role_changed',
+            'actor_id': str(getattr(actor, 'id', '')) or None,
+            'actor_email': getattr(actor, 'email', None),
+            'target_user_id': str(obj.pk),
+            'target_email': obj.email,
+            'previous_role': previous_role,
+            'new_role': new_role,
+        }
+
+        if new_role == User.Role.ADMIN:
+            logger.warning(
+                "User role escalated to ADMIN via admin panel", extra=context
+            )
+        else:
+            logger.info("User role changed via admin panel", extra=context)
+
+        # Persist a queryable audit record (best-effort).
+        try:
+            from marketplace.services.audit import record_audit
+            from marketplace.models import AuditLog
+            record_audit(
+                action=AuditLog.Action.USER_ROLE_CHANGED,
+                request=request,
+                target_type='User',
+                target_id=str(obj.pk),
+                target_repr=obj.email,
+                metadata={'previous_role': previous_role, 'new_role': new_role},
+            )
+        except Exception:  # pragma: no cover - defensive
+            pass
+
 
     @display(description="Email", ordering="email")
     def display_email(self, obj):

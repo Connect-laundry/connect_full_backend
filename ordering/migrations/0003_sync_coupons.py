@@ -12,6 +12,17 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Drop the explicit index on `expires_at` BEFORE renaming the field.
+        # On SQLite the later AddField operations remake the whole table and
+        # rebuild every index from state; if this index still references the
+        # about-to-be-renamed `expires_at` column the remake raises
+        # FieldDoesNotExist. PostgreSQL never remakes the table, which is why
+        # production applied this migration cleanly. (This index is removed in
+        # 0004 on existing databases; doing it here is schema-equivalent.)
+        migrations.RemoveIndex(
+            model_name='coupon',
+            name='ordering_co_expires_e55a2f_idx',
+        ),
         migrations.RenameField(
             model_name='coupon',
             old_name='used_count',

@@ -12,6 +12,8 @@ from ..models.laundry import Laundry
 from ..models.favorite import Favorite
 # pyre-ignore[missing-module]
 from ..models.opening_hours import OpeningHours
+# pyre-ignore[missing-module]
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 
 class LaundryListSerializer(serializers.ModelSerializer):
     location = serializers.CharField(source='address')
@@ -35,12 +37,14 @@ class LaundryListSerializer(serializers.ModelSerializer):
             'minOrder', 'deliveryFee', 'avgPrice', 'latitude', 'longitude'
         )
 
+    @extend_schema_field(OpenApiTypes.FLOAT)
     def get_avgPrice(self, obj):
         avg = getattr(obj, 'avg_price', None)
         if avg is not None:
             return round(float(avg), 2)
         return None
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
         if not obj.image:
             return None
@@ -49,6 +53,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url
 
+    @extend_schema_field(OpenApiTypes.FLOAT)
     def get_distance(self, obj):
         # distance is annotated in the queryset as a Distance object
         dist = getattr(obj, 'distance', None)
@@ -62,6 +67,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
                 return None
         return None
 
+    @extend_schema_field(OpenApiTypes.BOOL)
     def get_isOpen(self, obj):
         cache_key = f"laundry_is_open_{obj.id}"
         is_open = cache.get(cache_key)
@@ -87,12 +93,14 @@ class LaundryListSerializer(serializers.ModelSerializer):
         cache.set(cache_key, is_open_now, 300) # 5 minutes
         return is_open_now
 
+    @extend_schema_field(OpenApiTypes.BOOL)
     def get_isFavorite(self, obj):
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
             return Favorite.objects.filter(user=request.user, laundry=obj).exists()
         return False
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_estimatedDelivery(self, obj):
         # pyre-ignore[missing-module]
         from ..services.delivery_estimator import DeliveryEstimator

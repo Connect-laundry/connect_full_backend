@@ -16,9 +16,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_UPLOAD_FOLDERS = {'uploads', 'avatars'}
+
+
 class MediaUploadSerializer(serializers.Serializer):
     file = serializers.ImageField()
-    folder = serializers.CharField(required=False, default='uploads')
+    folder = serializers.ChoiceField(
+        choices=sorted(ALLOWED_UPLOAD_FOLDERS),
+        required=False,
+        default='uploads',
+    )
 
     def validate_file(self, value):
         request = self.context.get('request')

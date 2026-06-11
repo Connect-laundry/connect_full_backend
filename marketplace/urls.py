@@ -4,7 +4,7 @@ from .views.faq import FAQView
 from .views.feedback import FeedbackView
 from .views.notifications import NotificationViewSet
 from .views.special_offer import SpecialOfferViewSet
-from .views.legal import LegalDocumentView
+from .views.legal import LegalDocumentDetailView, LegalDocumentListView
 
 router = DefaultRouter()
 router.register(r'notifications', NotificationViewSet, basename='notification')
@@ -14,7 +14,7 @@ urlpatterns = [
     path('faqs/', FAQView.as_view(), name='faq-list'),        # Canonical endpoint
     path('help/faq/', FAQView.as_view(), name='faq'),         # Legacy alias (kept for compatibility)
     path('help/feedback/', FeedbackView.as_view(), name='feedback'),
-    path('support/legal/', LegalDocumentView.as_view(), name='legal_list'),
-    path('support/legal/<str:type>/', LegalDocumentView.as_view(), name='legal_detail'),
+    path('legal/', LegalDocumentListView.as_view(), name='support_legal_list'),
+    path('legal/<str:type>/', LegalDocumentDetailView.as_view(), name='support_legal_detail'),
     path('', include(router.urls)),
 ]

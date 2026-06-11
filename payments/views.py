@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from rest_framework import status, permissions
+from rest_framework import serializers, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
@@ -16,6 +16,38 @@ from ordering.models import Order
 from config.throttling import PaymentCreateThrottle
 
 logger = logging.getLogger(__name__)
+
+
+class PaymentInitializeRequestSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField()
+    payment_method = serializers.ChoiceField(
+        choices=['CARD', 'PAYSTACK', 'CASH', 'CASH_ON_DELIVERY', 'BANK_TRANSFER', 'TRANSFER'],
+        required=False,
+        default='CARD',
+    )
+
+
+class PaymentInitializeDataSerializer(serializers.Serializer):
+    authorization_url = serializers.URLField(allow_null=True)
+    reference = serializers.CharField(allow_null=True)
+
+
+class PaymentInitializeResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    data = PaymentInitializeDataSerializer()
+
+
+class PaymentVerifyDataSerializer(serializers.Serializer):
+    payment_status = serializers.CharField()
+    order_status = serializers.CharField()
+    order_payment_status = serializers.CharField()
+
+
+class PaymentVerifyResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    data = PaymentVerifyDataSerializer()
 
 
 def _sanitize_payment_response(payload, reference):
@@ -79,7 +111,10 @@ class PaymentInitializeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentCreateThrottle]
 
-    @extend_schema(request=None)
+    @extend_schema(
+        request=PaymentInitializeRequestSerializer,
+        responses=PaymentInitializeResponseSerializer,
+    )
     def post(self, request):
         order_id = request.data.get('order_id')
         payment_method = _normalize_payment_method(request.data.get('payment_method', 'CARD'))
@@ -183,7 +218,7 @@ class PaymentVerifyView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
-    @extend_schema(request=None)
+    @extend_schema(request=None, responses=PaymentVerifyResponseSerializer)
     def get(self, request, reference):
         paystack = PaystackService()
         verify_data = paystack.verify_transaction(reference)
@@ -192,10 +227,17 @@ class PaymentVerifyView(APIView):
             # 7. Use select_for_update() and transaction.atomic()
             with transaction.atomic():
                 payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
-                
+
                 if not payment:
                     return Response({
-                        "status": "error", 
+                        "status": "error",
+                        "message": "Payment record not found.",
+                        "data": {}
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                if payment.user_id != request.user.id:
+                    return Response({
+                        "status": "error",
                         "message": "Payment record not found.",
                         "data": {}
                     }, status=status.HTTP_404_NOT_FOUND)

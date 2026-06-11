@@ -74,6 +74,24 @@ def health_check(request):
         logger.error(f"Health Check: Celery Broker is DOWN - {str(e)}")
 
     status_code = 200 if health_status['status'] == "healthy" else 503
+
+    # Surface component outages to admins (deduped per component so an ongoing
+    # outage produces a single unread notification, not one per health poll).
+    if health_status['status'] != "healthy":
+        try:
+            from marketplace.services.notification_service import NotificationService
+            for component, state in components_status.items():
+                if state == "down":
+                    NotificationService.system_alert(
+                        title=f"{component.capitalize()} health degraded",
+                        body=f"Health check reports '{component}' is DOWN.",
+                        category='HEALTH_DEGRADED',
+                        action_url='/health/',
+                        dedup_key=f'health_down:{component}',
+                    )
+        except Exception:  # pragma: no cover - never break the health endpoint
+            pass
+
     response_payload = {
         "status": health_status["status"],
     }

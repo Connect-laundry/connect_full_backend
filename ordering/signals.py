@@ -60,13 +60,14 @@ def trigger_order_notifications(sender, order, from_status, to_status, **kwargs)
 
 @receiver(order_status_changed)
 def handle_coupon_usage(sender, order, from_status, to_status, **kwargs):
-    """Increment used_count only after order confirmation."""
-    # pyre-ignore[missing-module]
-    from django.db import transaction
+    """
+    Coupon usage is counted atomically at order creation (see
+    ordering/serializers/order.py, where CouponUsage is recorded and
+    Coupon.current_usage is incremented under a row lock). This handler
+    only logs confirmation; it must not mutate usage counters or it would
+    double-count.
+    """
     if from_status == 'PENDING' and to_status == 'CONFIRMED' and order.coupon:
-        with transaction.atomic():
-            coupon = order.coupon
-            # Real-time increment
-            coupon.used_count += 1
-            coupon.save()
-            logger.info(f"Verified Coupon {coupon.code} used for Order {order.order_no}")
+        logger.info(
+            f"Coupon {order.coupon.code} confirmed for Order {order.order_no}"
+        )

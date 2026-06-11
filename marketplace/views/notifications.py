@@ -8,16 +8,22 @@ from django.utils import timezone
 from marketplace.models import Notification, PushDevice
 # pyre-ignore[missing-module]
 from ..serializers import NotificationSerializer, PushDeviceSerializer
+import logging
+
+logger = logging.getLogger(__name__)
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for checking and managing user notifications.
     """
+    queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Notification.objects.filter(user=self.request.user)
+        queryset = Notification.objects.filter(
+            user=self.request.user, audience=Notification.Audience.USER
+        )
         is_read = self.request.query_params.get('is_read')
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
@@ -103,6 +109,15 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'app_version': serializer.validated_data.get('app_version', ''),
             'is_active': True,
         }
+        existing = PushDevice.objects.filter(token=token).only('user_id').first()
+        if existing and existing.user_id != request.user.id:
+            logger.warning(
+                "Push token reassigned to a different user",
+                extra={
+                    "previous_user_id": str(existing.user_id),
+                    "new_user_id": str(request.user.id),
+                },
+            )
         device, _ = PushDevice.objects.update_or_create(token=token, defaults=defaults)
         return Response({
             "status": "success",

@@ -31,10 +31,10 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'Legal Documents',
             },
         ),
-        migrations.RemoveIndex(
-            model_name='notification',
-            name='marketplace_recipie_40bafb_idx',
-        ),
+        # NOTE: the removal of 'marketplace_recipie_40bafb_idx' was moved up into
+        # 0003 (before the recipient -> user rename) so a from-scratch migrate
+        # works on SQLite. Databases that already applied 0005 keep the same
+        # final schema; removing it here avoids a double-drop on fresh DBs.
         migrations.AlterField(
             model_name='notification',
             name='body',

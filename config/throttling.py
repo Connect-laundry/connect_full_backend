@@ -39,6 +39,10 @@ class FeedbackThrottle(SimpleRateThrottle):
         return self.cache_format % {'scope': self.scope, 'ident': ident}
 
 
+class LegalPublicThrottle(AnonRateThrottle):
+    scope = 'legal_public'
+
+
 class LoginIPThrottle(AnonRateThrottle):
     scope = 'auth_login_ip'
 
@@ -85,3 +89,7 @@ class PaymentCreateThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         ident = request.user.id if request.user.is_authenticated else self.get_ident(request)
         return self.cache_format % {'scope': self.scope, 'ident': ident}
+
+
+class AdminSearchThrottle(UserRateThrottle):
+    scope = 'admin_search'
