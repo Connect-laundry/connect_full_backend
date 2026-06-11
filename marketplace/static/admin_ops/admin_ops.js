@@ -187,7 +187,7 @@
       var pri = (n.priority || "NORMAL");
       
       var dot = el("span", "aops-dot");
-      
+
       // Icon badge based on type/category
       var iconContainer = el("div", "aops-icon-container");
       var sym = "info";
@@ -223,16 +223,16 @@
       }
       titleRow.appendChild(titleDiv);
       titleRow.appendChild(timeSpan);
-      
+
       var textDiv = el("div", "aops-item-text", n.body);
       
       var metaDiv = el("div", "aops-item-meta");
       var priSpan = el("span", "aops-pri aops-pri-" + pri, pri);
       var catSpan = el("span", "aops-category", (n.category || "").replace(/_/g, " "));
-      
+
       metaDiv.appendChild(priSpan);
       metaDiv.appendChild(catSpan);
-      
+
       bodyDiv.appendChild(titleRow);
       bodyDiv.appendChild(textDiv);
       bodyDiv.appendChild(metaDiv);
