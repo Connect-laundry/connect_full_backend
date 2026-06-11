@@ -1,5 +1,6 @@
 import os
 import base64
+# pyrefly: ignore [missing-import]
 from py_vapid import Vapid
 from cryptography.hazmat.primitives import serialization
 
