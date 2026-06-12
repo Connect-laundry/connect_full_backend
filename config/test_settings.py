@@ -12,6 +12,7 @@ os.environ.setdefault('CLERK_PUBLISHABLE_KEY', 'pk_test_ci_clerk_publishable_key
 os.environ.setdefault('CLERK_SECRET_KEY', 'sk_test_ci_clerk_secret_key')
 os.environ.setdefault('CLERK_JWT_ISSUER', 'https://ci-clerk.example.test')
 os.environ.setdefault('CLERK_JWKS_URL', 'https://ci-clerk.example.test/.well-known/jwks.json')
+os.environ.setdefault('CLERK_JWT_AUDIENCE', 'connect-backend')
 os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
 
 from .settings import BASE_DIR
