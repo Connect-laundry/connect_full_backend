@@ -304,13 +304,21 @@ REST_FRAMEWORK = {
 }
 
 CLERK_APPLICATION_ID = os.getenv('CLERK_APPLICATION_ID', 'app_3F19AAMpEcsq16S1tqBqiyTwrUI')
+CLERK_PUBLISHABLE_KEY = os.getenv('CLERK_PUBLISHABLE_KEY', '')
 CLERK_API_BASE_URL = os.getenv('CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
-CLERK_ISSUER = os.getenv('CLERK_ISSUER', '')
+CLERK_ISSUER = os.getenv('CLERK_JWT_ISSUER') or os.getenv('CLERK_ISSUER', '')
 CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL', '')
 CLERK_JWT_AUDIENCE = os.getenv('CLERK_JWT_AUDIENCE', CLERK_APPLICATION_ID)
 CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY', '')
 CLERK_JWT_LEEWAY_SECONDS = int(os.getenv('CLERK_JWT_LEEWAY_SECONDS', 30))
 CLERK_API_TIMEOUT_SECONDS = int(os.getenv('CLERK_API_TIMEOUT_SECONDS', 5))
+CLERK_JWKS_CACHE_SECONDS = int(os.getenv('CLERK_JWKS_CACHE_SECONDS', 300))
+CLERK_WEBHOOK_SECRET = os.getenv('CLERK_WEBHOOK_SECRET', '')
+CLERK_WEBHOOK_TOLERANCE_SECONDS = int(os.getenv('CLERK_WEBHOOK_TOLERANCE_SECONDS', 300))
+CLERK_DASHBOARD_USER_URL_TEMPLATE = os.getenv(
+    'CLERK_DASHBOARD_USER_URL_TEMPLATE',
+    'https://dashboard.clerk.com/users/{clerk_user_id}',
+)
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Connect Laundry API',
@@ -402,7 +410,7 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # Password Reset Settings
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <noreply@connectlaundry.com>')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <odamephilip966@gmail.com>')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000' if DEBUG else 'https://app.connectlaundry.com')
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
@@ -499,7 +507,7 @@ EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True')
 WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2')
 WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
 WEBPUSH_VAPID_CLAIMS = {
-    'sub': os.getenv('WEBPUSH_VAPID_SUB', 'mailto:admin@connectlaundry.com')
+    'sub': os.getenv('WEBPUSH_VAPID_SUB', 'mailto:odamephilip966@gmail.com')
 }
 PWA_VERSION = os.getenv('PWA_VERSION', '1.0.0')
 

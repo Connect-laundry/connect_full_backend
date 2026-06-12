@@ -46,7 +46,7 @@ def generate_and_save():
             new_lines.append(f"WEBPUSH_VAPID_PRIVATE_KEY={priv_b64}\n")
             keys_updated['WEBPUSH_VAPID_PRIVATE_KEY'] = True
         elif stripped.startswith('WEBPUSH_VAPID_SUB='):
-            new_lines.append("WEBPUSH_VAPID_SUB=mailto:admin@connectlaundry.com\n")
+            new_lines.append("WEBPUSH_VAPID_SUB=mailto:odamephilip966@gmail.com\n")
             keys_updated['WEBPUSH_VAPID_SUB'] = True
         else:
             new_lines.append(line)
@@ -57,7 +57,7 @@ def generate_and_save():
     if not keys_updated['WEBPUSH_VAPID_PRIVATE_KEY']:
         new_lines.append(f"WEBPUSH_VAPID_PRIVATE_KEY={priv_b64}\n")
     if not keys_updated['WEBPUSH_VAPID_SUB']:
-        new_lines.append("WEBPUSH_VAPID_SUB=mailto:admin@connectlaundry.com\n")
+        new_lines.append("WEBPUSH_VAPID_SUB=mailto:odamephilip966@gmail.com\n")
         
     with open(env_path, "w") as f:
         f.writelines(new_lines)

@@ -4,6 +4,16 @@ os.environ.setdefault('DISABLE_SENTRY', 'True')
 if not os.environ.get('SECRET_KEY'):
     os.environ['SECRET_KEY'] = 'connect-laundry-ci-test-secret-key-not-used-outside-test-settings'
 
+# Deploy checks run against this settings module in CI, but the production
+# Clerk checker intentionally reads process env values. Provide non-secret
+# placeholders so CI can exercise the check without requiring live credentials.
+os.environ.setdefault('CLERK_APPLICATION_ID', 'app_test_ci_clerk_application')
+os.environ.setdefault('CLERK_PUBLISHABLE_KEY', 'pk_test_ci_clerk_publishable_key')
+os.environ.setdefault('CLERK_SECRET_KEY', 'sk_test_ci_clerk_secret_key')
+os.environ.setdefault('CLERK_JWT_ISSUER', 'https://ci-clerk.example.test')
+os.environ.setdefault('CLERK_JWKS_URL', 'https://ci-clerk.example.test/.well-known/jwks.json')
+os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
+
 from .settings import BASE_DIR
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -186,5 +196,5 @@ PWA_VERSION = '1.0.0'
 WEBPUSH_VAPID_PUBLIC_KEY = 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2'
 WEBPUSH_VAPID_PRIVATE_KEY = ''
 WEBPUSH_VAPID_CLAIMS = {
-    'sub': 'mailto:admin@connectlaundry.com'
+    'sub': 'mailto:odamephilip966@gmail.com'
 }

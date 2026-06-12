@@ -24,8 +24,6 @@ from rest_framework import serializers, status
 # pyre-ignore[missing-module]
 from rest_framework.authentication import SessionAuthentication
 # pyre-ignore[missing-module]
-from rest_framework_simplejwt.authentication import JWTAuthentication
-# pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 # pyre-ignore[missing-module]
 from django.db.models import Q
@@ -45,6 +43,7 @@ from marketplace.serializers import (
     WebPushDeviceDeleteResponseSerializer,
 )
 from marketplace.services.audit import record_audit
+from users.auth.authentication import ClerkOrJWTAuthentication
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +144,7 @@ class AdminAuditLogResponseSerializer(serializers.Serializer):
 
 
 class _AdminBase(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
 
