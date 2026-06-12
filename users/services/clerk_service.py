@@ -118,7 +118,7 @@ def fetch_clerk_profile(payload: dict[str, Any]) -> ClerkProfile:
         response = requests.get(
             url,
             headers={'Authorization': f'Bearer {secret_key}'},
-            timeout=getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5),
+            timeout=5,
         )
         response.raise_for_status()
         data = response.json()
