@@ -18,9 +18,6 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.views import APIView
-# pyre-ignore[missing-module]
-from rest_framework_simplejwt.authentication import JWTAuthentication
-# pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 
 from config.throttling import LegalPublicThrottle
@@ -43,6 +40,7 @@ from marketplace.services.legal import (
     record_legal_acceptance,
     rollback_legal_page,
 )
+from users.auth.authentication import ClerkOrJWTAuthentication
 
 
 class LegalListResponseSerializer(serializers.Serializer):
@@ -186,7 +184,7 @@ class LegalDocumentDetailView(APIView):
 
 
 class LegalCurrentVersionsView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(responses=LegalCurrentVersionsResponseSerializer)
@@ -196,7 +194,7 @@ class LegalCurrentVersionsView(APIView):
 
 
 class LegalUserAcceptanceView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(responses=LegalAcceptanceListResponseSerializer)
@@ -237,7 +235,7 @@ class LegalUserAcceptanceView(APIView):
 
 
 class LegalAdminCreateView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
     @extend_schema(request=LegalPageSerializer, responses=LegalAdminResponseSerializer)
@@ -259,7 +257,7 @@ class LegalAdminCreateView(APIView):
 
 
 class LegalAdminDetailView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
     @extend_schema(request=LegalPageSerializer, responses=LegalAdminUpdateResponseSerializer)
@@ -292,7 +290,7 @@ class LegalAdminDetailView(APIView):
 
 
 class LegalAdminPublishView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
     @extend_schema(request=LegalPublishArchiveSerializer, responses=LegalAdminResponseSerializer)
@@ -305,7 +303,7 @@ class LegalAdminPublishView(APIView):
 
 
 class LegalAdminArchiveView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
     @extend_schema(request=LegalPublishArchiveSerializer, responses=LegalAdminResponseSerializer)
@@ -318,7 +316,7 @@ class LegalAdminArchiveView(APIView):
 
 
 class LegalAdminRollbackView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    authentication_classes = [ClerkOrJWTAuthentication, SessionAuthentication]
     permission_classes = [IsPlatformAdmin]
 
     @extend_schema(request=LegalPublishArchiveSerializer, responses=LegalAdminResponseSerializer)

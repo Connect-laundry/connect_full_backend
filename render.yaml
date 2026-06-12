@@ -72,6 +72,20 @@ services:
         sync: false
       - key: INTERNAL_HEALTH_TOKEN
         sync: false
+      - key: CLERK_APPLICATION_ID
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_JWT_ISSUER
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: CLERK_JWT_AUDIENCE
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
 
   - type: worker
     name: connect-laundry-worker
@@ -118,4 +132,18 @@ services:
       - key: EXPO_PUSH_ENABLED
         value: "True"
       - key: SENTRY_DSN
+        sync: false
+      - key: CLERK_APPLICATION_ID
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_JWT_ISSUER
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: CLERK_JWT_AUDIENCE
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
         sync: false

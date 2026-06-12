@@ -186,5 +186,5 @@ PWA_VERSION = '1.0.0'
 WEBPUSH_VAPID_PUBLIC_KEY = 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2'
 WEBPUSH_VAPID_PRIVATE_KEY = ''
 WEBPUSH_VAPID_CLAIMS = {
-    'sub': 'mailto:admin@connectlaundry.com'
+    'sub': 'mailto:odamephilip966@gmail.com'
 }

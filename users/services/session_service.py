@@ -4,13 +4,13 @@ from datetime import datetime, timezone as dt_timezone
 from typing import Any
 import uuid
 
-import jwt
-from django.db import transaction
-from django.utils import timezone
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
-from rest_framework_simplejwt.settings import api_settings
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+import jwt # type: ignore
+from django.db import transaction # type: ignore
+from django.utils import timezone # type: ignore
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied # type: ignore
+from rest_framework_simplejwt.settings import api_settings # type: ignore
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken # type: ignore
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError # type: ignore
 
 from users.models import DeviceSession, SessionRefreshToken, User
 
@@ -144,7 +144,7 @@ def revoke_session(session: DeviceSession, *, reason: str):
         session.revoked_reason = reason
         session.save(update_fields=['revoked_at', 'revoked_reason'])
 
-    refresh_tokens = session.refresh_tokens.filter(revoked_at__isnull=True)
+    refresh_tokens = session.refresh_tokens.filter(revoked_at__isnull=True) # type: ignore
     for refresh_token in refresh_tokens:
         refresh_token.revoked_at = now
         refresh_token.revoked_reason = reason

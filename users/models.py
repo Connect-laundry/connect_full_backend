@@ -61,9 +61,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
     clerk_user_id = models.CharField(max_length=255, unique=True, null=True, blank=True, db_index=True)
+    auth_provider = models.CharField(max_length=64, blank=True)
+    primary_email = models.EmailField(blank=True, default='')
     social_provider = models.CharField(max_length=32, blank=True)
     social_profile_image_url = models.URLField(blank=True)
+    email_verified = models.BooleanField(default=False)
+    phone_verified = models.BooleanField(default=False)
     last_social_login_at = models.DateTimeField(null=True, blank=True)
+    last_clerk_sign_in_at = models.DateTimeField(null=True, blank=True)
+    last_clerk_sync = models.DateTimeField(null=True, blank=True, db_index=True)
+    clerk_created_at = models.DateTimeField(null=True, blank=True)
+    clerk_updated_at = models.DateTimeField(null=True, blank=True)
+    clerk_status = models.CharField(max_length=32, blank=True, default='unsynced', db_index=True)
+    clerk_metadata = models.JSONField(default=dict, blank=True)
     
     # Referrals
     referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True, db_index=True)
@@ -109,6 +119,35 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+
+class ClerkWebhookEvent(models.Model):
+    class Status(models.TextChoices):
+        PROCESSING = 'PROCESSING', _('Processing')
+        PROCESSED = 'PROCESSED', _('Processed')
+        FAILED = 'FAILED', _('Failed')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    svix_id = models.CharField(max_length=255, unique=True, db_index=True)
+    event_type = models.CharField(max_length=64, db_index=True)
+    clerk_user_id = models.CharField(max_length=255, blank=True, db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROCESSING, db_index=True)
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    error = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = _('Clerk Webhook Event')
+        verbose_name_plural = _('Clerk Webhook Events')
+        ordering = ['-received_at']
+        indexes = [
+            models.Index(fields=['event_type', 'received_at']),
+            models.Index(fields=['clerk_user_id', 'received_at']),
+            models.Index(fields=['status', 'received_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} {self.svix_id}"
 
 class Address(models.Model):
     """User-defined delivery addresses."""
