@@ -419,6 +419,7 @@ class TestClerkSocialAuth:
             'CLERK_PUBLISHABLE_KEY',
             'CLERK_SECRET_KEY',
             'CLERK_JWKS_URL',
+            'CLERK_JWT_AUDIENCE',
             'CLERK_WEBHOOK_SECRET',
             'CLERK_JWT_ISSUER',
             'CLERK_ISSUER',
@@ -428,5 +429,6 @@ class TestClerkSocialAuth:
         errors = clerk_production_configuration_check(None)
 
         error_messages = [error.msg for error in errors]
+        assert any('CLERK_JWT_AUDIENCE' in message for message in error_messages)
         assert any('CLERK_WEBHOOK_SECRET' in message for message in error_messages)
         assert any('CLERK_JWT_ISSUER or CLERK_ISSUER' in message for message in error_messages)

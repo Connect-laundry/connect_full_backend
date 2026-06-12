@@ -303,7 +303,7 @@ REST_FRAMEWORK = {
     },
 }
 
-CLERK_APPLICATION_ID = os.getenv('CLERK_APPLICATION_ID', 'app_3F19AAMpEcsq16S1tqBqiyTwrUI')
+CLERK_APPLICATION_ID = os.getenv('CLERK_APPLICATION_ID', '')
 CLERK_PUBLISHABLE_KEY = os.getenv('CLERK_PUBLISHABLE_KEY', '')
 CLERK_API_BASE_URL = os.getenv('CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
 CLERK_ISSUER = os.getenv('CLERK_JWT_ISSUER') or os.getenv('CLERK_ISSUER', '')

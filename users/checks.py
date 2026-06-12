@@ -14,6 +14,7 @@ def clerk_production_configuration_check(app_configs, **kwargs):
         'CLERK_PUBLISHABLE_KEY': os.getenv('CLERK_PUBLISHABLE_KEY'),
         'CLERK_SECRET_KEY': os.getenv('CLERK_SECRET_KEY'),
         'CLERK_JWKS_URL': os.getenv('CLERK_JWKS_URL'),
+        'CLERK_JWT_AUDIENCE': os.getenv('CLERK_JWT_AUDIENCE'),
         'CLERK_WEBHOOK_SECRET': os.getenv('CLERK_WEBHOOK_SECRET'),
     }
     issuer = os.getenv('CLERK_JWT_ISSUER') or os.getenv('CLERK_ISSUER')
