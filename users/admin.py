@@ -18,21 +18,30 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         'phone',
         'display_role',
         'display_status',
+        'social_provider',
         'is_staff',
     )
-    list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'is_verified')
-    search_fields = ('email', 'phone', 'first_name', 'last_name')
+    list_filter = ('role', 'social_provider', 'is_staff', 'is_superuser', 'is_active', 'is_verified')
+    search_fields = ('email', 'phone', 'first_name', 'last_name', 'clerk_user_id')
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal Info'), {'fields': ('first_name', 'last_name', 'phone', 'role')}),
+        (_('Social Identity'), {'fields': ('clerk_user_id', 'social_provider', 'social_profile_image_url', 'last_social_login_at')}),
         (_('Permissions'), {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'is_verified', 'groups', 'user_permissions'),
         }),
         (_('Important dates'), {'fields': ('last_login', 'created_at', 'updated_at')}),
     )
 
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = (
+        'clerk_user_id',
+        'social_provider',
+        'social_profile_image_url',
+        'last_social_login_at',
+        'created_at',
+        'updated_at',
+    )
 
     def save_model(self, request, obj, form, change):
         """Audit role changes made through the admin panel.
