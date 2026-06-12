@@ -57,9 +57,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(_('email address'), unique=True, db_index=True)
-    phone = models.CharField(_('phone number'), max_length=20, unique=True, db_index=True)
+    phone = models.CharField(_('phone number'), max_length=20, unique=True, null=True, blank=True, db_index=True)
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
+    clerk_user_id = models.CharField(max_length=255, unique=True, null=True, blank=True, db_index=True)
+    social_provider = models.CharField(max_length=32, blank=True)
+    social_profile_image_url = models.URLField(blank=True)
+    last_social_login_at = models.DateTimeField(null=True, blank=True)
     
     # Referrals
     referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True, db_index=True)

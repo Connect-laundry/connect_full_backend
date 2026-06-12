@@ -19,6 +19,7 @@ from .views.media import MediaUploadView
 from .views.password_reset import ForgotPasswordView, ResetPasswordView
 # pyre-ignore[missing-module]
 from .views.sessions import ActiveSessionsView, RevokeCurrentSessionView, RevokeAllSessionsView
+from .views.social import SessionView, SocialLoginView
 # pyre-ignore[missing-module]
 from rest_framework.routers import DefaultRouter
 
@@ -29,6 +30,8 @@ urlpatterns = [
     # Auth
     path('auth/register/', RegisterView.as_view(), name='auth_register'),
     path('auth/login/', LoginView.as_view(), name='auth_login'),
+    path('auth/social-login/', SocialLoginView.as_view(), name='auth_social_login'),
+    path('auth/session/', SessionView.as_view(), name='auth_session'),
     path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('auth/logout-all/', RevokeAllSessionsView.as_view(), name='auth_logout_all'),

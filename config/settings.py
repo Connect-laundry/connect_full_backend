@@ -265,7 +265,7 @@ if not DEBUG or os.getenv('CLOUDINARY_CLOUD_NAME'):
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.auth.authentication.ClerkOrJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -302,6 +302,15 @@ REST_FRAMEWORK = {
         'admin_search': os.getenv('THROTTLE_ADMIN_SEARCH', '120/minute'),
     },
 }
+
+CLERK_APPLICATION_ID = os.getenv('CLERK_APPLICATION_ID', 'app_3F19AAMpEcsq16S1tqBqiyTwrUI')
+CLERK_API_BASE_URL = os.getenv('CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
+CLERK_ISSUER = os.getenv('CLERK_ISSUER', '')
+CLERK_JWKS_URL = os.getenv('CLERK_JWKS_URL', '')
+CLERK_JWT_AUDIENCE = os.getenv('CLERK_JWT_AUDIENCE', CLERK_APPLICATION_ID)
+CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY', '')
+CLERK_JWT_LEEWAY_SECONDS = int(os.getenv('CLERK_JWT_LEEWAY_SECONDS', 30))
+CLERK_API_TIMEOUT_SECONDS = int(os.getenv('CLERK_API_TIMEOUT_SECONDS', 5))
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Connect Laundry API',

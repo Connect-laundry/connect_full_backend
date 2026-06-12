@@ -23,6 +23,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'phone', 'first_name', 'last_name', 
-            'fullName', 'avatar', 'role', 'addresses', 'created_at'
+            'fullName', 'avatar', 'role', 'addresses', 'social_provider',
+            'social_profile_image_url', 'last_social_login_at', 'created_at'
         ]
-        read_only_fields = ['id', 'email', 'role', 'created_at']
+        read_only_fields = [
+            'id', 'email', 'role', 'social_provider', 'social_profile_image_url',
+            'last_social_login_at', 'created_at',
+        ]
