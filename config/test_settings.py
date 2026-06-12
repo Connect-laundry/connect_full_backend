@@ -4,6 +4,16 @@ os.environ.setdefault('DISABLE_SENTRY', 'True')
 if not os.environ.get('SECRET_KEY'):
     os.environ['SECRET_KEY'] = 'connect-laundry-ci-test-secret-key-not-used-outside-test-settings'
 
+# Deploy checks run against this settings module in CI, but the production
+# Clerk checker intentionally reads process env values. Provide non-secret
+# placeholders so CI can exercise the check without requiring live credentials.
+os.environ.setdefault('CLERK_APPLICATION_ID', 'app_test_ci_clerk_application')
+os.environ.setdefault('CLERK_PUBLISHABLE_KEY', 'pk_test_ci_clerk_publishable_key')
+os.environ.setdefault('CLERK_SECRET_KEY', 'sk_test_ci_clerk_secret_key')
+os.environ.setdefault('CLERK_JWT_ISSUER', 'https://ci-clerk.example.test')
+os.environ.setdefault('CLERK_JWKS_URL', 'https://ci-clerk.example.test/.well-known/jwks.json')
+os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
+
 from .settings import BASE_DIR
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
