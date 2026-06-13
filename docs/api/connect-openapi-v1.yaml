@@ -8438,7 +8438,7 @@ components:
           maxLength: 150
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
@@ -8469,21 +8469,13 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
       - password
       - password_confirm
       - phone
-    RegisterRoleEnum:
-      enum:
-      - CUSTOMER
-      - OWNER
-      type: string
-      description: |-
-        * `CUSTOMER` - CUSTOMER
-        * `OWNER` - OWNER
     ResetPassword:
       type: object
       properties:
@@ -8558,6 +8550,14 @@ components:
           type: string
       required:
       - detail
+    Role9e8Enum:
+      enum:
+      - CUSTOMER
+      - OWNER
+      type: string
+      description: |-
+        * `CUSTOMER` - CUSTOMER
+        * `OWNER` - OWNER
     RoundingStrategyEnum:
       enum:
       - NONE
@@ -8617,7 +8617,7 @@ components:
       properties:
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
     SocialLoginRequest:
       type: object
@@ -8628,18 +8628,10 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - clerk_token
-    SocialLoginRoleEnum:
-      enum:
-      - OWNER
-      - CUSTOMER
-      type: string
-      description: |-
-        * `OWNER` - OWNER
-        * `CUSTOMER` - CUSTOMER
     SocialSession:
       type: object
       properties:
