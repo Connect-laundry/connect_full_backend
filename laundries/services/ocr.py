@@ -50,11 +50,9 @@ def get_ocr_provider() -> BaseOCRProvider:
     provider so the workflow degrades gracefully.
     """
     provider = (getattr(settings, 'OCR_PROVIDER', '') or '').lower()
-    
     if provider == 'google_vision':
         from .google_vision_service import GoogleVisionOCRProvider
         return GoogleVisionOCRProvider()
-        
     if provider in ('', 'none', 'null'):
         return NullOCRProvider()
     logger.warning("Unknown OCR_PROVIDER %r; falling back to NullOCRProvider.", provider)

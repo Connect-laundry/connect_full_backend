@@ -114,7 +114,6 @@ class PriceImportViewSet(viewsets.GenericViewSet):
                 {'status': 'error', 'message': 'Invalid or corrupted image file.', 'data': None},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
         payload = PriceImportCreateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         image = payload.validated_data['source_image']
@@ -128,7 +127,6 @@ class PriceImportViewSet(viewsets.GenericViewSet):
                 provider=provider.name,
                 status=PriceListImportJob.Status.PROCESSING,
             )
-
         import sys
         if 'test' in sys.argv or 'pytest' in sys.modules:
             from laundries.tasks import process_ocr_import

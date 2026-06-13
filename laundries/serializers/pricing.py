@@ -83,4 +83,3 @@ class DeliveryZonePricingSerializer(serializers.ModelSerializer):
         model = DeliveryZonePricing
         fields = ['id', 'min_distance_km', 'max_distance_km', 'delivery_fee', 'pickup_fee']
         read_only_fields = ['id']
-

@@ -155,4 +155,3 @@ class OwnerAuditLogAdmin(ModelAdmin):
     list_filter = ('action', 'timestamp')
     search_fields = ('laundry__name', 'actor__email', 'action')
     readonly_fields = ('id', 'timestamp')
-

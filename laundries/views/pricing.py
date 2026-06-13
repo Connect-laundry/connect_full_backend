@@ -42,7 +42,6 @@ from ..serializers.pricing import (
 )
 from ..permissions import IsOwnerRole
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -343,7 +342,6 @@ class PricingItemViewSet(viewsets.ModelViewSet):
             }
         })
 
-
 class WeightPricingView(APIView):
     """GET / PUT / PATCH the owner's weight-based tariff (singleton per laundry)."""
 
@@ -630,4 +628,3 @@ class DeliveryZonePricingViewSet(viewsets.ModelViewSet):
             details={'zone_id': str(instance.id)}
         )
         return super().destroy(request, *args, **kwargs)
-

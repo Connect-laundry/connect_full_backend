@@ -34,6 +34,7 @@ class HolidayOverrideSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         is_closed = attrs.get('is_closed', False)
+        is_overnight = attrs.get('is_overnight', False)
         opening = attrs.get('opening_time')
         closing = attrs.get('closing_time')
 
@@ -46,9 +47,18 @@ class HolidayOverrideSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'opening_time and closing_time are required for open days.'
             )
-        if opening >= closing:
+
+        if is_overnight:
+            # Spans midnight (e.g. 20:00 -> 02:00): closing is on the next day, so
+            # closing < opening is expected. Only equal times are nonsensical.
+            if opening == closing:
+                raise serializers.ValidationError(
+                    'Overnight hours cannot have equal opening and closing times.'
+                )
+        elif opening >= closing:
             raise serializers.ValidationError(
-                'opening_time must be earlier than closing_time.'
+                'opening_time must be earlier than closing_time '
+                '(set is_overnight=true for hours that cross midnight).'
             )
         return attrs
 
