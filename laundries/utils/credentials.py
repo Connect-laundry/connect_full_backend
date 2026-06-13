@@ -42,7 +42,7 @@ def initialize_google_credentials():
         # Check if Google's standard variable is already pointing to a valid file
         existing_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         if existing_path and os.path.isfile(existing_path):
-            logger.info("GOOGLE_APPLICATION_CREDENTIALS is already set to an existing path: %s", existing_path)
+            logger.info("GCP env path is already set to an existing file: %s", existing_path)
             return existing_path
 
         logger.info(
@@ -92,7 +92,7 @@ def initialize_google_credentials():
                 try:
                     os.remove(_temp_credentials_path)
                 except Exception as ex:
-                    logger.debug("Failed to remove temporary credentials file: %s", ex)
+                    logger.debug("Failed to remove temporary GCP auth file: %s", ex)
                 _temp_credentials_path = None
 
         atexit.register(cleanup_temp_credentials)
@@ -101,5 +101,5 @@ def initialize_google_credentials():
 
     except Exception as e:
         # Avoid logging credentials or full trace to keep secrets safe
-        logger.error("Error writing temporary credentials file: %s", str(e))
+        logger.error("Error writing temporary GCP auth file: %s", str(e))
         return None
