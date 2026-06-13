@@ -626,3 +626,11 @@ UNFOLD = {
         ],
     },
 }
+
+# Initialize Google Application Credentials from environment JSON if present
+try:
+    from laundries.utils.credentials import initialize_google_credentials
+    initialize_google_credentials()
+except Exception:
+    pass
+

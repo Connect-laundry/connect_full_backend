@@ -8,7 +8,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from ..models.laundry import Laundry
-from ..models.opening_hours import OpeningHours
+from ..models.opening_hours import OpeningHours, HolidayOverride
 from ..services.geocoding import GeocodingError, GeocodingUnavailable, get_geocoder
 from .location import LocationInputSerializer
 
@@ -24,6 +24,43 @@ OPERATING_HOURS_DEFAULT_TEMPLATE = [
     {'day': 6, 'opening_time': '09:00', 'closing_time': '15:00', 'is_closed': False},
     {'day': 7, 'opening_time': '00:00', 'closing_time': '00:00', 'is_closed': True},
 ]
+
+
+class HolidayOverrideSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HolidayOverride
+        fields = ['id', 'date', 'opening_time', 'closing_time', 'is_closed', 'note']
+        read_only_fields = ['id']
+
+    def validate(self, attrs):
+        is_closed = attrs.get('is_closed', False)
+        is_overnight = attrs.get('is_overnight', False)
+        opening = attrs.get('opening_time')
+        closing = attrs.get('closing_time')
+
+        if is_closed:
+            attrs['opening_time'] = None
+            attrs['closing_time'] = None
+            return attrs
+
+        if not opening or not closing:
+            raise serializers.ValidationError(
+                'opening_time and closing_time are required for open days.'
+            )
+
+        if is_overnight:
+            # Spans midnight (e.g. 20:00 -> 02:00): closing is on the next day, so
+            # closing < opening is expected. Only equal times are nonsensical.
+            if opening == closing:
+                raise serializers.ValidationError(
+                    'Overnight hours cannot have equal opening and closing times.'
+                )
+        elif opening >= closing:
+            raise serializers.ValidationError(
+                'opening_time must be earlier than closing_time '
+                '(set is_overnight=true for hours that cross midnight).'
+            )
+        return attrs
 
 
 class OpeningHoursSerializer(serializers.ModelSerializer):
@@ -89,6 +126,8 @@ class MyLaundrySerializer(serializers.ModelSerializer):
             'pricing_model', 'estimated_delivery_hours', 'delivery_fee', 'pickup_fee',
             'min_order', 'is_featured', 'is_active', 'status', 'approved_at',
             'rejected_at', 'operating_hours', 'created_at', 'updated_at',
+            'vacation_mode', 'service_radius_km', 'service_area_polygon',
+            'is_eco_friendly', 'ironing_available',
         ]
         # latitude/longitude are backend-derived (set via ``location``), so they
         # are read-only output. The rest are platform/approval-controlled.
@@ -241,3 +280,18 @@ class MyLaundrySerializer(serializers.ModelSerializer):
                 },
             )
         laundry.opening_hours.exclude(day__in=provided_days).delete()
+
+
+class CopyTodayHoursSerializer(serializers.Serializer):
+    day = serializers.IntegerField(
+        min_value=1,
+        max_value=7,
+        help_text="Day index (1=Monday ... 7=Sunday) from which to copy operating hours."
+    )
+
+
+class ToggleVacationModeResponseSerializer(serializers.Serializer):
+    vacation_mode = serializers.BooleanField(
+        help_text="The updated vacation mode status of the laundry."
+    )
+

@@ -26,7 +26,7 @@ from ..serializers.my_laundry import (
     MyLaundrySerializer,
 )
 from ..services.geocoding import GeocodingError, GeocodingUnavailable, get_geocoder
-from .my_laundry import IsOwnerRole
+from ..permissions import IsOwnerRole
 from .pricing import get_owner_laundry
 
 logger = logging.getLogger(__name__)

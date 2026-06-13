@@ -101,6 +101,32 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if laundry and (laundry.status != 'APPROVED' or not laundry.is_active):
             raise serializers.ValidationError({"laundry": "This laundry is not approved or is currently inactive."})
 
+        if laundry and getattr(laundry, 'vacation_mode', False):
+            raise serializers.ValidationError({"laundry": "This laundry is temporarily on vacation and not accepting orders."})
+
+        # Geofencing validation check
+        pickup_lat = data.get('pickup_lat')
+        pickup_lng = data.get('pickup_lng')
+        if laundry and pickup_lat is not None and pickup_lng is not None:
+            lat = float(pickup_lat)
+            lng = float(pickup_lng)
+            
+            from ..services.finance_service import FinanceService
+            if getattr(laundry, 'service_area_polygon', None):
+                inside = FinanceService.is_point_in_polygon(lng, lat, laundry.service_area_polygon)
+                if not inside:
+                    raise serializers.ValidationError({
+                        "pickup_address": "Your pickup address is outside this laundry's service coverage area."
+                    })
+            elif laundry.latitude is not None and laundry.longitude is not None:
+                distance = FinanceService.calculate_haversine_distance(
+                    lat, lng, laundry.latitude, laundry.longitude
+                )
+                if distance is not None and distance > float(laundry.service_radius_km):
+                    raise serializers.ValidationError({
+                        "pickup_address": f"Your pickup address is {distance:.2f} km away, which is outside the laundry's {laundry.service_radius_km} km service radius."
+                    })
+
         pickup_address = str(data.get('pickup_address') or '').strip()
         delivery_address = str(data.get('delivery_address') or '').strip()
         if not pickup_address:

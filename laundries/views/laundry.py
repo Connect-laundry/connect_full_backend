@@ -44,7 +44,7 @@ from ..models.service import LaundryService
 from ..models.favorite import Favorite
 from ..models.category import Category
 # pyre-ignore[missing-module]
-from ..models.opening_hours import OpeningHours
+from ..models.opening_hours import OpeningHours, HolidayOverride
 # pyre-ignore[missing-module]
 from ..models.review import Review
 # pyre-ignore[missing-module]
@@ -57,6 +57,54 @@ from ..pagination import StandardResultsSetPagination
 from ..filters import LaundryFilter
 
 logger = logging.getLogger(__name__)
+
+def get_open_laundry_ids(now=None):
+    if now is None:
+        now = timezone.now()
+    current_date = now.date()
+    current_time = now.time()
+    current_day = current_date.isoweekday() # 1 = Monday, 7 = Sunday
+    
+    # 1. Holiday overrides for today
+    holiday_overrides = HolidayOverride.objects.filter(date=current_date)
+    closed_by_override = set(holiday_overrides.filter(is_closed=True).values_list('laundry_id', flat=True))
+    
+    open_by_override = set()
+    for override in holiday_overrides.filter(is_closed=False):
+        if override.opening_time and override.closing_time:
+            if override.opening_time <= current_time <= override.closing_time:
+                open_by_override.add(override.laundry_id)
+                
+    # 2. Regular opening hours for laundries that don't have overrides today
+    overridden_laundry_ids = set(holiday_overrides.values_list('laundry_id', flat=True))
+    
+    matching_hours = OpeningHours.objects.filter(
+        day=current_day,
+        is_closed=False
+    ).exclude(laundry_id__in=overridden_laundry_ids)
+    
+    regular_open_ids = set()
+    for oh in matching_hours:
+        if oh.is_overnight:
+            if current_time >= oh.opening_time or current_time <= oh.closing_time:
+                regular_open_ids.add(oh.laundry_id)
+        else:
+            if oh.opening_time <= current_time <= oh.closing_time:
+                regular_open_ids.add(oh.laundry_id)
+                
+    # Check if we are in the morning hours of an overnight schedule from yesterday
+    yesterday_day = 7 if current_day == 1 else current_day - 1
+    yesterday_overnight_hours = OpeningHours.objects.filter(
+        day=yesterday_day,
+        is_closed=False,
+        is_overnight=True
+    ).exclude(laundry_id__in=overridden_laundry_ids)
+    
+    for oh in yesterday_overnight_hours:
+        if current_time <= oh.closing_time:
+            regular_open_ids.add(oh.laundry_id)
+
+    return (regular_open_ids | open_by_override) - closed_by_override
 
 class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -183,6 +231,50 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         if self.request.query_params.get('is_featured') == 'true' or self.request.query_params.get('featured') == 'true':
             queryset = queryset.filter(is_featured=True)
                 
+        # 7. Rating Range Filter
+        min_rating = self.request.query_params.get('min_rating') or self.request.query_params.get('rating_gte')
+        if min_rating:
+            try:
+                queryset = queryset.filter(rating__gte=float(min_rating))
+            except (ValueError, TypeError):
+                pass
+
+        # 8. Price Range Filter
+        min_price = self.request.query_params.get('min_price')
+        if min_price:
+            try:
+                queryset = queryset.filter(laundry_services__price__gte=float(min_price))
+            except (ValueError, TypeError):
+                pass
+        max_price = self.request.query_params.get('max_price')
+        if max_price:
+            try:
+                queryset = queryset.filter(laundry_services__price__lte=float(max_price))
+            except (ValueError, TypeError):
+                pass
+
+        # 9. Same-day Service Filter (estimated delivery <= 24 hours)
+        same_day_service = self.request.query_params.get('same_day_service') or self.request.query_params.get('same_day')
+        if same_day_service == 'true':
+            queryset = queryset.filter(estimated_delivery_hours__lte=24)
+
+        # 10. Eco-friendly Filter
+        is_eco_friendly = self.request.query_params.get('is_eco_friendly') or self.request.query_params.get('eco_friendly')
+        if is_eco_friendly == 'true':
+            queryset = queryset.filter(is_eco_friendly=True)
+
+        # 11. Ironing Available Filter
+        ironing_available = self.request.query_params.get('ironing_available')
+        if ironing_available == 'true':
+            queryset = queryset.filter(ironing_available=True)
+
+        # 12. Open Now Filter
+        open_now = self.request.query_params.get('open_now')
+        if open_now == 'true':
+            open_ids = get_open_laundry_ids()
+            queryset = queryset.filter(id__in=open_ids).exclude(vacation_mode=True)
+
+        queryset = queryset.distinct()
         return queryset
 
     def get_serializer_class(self):

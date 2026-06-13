@@ -23,6 +23,15 @@ class DashboardStatsSerializer(serializers.Serializer):
     picked_up_count = serializers.IntegerField()
     delivered_count = serializers.IntegerField()
     total_orders = serializers.IntegerField()
+    revenue_today = serializers.DecimalField(max_digits=12, decimal_places=2)
+    revenue_this_month = serializers.DecimalField(max_digits=12, decimal_places=2)
+    average_order_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+    most_popular_items = serializers.JSONField()
+    repeat_customer_rate = serializers.FloatField()
+    pending_pickups = serializers.IntegerField()
+    pending_deliveries = serializers.IntegerField()
+    average_turnaround_time = serializers.FloatField()
+
 
 class DashboardEarningsSerializer(serializers.Serializer):
     today = serializers.DecimalField(max_digits=12, decimal_places=2)

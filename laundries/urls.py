@@ -17,8 +17,14 @@ from .views.dashboard import (
     ServiceStatusUpdateView
 # pyre-ignore[missing-module]
 )
-from .views.my_laundry import MyLaundryView, MyLaundryDetailView
-from .views.pricing import PricingItemViewSet, WeightPricingView
+from .views.my_laundry import (
+    MyLaundryView, MyLaundryDetailView,
+    CopyMondayHoursView, CopyTodayHoursView, ToggleVacationModeView, HolidayOverrideViewSet
+)
+from .views.pricing import (
+    PricingItemViewSet, WeightPricingView,
+    PricingCatalogVersionViewSet, ScheduledPriceChangeViewSet, DeliveryZonePricingViewSet
+)
 from .views.price_import import PriceImportViewSet
 from .views.location import GeocodeView, HoursTemplateView
 # pyre-ignore[missing-module]
@@ -28,6 +34,10 @@ router = DefaultRouter()
 router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
 router.register(r'dashboard/pricing-items', PricingItemViewSet, basename='dashboard-pricing-items')
 router.register(r'dashboard/price-imports', PriceImportViewSet, basename='dashboard-price-imports')
+router.register(r'dashboard/pricing-versions', PricingCatalogVersionViewSet, basename='dashboard-pricing-versions')
+router.register(r'dashboard/scheduled-prices', ScheduledPriceChangeViewSet, basename='dashboard-scheduled-prices')
+router.register(r'dashboard/delivery-zones', DeliveryZonePricingViewSet, basename='dashboard-delivery-zones')
+router.register(r'dashboard/holiday-overrides', HolidayOverrideViewSet, basename='dashboard-holiday-overrides')
 router.register(r'laundries', LaundryViewSet, basename='laundry')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
@@ -40,6 +50,9 @@ urlpatterns = [
     path('dashboard/my-laundry/', MyLaundryView.as_view(), name='dashboard-my-laundry'),
     path('dashboard/my-laundry/<uuid:id>/', MyLaundryDetailView.as_view(), name='dashboard-my-laundry-detail'),
     path('dashboard/my-laundry/hours/template/', HoursTemplateView.as_view(), name='dashboard-hours-template'),
+    path('dashboard/my-laundry/hours/copy-monday/', CopyMondayHoursView.as_view(), name='dashboard-copy-monday-hours'),
+    path('dashboard/my-laundry/hours/copy-today/', CopyTodayHoursView.as_view(), name='dashboard-copy-today-hours'),
+    path('dashboard/my-laundry/toggle-vacation/', ToggleVacationModeView.as_view(), name='dashboard-toggle-vacation'),
     path('dashboard/weight-pricing/', WeightPricingView.as_view(), name='dashboard-weight-pricing'),
     path('dashboard/geocode/', GeocodeView.as_view(), name='dashboard-geocode'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),

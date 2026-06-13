@@ -121,3 +121,67 @@ class LaundryWeightPricing(models.Model):
 
     def __str__(self):
         return f"{self.base_price_per_kg}/kg ({self.laundry_id})"
+
+
+class PricingCatalogVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='pricing_versions',
+    )
+    version_number = models.PositiveIntegerField()
+    items_data = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('Pricing Catalog Version')
+        verbose_name_plural = _('Pricing Catalog Versions')
+        ordering = ['-version_number']
+        unique_together = ('laundry', 'version_number')
+
+    def __str__(self):
+        return f"Version {self.version_number} - {self.laundry.name}"
+
+
+class ScheduledPriceChange(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='scheduled_price_changes',
+    )
+    effective_at = models.DateTimeField(db_index=True)
+    pricing_data = models.JSONField()
+    is_applied = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('Scheduled Price Change')
+        verbose_name_plural = _('Scheduled Price Changes')
+        ordering = ['effective_at']
+
+    def __str__(self):
+        return f"Scheduled change for {self.laundry.name} on {self.effective_at} (Applied: {self.is_applied})"
+
+
+class DeliveryZonePricing(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='delivery_zones',
+    )
+    min_distance_km = models.DecimalField(max_digits=5, decimal_places=2)
+    max_distance_km = models.DecimalField(max_digits=5, decimal_places=2)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    pickup_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    class Meta:
+        verbose_name = _('Delivery Zone Pricing')
+        verbose_name_plural = _('Delivery Zone Pricing')
+        ordering = ['min_distance_km']
+
+    def __str__(self):
+        return f"{self.min_distance_km}-{self.max_distance_km} km: Fee GHS {self.delivery_fee} ({self.laundry.name})"
+

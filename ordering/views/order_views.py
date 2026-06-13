@@ -108,8 +108,16 @@ class BookingViewSet(viewsets.GenericViewSet):
         from laundries.models.service import LaundryService
         from ordering.models import OrderItem
         
+        pickup_lat = request.data.get('pickup_lat')
+        pickup_lng = request.data.get('pickup_lng')
+        
         # Build a transient order-like object in memory for preview pricing only.
-        temp_order = Order(laundry=laundry, user=request.user)
+        temp_order = Order(
+            laundry=laundry,
+            user=request.user,
+            pickup_lat=Decimal(str(pickup_lat)) if pickup_lat is not None else None,
+            pickup_lng=Decimal(str(pickup_lng)) if pickup_lng is not None else None
+        )
         
         total_items_price = Decimal('0.00')
         errors = []
@@ -132,9 +140,26 @@ class BookingViewSet(viewsets.GenericViewSet):
                 
         # 3. Use FinanceService for the full breakdown
         from ..services.finance_service import FinanceService
-        # Note: Since calculate_price_breakdown usually queries the DB for items, 
-        # we might need a modified version or just calculate manually here if it's simpler for preview.
         
+        outside_service_area = False
+        warning_msg = None
+        if pickup_lat is not None and pickup_lng is not None:
+            lat = float(pickup_lat)
+            lng = float(pickup_lng)
+            
+            if getattr(laundry, 'service_area_polygon', None):
+                inside = FinanceService.is_point_in_polygon(lng, lat, laundry.service_area_polygon)
+                if not inside:
+                    outside_service_area = True
+                    warning_msg = "Coordinates are outside the laundry's custom service polygon."
+            elif laundry.latitude is not None and laundry.longitude is not None:
+                distance = FinanceService.calculate_haversine_distance(
+                    lat, lng, laundry.latitude, laundry.longitude
+                )
+                if distance is not None and distance > float(laundry.service_radius_km):
+                    outside_service_area = True
+                    warning_msg = f"Coordinates are {distance:.2f} km away, which is outside the laundry's {laundry.service_radius_km} km service radius."
+
         # Let's do a semi-manual calculation for the preview to avoid DB order creation
         delivery_fee = FinanceService.calculate_delivery_fee(temp_order)
         pickup_fee = FinanceService.calculate_pickup_fee(temp_order)
@@ -155,7 +180,9 @@ class BookingViewSet(viewsets.GenericViewSet):
                 "tax": str(tax.quantize(Decimal('0.01'))),
                 "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
                 "total": str(total.quantize(Decimal('0.01'))),
-                "currency": "GHS"
+                "currency": "GHS",
+                "outside_service_area": outside_service_area,
+                "warning": warning_msg
             }
         })
 

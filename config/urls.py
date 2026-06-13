@@ -28,7 +28,8 @@ from config.views.health import health_check
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from marketplace.views.legal import PublicLegalHtmlView
 
-root_target = '/api/schema/swagger-ui/' if settings.DEBUG else '/health/'
+root_target = '/api/docs/' if settings.DEBUG else '/health/'
+
 
 urlpatterns = [
     path('', RedirectView.as_view(url=root_target, permanent=False), name='root'),
@@ -58,14 +59,10 @@ urlpatterns = [
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += [
-        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-        path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-        path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    ]
 
 # Serve media files in development
 from django.conf.urls.static import static

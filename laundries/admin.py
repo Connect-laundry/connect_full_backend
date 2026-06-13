@@ -1,11 +1,14 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display
-from .models.laundry import Laundry
-from .models.opening_hours import OpeningHours
+from .models.laundry import Laundry, OwnerAuditLog
+from .models.opening_hours import OpeningHours, HolidayOverride
 from .models.review import Review
 from .models.favorite import Favorite
-from .models.pricing import LaundryPricingItem, LaundryWeightPricing
+from .models.pricing import (
+    LaundryPricingItem, LaundryWeightPricing, PricingCatalogVersion,
+    ScheduledPriceChange, DeliveryZonePricing
+)
 from .models.price_import import PriceListImportJob, PriceListDraftItem
 from django.utils.html import format_html
 
@@ -118,3 +121,37 @@ class PriceListImportJobAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('laundry')
+
+
+@admin.register(PricingCatalogVersion)
+class PricingCatalogVersionAdmin(ModelAdmin):
+    list_display = ('laundry', 'version_number', 'created_at')
+    search_fields = ('laundry__name',)
+    readonly_fields = ('id', 'created_at')
+
+@admin.register(ScheduledPriceChange)
+class ScheduledPriceChangeAdmin(ModelAdmin):
+    list_display = ('laundry', 'effective_at', 'is_applied', 'created_at')
+    list_filter = ('is_applied', 'effective_at')
+    search_fields = ('laundry__name',)
+    readonly_fields = ('id', 'created_at')
+
+@admin.register(HolidayOverride)
+class HolidayOverrideAdmin(ModelAdmin):
+    list_display = ('laundry', 'date', 'opening_time', 'closing_time', 'is_closed', 'note')
+    list_filter = ('is_closed', 'date')
+    search_fields = ('laundry__name', 'note')
+    readonly_fields = ('id',)
+
+@admin.register(DeliveryZonePricing)
+class DeliveryZonePricingAdmin(ModelAdmin):
+    list_display = ('laundry', 'min_distance_km', 'max_distance_km', 'delivery_fee', 'pickup_fee')
+    search_fields = ('laundry__name',)
+    readonly_fields = ('id',)
+
+@admin.register(OwnerAuditLog)
+class OwnerAuditLogAdmin(ModelAdmin):
+    list_display = ('laundry', 'actor', 'action', 'timestamp')
+    list_filter = ('action', 'timestamp')
+    search_fields = ('laundry__name', 'actor__email', 'action')
+    readonly_fields = ('id', 'timestamp')
