@@ -21,6 +21,8 @@ class OpeningHours(models.Model):
     opening_time = models.TimeField()
     closing_time = models.TimeField()
     is_closed = models.BooleanField(default=False)
+    # When true, closing_time is on the FOLLOWING day (e.g. 20:00 -> 02:00).
+    is_overnight = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('laundry', 'day')

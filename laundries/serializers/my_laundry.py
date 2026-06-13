@@ -9,6 +9,21 @@ from rest_framework import serializers
 
 from ..models.laundry import Laundry
 from ..models.opening_hours import OpeningHours
+from ..services.geocoding import GeocodingError, GeocodingUnavailable, get_geocoder
+from .location import LocationInputSerializer
+
+
+# Industry-standard default operating hours used to seed the onboarding form.
+# Day numbers follow OpeningHours.Weekday (1=Mon ... 7=Sun).
+OPERATING_HOURS_DEFAULT_TEMPLATE = [
+    {'day': 1, 'opening_time': '08:00', 'closing_time': '18:00', 'is_closed': False},
+    {'day': 2, 'opening_time': '08:00', 'closing_time': '18:00', 'is_closed': False},
+    {'day': 3, 'opening_time': '08:00', 'closing_time': '18:00', 'is_closed': False},
+    {'day': 4, 'opening_time': '08:00', 'closing_time': '18:00', 'is_closed': False},
+    {'day': 5, 'opening_time': '08:00', 'closing_time': '18:00', 'is_closed': False},
+    {'day': 6, 'opening_time': '09:00', 'closing_time': '15:00', 'is_closed': False},
+    {'day': 7, 'opening_time': '00:00', 'closing_time': '00:00', 'is_closed': True},
+]
 
 
 class OpeningHoursSerializer(serializers.ModelSerializer):
@@ -16,13 +31,15 @@ class OpeningHoursSerializer(serializers.ModelSerializer):
     # Times are optional so a closed day can be sent without hours.
     opening_time = serializers.TimeField(required=False, allow_null=True)
     closing_time = serializers.TimeField(required=False, allow_null=True)
+    is_overnight = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = OpeningHours
-        fields = ['id', 'day', 'opening_time', 'closing_time', 'is_closed']
+        fields = ['id', 'day', 'opening_time', 'closing_time', 'is_closed', 'is_overnight']
 
     def validate(self, attrs):
         is_closed = attrs.get('is_closed', False)
+        is_overnight = attrs.get('is_overnight', False)
         opening = attrs.get('opening_time')
         closing = attrs.get('closing_time')
 
@@ -30,15 +47,25 @@ class OpeningHoursSerializer(serializers.ModelSerializer):
             # Model fields are NOT NULL; default closed days to midnight.
             attrs['opening_time'] = opening or time(0, 0)
             attrs['closing_time'] = closing or time(0, 0)
+            attrs['is_overnight'] = False
             return attrs
 
         if not opening or not closing:
             raise serializers.ValidationError(
                 'opening_time and closing_time are required for open days.'
             )
-        if opening >= closing:
+
+        if is_overnight:
+            # Spans midnight (e.g. 20:00 -> 02:00): closing is on the next day, so
+            # closing < opening is expected. Only equal times are nonsensical.
+            if opening == closing:
+                raise serializers.ValidationError(
+                    'Overnight hours cannot have equal opening and closing times.'
+                )
+        elif opening >= closing:
             raise serializers.ValidationError(
-                'opening_time must be earlier than closing_time.'
+                'opening_time must be earlier than closing_time '
+                '(set is_overnight=true for hours that cross midnight).'
             )
         return attrs
 
@@ -50,20 +77,24 @@ class MyLaundrySerializer(serializers.ModelSerializer):
     operating_hours = OpeningHoursSerializer(
         many=True, source='opening_hours', required=False
     )
+    # Write-only structured location input. ``latitude``/``longitude`` are
+    # exposed read-only (derived) — owners set location through this field.
+    location = LocationInputSerializer(write_only=True, required=False)
 
     class Meta:
         model = Laundry
         fields = [
             'id', 'name', 'description', 'image', 'imageUrl', 'address', 'city',
-            'latitude', 'longitude', 'phone_number', 'price_range',
-            'estimated_delivery_hours', 'delivery_fee', 'pickup_fee', 'min_order',
-            'is_featured', 'is_active', 'status', 'approved_at', 'rejected_at',
-            'operating_hours', 'created_at', 'updated_at',
+            'latitude', 'longitude', 'location', 'phone_number', 'price_range',
+            'pricing_model', 'estimated_delivery_hours', 'delivery_fee', 'pickup_fee',
+            'min_order', 'is_featured', 'is_active', 'status', 'approved_at',
+            'rejected_at', 'operating_hours', 'created_at', 'updated_at',
         ]
-        # These are controlled by the platform/approval flow, never the owner.
+        # latitude/longitude are backend-derived (set via ``location``), so they
+        # are read-only output. The rest are platform/approval-controlled.
         read_only_fields = [
-            'id', 'imageUrl', 'is_featured', 'is_active', 'status',
-            'approved_at', 'rejected_at', 'created_at', 'updated_at',
+            'id', 'imageUrl', 'latitude', 'longitude', 'is_featured', 'is_active',
+            'status', 'approved_at', 'rejected_at', 'created_at', 'updated_at',
         ]
 
     def get_imageUrl(self, obj) -> str | None:
@@ -79,15 +110,23 @@ class MyLaundrySerializer(serializers.ModelSerializer):
         return url
 
     def to_internal_value(self, data):
-        """Accept ``operating_hours`` as a JSON string (multipart/form-data)."""
-        data = self._coerce_operating_hours(data)
+        """Normalise multipart inputs and fold legacy coordinate fields.
+
+        * ``operating_hours`` may arrive as a JSON string (multipart/form-data).
+        * ``location`` may arrive as a JSON string (multipart/form-data).
+        * Legacy clients send top-level ``latitude``/``longitude``; fold them into
+          the structured ``location`` input for backward compatibility.
+        """
+        data = self._coerce_json_field(data, 'operating_hours', expect_list=True)
+        data = self._coerce_json_field(data, 'location', expect_list=False)
+        data = self._fold_legacy_coordinates(data)
         return super().to_internal_value(data)
 
     @staticmethod
-    def _coerce_operating_hours(data):
+    def _coerce_json_field(data, key, *, expect_list):
         if not hasattr(data, 'get'):
             return data
-        raw = data.get('operating_hours')
+        raw = data.get(key)
         if not isinstance(raw, str):
             return data
         stripped = raw.strip()
@@ -96,14 +135,69 @@ class MyLaundrySerializer(serializers.ModelSerializer):
         try:
             parsed = json.loads(stripped)
         except (ValueError, TypeError):
-            raise serializers.ValidationError(
-                {'operating_hours': ['Must be a valid JSON array.']}
-            )
-        # Build a plain mutable dict so the nested list survives validation
-        # regardless of whether the source was a QueryDict or a plain dict.
-        coerced = {key: data.get(key) for key in data.keys()}
-        coerced['operating_hours'] = parsed
+            label = 'a valid JSON array.' if expect_list else 'valid JSON.'
+            raise serializers.ValidationError({key: [f'Must be {label}']})
+        coerced = {k: data.get(k) for k in data.keys()}
+        coerced[key] = parsed
         return coerced
+
+    @staticmethod
+    def _fold_legacy_coordinates(data):
+        if not hasattr(data, 'get'):
+            return data
+        if data.get('location') not in (None, ''):
+            return data  # explicit structured location wins
+        lat = data.get('latitude')
+        lng = data.get('longitude')
+        if lat in (None, '') or lng in (None, ''):
+            return data
+        coerced = {k: data.get(k) for k in data.keys()}
+        coerced['location'] = {'latitude': lat, 'longitude': lng, 'method': 'gps'}
+        return coerced
+
+    def validate(self, attrs):
+        location = attrs.pop('location', None)
+        coords = self._resolve_coordinates(location, attrs)
+        if coords is not None:
+            attrs['latitude'], attrs['longitude'] = coords
+        elif self.instance is None:
+            # Creation requires a resolvable business location.
+            raise serializers.ValidationError(
+                {'location': ['A business location (coordinates or address) is required.']}
+            )
+        return attrs
+
+    def _resolve_coordinates(self, location, attrs):
+        """Return (latitude, longitude) Decimals or None if unset on update."""
+        if location:
+            lat = location.get('latitude')
+            lng = location.get('longitude')
+            if lat is not None and lng is not None:
+                return lat, lng
+            address = location.get('address') or attrs.get('address')
+            if address:
+                return self._geocode(address)
+        # No structured location; on create try the plain address field.
+        if self.instance is None and attrs.get('address'):
+            return self._geocode(attrs['address'])
+        return None
+
+    @staticmethod
+    def _geocode(address):
+        try:
+            result = get_geocoder().geocode(address)
+        except GeocodingUnavailable as exc:
+            raise serializers.ValidationError(
+                {'location': [
+                    'Address geocoding is unavailable on this server; '
+                    'please supply latitude and longitude coordinates.'
+                ]}
+            ) from exc
+        except GeocodingError as exc:
+            raise serializers.ValidationError(
+                {'location': [f'Could not resolve the address to a location: {exc}']}
+            ) from exc
+        return result.latitude, result.longitude
 
     def create(self, validated_data):
         opening_hours = validated_data.pop('opening_hours', [])
@@ -143,6 +237,7 @@ class MyLaundrySerializer(serializers.ModelSerializer):
                     'opening_time': entry['opening_time'],
                     'closing_time': entry['closing_time'],
                     'is_closed': entry.get('is_closed', False),
+                    'is_overnight': entry.get('is_overnight', False),
                 },
             )
         laundry.opening_hours.exclude(day__in=provided_days).delete()

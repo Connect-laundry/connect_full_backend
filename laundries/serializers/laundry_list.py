@@ -22,6 +22,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
     reviewsCount = serializers.IntegerField(read_only=True)
     isOpen = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
+    pricingModel = serializers.CharField(source='pricing_model', read_only=True)
     isFavorite = serializers.SerializerMethodField()
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
@@ -33,7 +34,7 @@ class LaundryListSerializer(serializers.ModelSerializer):
         model = Laundry
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
-            'reviewsCount', 'isOpen', 'priceRange', 'isFavorite', 'estimatedDelivery',
+            'reviewsCount', 'isOpen', 'priceRange', 'pricingModel', 'isFavorite', 'estimatedDelivery',
             'minOrder', 'deliveryFee', 'avgPrice', 'latitude', 'longitude'
         )
 
