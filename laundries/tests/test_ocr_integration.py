@@ -77,7 +77,6 @@ def test_credentials_initialize_empty_env():
             path = initialize_google_credentials()
             assert path is None
 
-
 def test_credentials_initialize_invalid_json():
     """If env var contains invalid JSON, initializer should fail gracefully."""
     with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': 'invalid-non-json'}):
@@ -168,8 +167,6 @@ def test_credentials_initialize_backslash_newline_flow():
             from laundries.utils.credentials import _temp_credentials_path
             if _temp_credentials_path and os.path.exists(_temp_credentials_path):
                 os.remove(_temp_credentials_path)
-
-
 # =====================================================================
 # OCR PARSER INTELLIGENCE TESTS
 # =====================================================================

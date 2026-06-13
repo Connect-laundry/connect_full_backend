@@ -76,7 +76,6 @@ def initialize_google_credentials():
         # This happens often in env vars where \n gets unescaped to \ + literal newline
         if '\\\n' in cleaned_json:
             cleaned_json = cleaned_json.replace('\\\n', '\\n')
-
         parsed_creds = json.loads(cleaned_json)
 
         # Check for service account fields
