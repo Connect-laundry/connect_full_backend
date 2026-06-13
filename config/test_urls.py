@@ -3,6 +3,8 @@ from django.views.generic import RedirectView, TemplateView
 from django.conf import settings
 from marketplace.views.legal import PublicLegalHtmlView
 
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+
 urlpatterns = [
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
     path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
@@ -28,5 +30,9 @@ urlpatterns = [
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
+
 

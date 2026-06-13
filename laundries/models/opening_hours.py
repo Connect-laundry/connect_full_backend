@@ -32,3 +32,28 @@ class OpeningHours(models.Model):
 
     def __str__(self):
         return f"{self.laundry.name} - {self.get_day_display()}: {self.opening_time} to {self.closing_time}"
+
+
+class HolidayOverride(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='holiday_overrides',
+    )
+    date = models.DateField(db_index=True)
+    opening_time = models.TimeField(null=True, blank=True)
+    closing_time = models.TimeField(null=True, blank=True)
+    is_closed = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = _('Holiday Override')
+        verbose_name_plural = _('Holiday Overrides')
+        ordering = ['date']
+        unique_together = ('laundry', 'date')
+
+    def __str__(self):
+        status_str = "Closed" if self.is_closed else f"{self.opening_time}-{self.closing_time}"
+        return f"{self.laundry.name} on {self.date}: {status_str} ({self.note})"
+

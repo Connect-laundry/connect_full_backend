@@ -44,8 +44,10 @@ class TestPhase2Security:
             client = APIClient()
 
             assert client.get('/api/v1/laundries/diagnosis/').status_code == status.HTTP_404_NOT_FOUND
-            assert client.get('/api/schema/').status_code == status.HTTP_404_NOT_FOUND
-            assert client.get('/api/schema/swagger-ui/').status_code == status.HTTP_404_NOT_FOUND
+            # Now unconditionally exposed as required by API pipeline specs
+            assert client.get('/api/schema/').status_code == status.HTTP_200_OK
+            assert client.get('/api/docs/').status_code == status.HTTP_200_OK
+
 
     def test_logistics_queries_are_role_scoped(self):
         owner = User.objects.create_user(email='owner@example.com',

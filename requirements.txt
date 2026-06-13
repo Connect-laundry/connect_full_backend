@@ -51,3 +51,7 @@ pytest==9.0.3
 pytest-django==4.11.1
 django-unfold==0.41.0
 pywebpush==2.3.0
+openpyxl==3.1.5
+google-cloud-vision==3.9.0
+
+

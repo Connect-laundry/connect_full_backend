@@ -2,7 +2,10 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
-from ..models.pricing import LaundryPricingItem, LaundryWeightPricing
+from ..models.pricing import (
+    LaundryPricingItem, LaundryWeightPricing,
+    PricingCatalogVersion, ScheduledPriceChange, DeliveryZonePricing
+)
 
 
 class LaundryPricingItemSerializer(serializers.ModelSerializer):
@@ -59,3 +62,25 @@ class LaundryWeightPricingSerializer(serializers.ModelSerializer):
             'rounding_strategy', 'is_active', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PricingCatalogVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PricingCatalogVersion
+        fields = ['id', 'version_number', 'items_data', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class ScheduledPriceChangeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScheduledPriceChange
+        fields = ['id', 'effective_at', 'pricing_data', 'is_applied', 'created_at']
+        read_only_fields = ['id', 'is_applied', 'created_at']
+
+
+class DeliveryZonePricingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryZonePricing
+        fields = ['id', 'min_distance_km', 'max_distance_km', 'delivery_fee', 'pickup_fee']
+        read_only_fields = ['id']
+

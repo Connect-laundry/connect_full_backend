@@ -1,5 +1,7 @@
 # pyre-ignore[missing-module]
 from rest_framework import permissions
+# pyre-ignore[missing-module]
+from users.models import User
 
 class IsLaundryOwnerOrReadOnly(permissions.BasePermission):
     """
@@ -13,3 +15,17 @@ class IsLaundryOwnerOrReadOnly(permissions.BasePermission):
 
         # Write permissions are only allowed to the owner of the laundry.
         return obj.owner == request.user
+
+class IsOwnerRole(permissions.BasePermission):
+    """Only authenticated users with the OWNER role may manage their laundry."""
+
+    message = 'Only laundry owners can access this resource.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and getattr(user, 'role', None) == User.Role.OWNER
+        )
+

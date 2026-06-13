@@ -83,6 +83,11 @@ class Laundry(models.Model):
     
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
     is_active = models.BooleanField(_('is active'), default=False, db_index=True)
+    vacation_mode = models.BooleanField(_('vacation mode'), default=False, db_index=True)
+    service_radius_km = models.DecimalField(_('service radius (km)'), max_digits=5, decimal_places=2, default=5.0)
+    service_area_polygon = models.JSONField(_('service area polygon'), null=True, blank=True)
+    is_eco_friendly = models.BooleanField(_('is eco-friendly'), default=False, db_index=True)
+    ironing_available = models.BooleanField(_('ironing available'), default=False, db_index=True)
     
     status = models.CharField(
         _('approval status'),
@@ -144,3 +149,30 @@ class Laundry(models.Model):
         except Exception:
              import logging
              logging.error("GIS models not available for Laundry.location")
+
+
+class OwnerAuditLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey(
+        'laundries.Laundry',
+        on_delete=models.CASCADE,
+        related_name='audit_logs',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='laundry_audit_logs',
+    )
+    action = models.CharField(_('action'), max_length=100, db_index=True)
+    details = models.JSONField(_('details'), default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _('Owner Audit Log')
+        verbose_name_plural = _('Owner Audit Logs')
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.action} by {self.actor} at {self.timestamp}"
+

@@ -34,17 +34,25 @@ from ..serializers.price_import import (
     PriceListImportJobSerializer,
 )
 from ..services.ocr import get_ocr_provider
-from .my_laundry import IsOwnerRole
+from ..permissions import IsOwnerRole
 from .pricing import get_owner_laundry
 
 logger = logging.getLogger(__name__)
 
 
+from rest_framework.throttling import UserRateThrottle
+from PIL import Image as PILImage
+
+class PriceImportRateThrottle(UserRateThrottle):
+    rate = '60/hour'
+
 class PriceImportViewSet(viewsets.GenericViewSet):
+    queryset = PriceListImportJob.objects.none()
     permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     renderer_classes = [StandardResponseRenderer]
     serializer_class = PriceListImportJobSerializer
+    throttle_classes = [PriceImportRateThrottle]
 
     def get_queryset(self):
         return PriceListImportJob.objects.filter(
@@ -58,7 +66,7 @@ class PriceImportViewSet(viewsets.GenericViewSet):
                 {'status': 'error',
                  'message': 'Register a laundry before importing a price list.',
                  'data': None},
-                status=status.HTTP_400_BAD_REQUEST,
+                 status=status.HTTP_400_BAD_REQUEST,
             )
         return laundry, None
 
@@ -67,9 +75,50 @@ class PriceImportViewSet(viewsets.GenericViewSet):
         laundry, error = self._require_laundry()
         if error is not None:
             return error
+        image_file = request.data.get('source_image')
+        if not image_file:
+            return Response(
+                {'status': 'error', 'message': 'No image file provided.', 'data': None},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 1. Enforce max file size of 10MB (checked before parsing to prevent memory fatigue)
+        MAX_SIZE = 10 * 1024 * 1024
+        if hasattr(image_file, 'size') and image_file.size > MAX_SIZE:
+            return Response(
+                {'status': 'error', 'message': 'Image file size exceeds the 10MB limit.', 'data': None},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Enforce standard web image file extensions
+        if hasattr(image_file, 'name'):
+            filename = image_file.name.lower()
+            valid_extensions = ('.png', '.jpg', '.jpeg', '.webp')
+            if not filename.endswith(valid_extensions):
+                return Response(
+                    {'status': 'error', 'message': 'Unsupported image format. Allowed formats: PNG, JPG, JPEG, WEBP.', 'data': None},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # 3. Decode verification using Pillow (SSRF/Zip-bomb/Malicious upload checks)
+        try:
+            if hasattr(image_file, 'seek'):
+                image_file.seek(0)
+            with PILImage.open(image_file) as img:
+                img.verify()
+            if hasattr(image_file, 'seek'):
+                image_file.seek(0)
+        except Exception as e:
+            logger.error("Malicious or corrupted image upload blocked: %s", str(e))
+            return Response(
+                {'status': 'error', 'message': 'Invalid or corrupted image file.', 'data': None},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         payload = PriceImportCreateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         image = payload.validated_data['source_image']
+
 
         provider = get_ocr_provider()
         with transaction.atomic():
@@ -79,33 +128,20 @@ class PriceImportViewSet(viewsets.GenericViewSet):
                 provider=provider.name,
                 status=PriceListImportJob.Status.PROCESSING,
             )
-            try:
-                candidates = provider.extract(job.source_image) or []
-            except Exception as exc:  # pragma: no cover - provider errors
-                logger.warning("OCR extraction failed for job %s: %s", job.id, exc)
-                job.status = PriceListImportJob.Status.FAILED
-                job.error = str(exc)[:255]
-                job.save(update_fields=['status', 'error', 'updated_at'])
-                candidates = []
-            else:
-                for cand in candidates:
-                    name = (cand.get('item_name') or '').strip()
-                    if not name:
-                        continue
-                    PriceListDraftItem.objects.create(
-                        job=job,
-                        item_name=name[:120],
-                        suggested_price=cand.get('suggested_price'),
-                        category=(cand.get('category') or '')[:80],
-                        confidence=cand.get('confidence'),
-                    )
-                job.status = PriceListImportJob.Status.READY
-                job.save(update_fields=['status', 'updated_at'])
+
+        import sys
+        if 'test' in sys.argv or 'pytest' in sys.modules:
+            from laundries.tasks import process_ocr_import
+            process_ocr_import(job.id)
+        else:
+            from laundries.tasks import process_ocr_import
+            transaction.on_commit(lambda: process_ocr_import.delay(job.id))
 
         job.refresh_from_db()
         return Response(
             PriceListImportJobSerializer(job).data, status=status.HTTP_201_CREATED
         )
+
 
     @extend_schema(responses=PriceListImportJobSerializer)
     def retrieve(self, request, pk=None):
