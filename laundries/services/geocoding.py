@@ -121,7 +121,7 @@ class MapboxGeocoder(BaseGeocoder):
         self.access_token = access_token
 
     def _request(self, query: str) -> dict:
-        url = self.ENDPOINT.format(query=requests.utils.quote(query))
+        url = self.ENDPOINT.format(query=requests.utils.quote(query)) # type: ignore
         try:
             resp = requests.get(
                 url,

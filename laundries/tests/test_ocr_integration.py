@@ -57,11 +57,25 @@ def _valid_png(name='pricelist.png', size=(8, 8)):
 # =====================================================================
 
 def test_credentials_initialize_empty_env():
-    """If env var is empty, initializer returns None or existing path."""
+    """If env var is empty, whitespace-only, or contains literal empty quotes, initializer returns None or existing path."""
     with patch.dict(os.environ, {}, clear=True):
         path = initialize_google_credentials()
         assert path is None or path == os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': '   '}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': '""'}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': "''"}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
 
 def test_credentials_initialize_invalid_json():
     """If env var contains invalid JSON, initializer should fail gracefully."""
@@ -106,6 +120,53 @@ def test_credentials_initialize_valid_json_flow():
                 os.remove(_temp_credentials_path)
 
 
+def test_credentials_initialize_base64_flow():
+    """Valid base64-encoded credentials JSON is decoded and parsed successfully."""
+    import base64
+    fake_creds = {
+        "type": "service_account",
+        "project_id": "test-project-base64",
+        "private_key": "fake-key",
+        "client_email": "test@test.iam.gserviceaccount.com"
+    }
+    creds_str = json.dumps(fake_creds)
+    base64_str = base64.b64encode(creds_str.encode('utf-8')).decode('utf-8')
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': base64_str}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            temp_path = initialize_google_credentials()
+            
+            assert temp_path is not None
+            assert os.path.isfile(temp_path)
+            
+            with open(temp_path, 'r') as f:
+                data = json.load(f)
+                assert data["project_id"] == "test-project-base64"
+
+            from laundries.utils.credentials import _temp_credentials_path
+            if _temp_credentials_path and os.path.exists(_temp_credentials_path):
+                os.remove(_temp_credentials_path)
+
+
+def test_credentials_initialize_backslash_newline_flow():
+    """Credentials JSON with backslash followed by a literal newline is cleaned and parsed successfully."""
+    creds_str = '{"type": "service_account", "project_id": "test-project-backslash", "private_key": "line1\\\nline2"}'
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': creds_str}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            temp_path = initialize_google_credentials()
+            
+            assert temp_path is not None
+            assert os.path.isfile(temp_path)
+            
+            with open(temp_path, 'r') as f:
+                data = json.load(f)
+                assert data["project_id"] == "test-project-backslash"
+                assert data["private_key"] == "line1\nline2"
+
+            from laundries.utils.credentials import _temp_credentials_path
+            if _temp_credentials_path and os.path.exists(_temp_credentials_path):
+                os.remove(_temp_credentials_path)
 # =====================================================================
 # OCR PARSER INTELLIGENCE TESTS
 # =====================================================================

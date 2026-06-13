@@ -38,6 +38,13 @@ def initialize_google_credentials():
         return _temp_credentials_path
 
     creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+    if creds_json:
+        creds_json = creds_json.strip()
+        # Strip literal wrapping quotes if they exist (common in env vars)
+        if (creds_json.startswith('"') and creds_json.endswith('"')) or \
+           (creds_json.startswith("'") and creds_json.endswith("'")):
+            creds_json = creds_json[1:-1].strip()
+
     if not creds_json:
         # Check if Google's standard variable is already pointing to a valid file
         existing_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
@@ -53,7 +60,22 @@ def initialize_google_credentials():
 
     try:
         # Validate that the string is valid JSON
-        cleaned_json = creds_json.strip()
+        cleaned_json = creds_json
+
+        # 1. Try decoding as base64 if it doesn't start with JSON brace (common for cloud env variables)
+        import base64
+        if cleaned_json and not cleaned_json.startswith('{'):
+            try:
+                decoded = base64.b64decode(cleaned_json).decode('utf-8')
+                if decoded.strip().startswith('{'):
+                    cleaned_json = decoded.strip()
+            except Exception:
+                pass
+
+        # 2. Handle common escaping issues (e.g. backslash followed by literal newline)
+        # This happens often in env vars where \n gets unescaped to \ + literal newline
+        if '\\\n' in cleaned_json:
+            cleaned_json = cleaned_json.replace('\\\n', '\\n')
         parsed_creds = json.loads(cleaned_json)
 
         # Check for service account fields

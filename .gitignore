@@ -48,3 +48,14 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Google Cloud credentials
+*.json
+!package.json
+!tsconfig.json
+
+# Local credentials
+credentials/ 
+secrets/
+.env
+.env.*
