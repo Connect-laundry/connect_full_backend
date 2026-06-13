@@ -113,22 +113,27 @@ def _attach_session_claims(refresh: RefreshToken, *, session: DeviceSession, use
 
 def issue_tokens_for_user(user: User, request):
     device_context = get_device_context(request)
-    session = DeviceSession.objects.create(
-        user=user,
-        device_id=device_context['device_id'],
-        platform=device_context['platform'],
-        app_version=device_context['app_version'],
-        user_agent=device_context['user_agent'],
-        ip_address=device_context['ip_address'],
-    )
+    # All session-side writes (device session, refresh-token record, session
+    # touch) form one unit: either the caller gets a fully-consistent session or
+    # nothing is persisted. Callers may nest this inside a wider transaction
+    # (e.g. registration); transaction.atomic() handles nesting via savepoints.
+    with transaction.atomic():
+        session = DeviceSession.objects.create(
+            user=user,
+            device_id=device_context['device_id'],
+            platform=device_context['platform'],
+            app_version=device_context['app_version'],
+            user_agent=device_context['user_agent'],
+            ip_address=device_context['ip_address'],
+        )
 
-    refresh = RefreshToken.for_user(user)
-    _attach_session_claims(refresh, session=session, user=user)
+        refresh = RefreshToken.for_user(user)
+        _attach_session_claims(refresh, session=session, user=user)
 
-    refresh_jti = str(refresh[api_settings.JTI_CLAIM])
-    refresh_exp = _exp_to_datetime(refresh.get('exp'))
-    _touch_session(session, jti=refresh_jti, exp=refresh_exp, request=request)
-    _create_refresh_record(session, jti=refresh_jti, exp=refresh_exp)
+        refresh_jti = str(refresh[api_settings.JTI_CLAIM])
+        refresh_exp = _exp_to_datetime(refresh.get('exp'))
+        _create_refresh_record(session, jti=refresh_jti, exp=refresh_exp)
+        _touch_session(session, jti=refresh_jti, exp=refresh_exp, request=request)
 
     return {
         'access': str(refresh.access_token),

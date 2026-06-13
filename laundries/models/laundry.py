@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 # pyre-ignore[missing-module]
 from django.core.validators import MinValueValidator, MaxValueValidator
 # pyre-ignore[missing-module]
-from ..utils.validators import validate_file_upload
+from ..utils.validators import validate_file_upload, validate_latitude, validate_longitude
 
 # Conditionally import GIS or regular Django models based on USE_POSTGIS
 USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
@@ -39,6 +39,11 @@ class Laundry(models.Model):
         REJECTED = "REJECTED", _("Rejected")
         SUSPENDED = "SUSPENDED", _("Suspended")
 
+    class PricingModel(models.TextChoices):
+        BY_ITEM = 'BY_ITEM', _('Per item / garment count')
+        BY_WEIGHT = 'BY_WEIGHT', _('Per weight (kg)')
+        HYBRID = 'HYBRID', _('Hybrid (item + weight)')
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(_('name'), max_length=255, db_index=True)
     description = models.TextField(_('description'), blank=True)
@@ -53,11 +58,24 @@ class Laundry(models.Model):
     city = models.CharField(_('city'), max_length=100, default='Accra', db_index=True)
     
     # Geospatial Optimization
-    latitude = models.DecimalField(_('latitude'), max_digits=9, decimal_places=6, db_index=True)
-    longitude = models.DecimalField(_('longitude'), max_digits=9, decimal_places=6, db_index=True)
+    latitude = models.DecimalField(
+        _('latitude'), max_digits=9, decimal_places=6, db_index=True,
+        validators=[validate_latitude],
+    )
+    longitude = models.DecimalField(
+        _('longitude'), max_digits=9, decimal_places=6, db_index=True,
+        validators=[validate_longitude],
+    )
 
     phone_number = models.CharField(_('phone number'), max_length=20)
     price_range = models.CharField(_('price range'), max_length=3, choices=PriceRange.choices, default=PriceRange.MEDIUM)
+    pricing_model = models.CharField(
+        _('pricing model'),
+        max_length=10,
+        choices=PricingModel.choices,
+        default=PricingModel.BY_ITEM,
+        db_index=True,
+    )
     estimated_delivery_hours = models.IntegerField(_('estimated delivery hours'), default=24)
     delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
     pickup_fee = models.DecimalField(_('pickup fee'), max_digits=10, decimal_places=2, default=0.00)

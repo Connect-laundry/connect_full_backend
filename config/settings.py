@@ -516,6 +516,17 @@ TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
 DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
 PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
 
+# Geocoding (business-location resolution for owner onboarding)
+# Provider: 'google' | 'mapbox' | '' (disabled). When disabled, the geocode
+# endpoint returns 503 and address-only laundry creation requires coordinates.
+GEOCODING_PROVIDER = os.getenv('GEOCODING_PROVIDER', '').lower()
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
+MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', '')
+
+# OCR provider for AI-assisted price-list import. '' / 'null' = stub (no extraction).
+OCR_PROVIDER = os.getenv('OCR_PROVIDER', '').lower()
+
+
 # Unfold Admin Configuration
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _

@@ -96,3 +96,23 @@ def validate_file_upload(value):
 
     if detected_format not in ALLOWED_PIL_FORMATS:
         raise ValidationError('Unsupported image format.')
+
+
+def validate_latitude(value):
+    """Latitude must be a real geographic value in [-90, 90]."""
+    try:
+        lat = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError('Latitude must be a number.') from exc
+    if not -90 <= lat <= 90:
+        raise ValidationError('Latitude must be between -90 and 90 degrees.')
+
+
+def validate_longitude(value):
+    """Longitude must be a real geographic value in [-180, 180]."""
+    try:
+        lng = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError('Longitude must be a number.') from exc
+    if not -180 <= lng <= 180:
+        raise ValidationError('Longitude must be between -180 and 180 degrees.')
