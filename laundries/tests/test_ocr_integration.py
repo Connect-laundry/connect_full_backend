@@ -57,10 +57,25 @@ def _valid_png(name='pricelist.png', size=(8, 8)):
 # =====================================================================
 
 def test_credentials_initialize_empty_env():
-    """If env var is empty, initializer returns None or existing path."""
+    """If env var is empty, whitespace-only, or contains literal empty quotes, initializer returns None or existing path."""
     with patch.dict(os.environ, {}, clear=True):
         path = initialize_google_credentials()
         assert path is None or path == os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': '   '}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': '""'}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
+
+    with patch.dict(os.environ, {'GOOGLE_APPLICATION_CREDENTIALS_JSON': "''"}, clear=True):
+        with patch('laundries.utils.credentials._temp_credentials_path', None):
+            path = initialize_google_credentials()
+            assert path is None
 
 
 def test_credentials_initialize_invalid_json():
