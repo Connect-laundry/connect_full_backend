@@ -53,14 +53,6 @@ def is_laundry_open_now(laundry, now=None):
 
 
 def get_open_laundry_ids(now=None):
-    """Return approved active laundry ids that are open right now."""
-    laundries = (
-        Laundry.objects.filter(
-            status=Laundry.ApprovalStatus.APPROVED,
-            is_active=True,
-            vacation_mode=False,
-        )
-        .prefetch_related("opening_hours")
-        .only("id", "is_active", "vacation_mode", "status")
-    )
+    """Return laundry ids that are open right now."""
+    laundries = Laundry.objects.all().prefetch_related("opening_hours")
     return {laundry.id for laundry in laundries if is_laundry_open_now(laundry, now=now)}
