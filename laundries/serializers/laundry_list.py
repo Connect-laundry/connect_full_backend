@@ -1,17 +1,11 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
-# pyre-ignore[missing-module]
-from django.db.models import Avg, Count
-# pyre-ignore[missing-module]
 from django.core.cache import cache
-# pyre-ignore[missing-module]
-from django.utils import timezone
 # pyre-ignore[missing-module]
 from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
-# pyre-ignore[missing-module]
-from ..models.opening_hours import OpeningHours
+from ..services.opening_status import is_laundry_open_now
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 
@@ -75,21 +69,8 @@ class LaundryListSerializer(serializers.ModelSerializer):
         
         if is_open is not None:
             return is_open
-            
-        now = timezone.localtime()
-        current_day = now.isoweekday() # 1-7
-        current_time = now.time()
-        
-        # Check OpeningHours (Optimized to use prefetched data if available)
-        # If prefetched, obj.opening_hours.all() will not hit the DB
-        opening_hours = getattr(obj, 'opening_hours', None)
-        if opening_hours is not None:
-             # Search in the prefetched list
-             oh = next((h for h in opening_hours.all() if h.day == current_day and not h.is_closed), None)
-        else:
-             oh = OpeningHours.objects.filter(laundry=obj, day=current_day, is_closed=False).first()
-             
-        is_open_now = bool(oh and oh.opening_time <= current_time <= oh.closing_time)
+
+        is_open_now = is_laundry_open_now(obj)
         
         cache.set(cache_key, is_open_now, 300) # 5 minutes
         return is_open_now

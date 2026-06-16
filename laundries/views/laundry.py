@@ -44,67 +44,18 @@ from ..models.service import LaundryService
 from ..models.favorite import Favorite
 from ..models.category import Category
 # pyre-ignore[missing-module]
-from ..models.opening_hours import OpeningHours, HolidayOverride
-# pyre-ignore[missing-module]
 from ..models.review import Review
 # pyre-ignore[missing-module]
 from ..serializers.laundry_list import LaundryListSerializer
 # pyre-ignore[missing-module]
 from ..serializers.laundry_detail import LaundryDetailSerializer
+from ..services.opening_status import get_open_laundry_ids
 # pyre-ignore[missing-module]
 from ..pagination import StandardResultsSetPagination
 # pyre-ignore[missing-module]
 from ..filters import LaundryFilter
 
 logger = logging.getLogger(__name__)
-
-def get_open_laundry_ids(now=None):
-    if now is None:
-        now = timezone.now()
-    current_date = now.date()
-    current_time = now.time()
-    current_day = current_date.isoweekday() # 1 = Monday, 7 = Sunday
-    
-    # 1. Holiday overrides for today
-    holiday_overrides = HolidayOverride.objects.filter(date=current_date)
-    closed_by_override = set(holiday_overrides.filter(is_closed=True).values_list('laundry_id', flat=True))
-    
-    open_by_override = set()
-    for override in holiday_overrides.filter(is_closed=False):
-        if override.opening_time and override.closing_time:
-            if override.opening_time <= current_time <= override.closing_time:
-                open_by_override.add(override.laundry_id)
-                
-    # 2. Regular opening hours for laundries that don't have overrides today
-    overridden_laundry_ids = set(holiday_overrides.values_list('laundry_id', flat=True))
-    
-    matching_hours = OpeningHours.objects.filter(
-        day=current_day,
-        is_closed=False
-    ).exclude(laundry_id__in=overridden_laundry_ids)
-    
-    regular_open_ids = set()
-    for oh in matching_hours:
-        if oh.is_overnight:
-            if current_time >= oh.opening_time or current_time <= oh.closing_time:
-                regular_open_ids.add(oh.laundry_id)
-        else:
-            if oh.opening_time <= current_time <= oh.closing_time:
-                regular_open_ids.add(oh.laundry_id)
-                
-    # Check if we are in the morning hours of an overnight schedule from yesterday
-    yesterday_day = 7 if current_day == 1 else current_day - 1
-    yesterday_overnight_hours = OpeningHours.objects.filter(
-        day=yesterday_day,
-        is_closed=False,
-        is_overnight=True
-    ).exclude(laundry_id__in=overridden_laundry_ids)
-    
-    for oh in yesterday_overnight_hours:
-        if current_time <= oh.closing_time:
-            regular_open_ids.add(oh.laundry_id)
-
-    return (regular_open_ids | open_by_override) - closed_by_override
 
 class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     """

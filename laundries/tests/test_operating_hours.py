@@ -1,5 +1,7 @@
 """Tests for operating hours validation, overnight support, and default template."""
 import json
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.urls import reverse
@@ -8,6 +10,7 @@ from rest_framework.test import APIClient
 
 from laundries.models.laundry import Laundry
 from laundries.models.opening_hours import OpeningHours
+from laundries.services.opening_status import is_laundry_open_now
 from users.models import User
 
 
@@ -130,6 +133,52 @@ class TestClosedDayHandling:
         assert resp.status_code == status.HTTP_201_CREATED
         oh = OpeningHours.objects.get(laundry__name='Hours Laundry', day=7)
         assert oh.is_closed is True
+
+
+@pytest.mark.django_db
+class TestOpeningStatus:
+    def test_open_status_uses_closed_days_overnight_and_vacation_mode(self):
+        owner = _owner()
+        laundry = Laundry.objects.create(
+            name='Status Laundry',
+            address='1 Status St',
+            latitude='5.603700',
+            longitude='-0.187000',
+            phone_number='0240000051',
+            owner=owner,
+            is_active=True,
+            status=Laundry.ApprovalStatus.APPROVED,
+        )
+        OpeningHours.objects.create(
+            laundry=laundry,
+            day=2,
+            opening_time=time(20, 0),
+            closing_time=time(2, 0),
+            is_overnight=True,
+        )
+        OpeningHours.objects.create(
+            laundry=laundry,
+            day=3,
+            opening_time=time(0, 0),
+            closing_time=time(0, 0),
+            is_closed=True,
+        )
+        laundry.refresh_from_db()
+        assert laundry.is_active is True
+        assert laundry.vacation_mode is False
+        assert [
+            (hour.day, hour.opening_time, hour.closing_time, hour.is_closed, hour.is_overnight)
+            for hour in laundry.opening_hours.all()
+        ] == [
+            (2, time(20, 0), time(2, 0), False, True),
+            (3, time(0, 0), time(0, 0), True, False),
+        ]
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 0, tzinfo=ZoneInfo('UTC'))) is True
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 6, 0, tzinfo=ZoneInfo('UTC'))) is True
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 17, 0, tzinfo=ZoneInfo('UTC'))) is False
+
+        laundry.vacation_mode = True
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 0, tzinfo=ZoneInfo('UTC'))) is False
 
 
 @pytest.mark.django_db
