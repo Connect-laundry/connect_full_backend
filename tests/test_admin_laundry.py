@@ -9,12 +9,12 @@ from users.models import User
 @pytest.mark.django_db
 @override_settings(ROOT_URLCONF='config.urls')
 def test_laundry_admin_change_view_loads(client):
-    admin = User.objects.create_superuser(
+    admin = User.objects.create_superuser( # type: ignore
         email='admin-change@example.com',
         phone='233555990001',
         password='StrongPass123!',
     )
-    owner = User.objects.create_user(
+    owner = User.objects.create_user( # type: ignore
         email='owner-change@example.com',
         phone='233555990002',
         password='StrongPass123!',

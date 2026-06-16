@@ -2,6 +2,7 @@ import pytest
 import csv
 import io
 from decimal import Decimal
+from datetime import datetime
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -37,6 +38,8 @@ def _laundry(owner):
         owner=owner, name='Modern Laundry', address='123 Osu, Accra', city='Accra',
         latitude=Decimal('5.603700'), longitude=Decimal('-0.187000'), phone_number='0240000020',
         service_radius_km=Decimal('5.0'),
+        status=Laundry.ApprovalStatus.APPROVED,
+        is_active=True,
         service_area_polygon={
             "type": "Polygon",
             "coordinates": [[
@@ -237,7 +240,10 @@ class TestModernizationFeatures:
         from laundries.views.laundry import get_open_laundry_ids
         
         # Test Monday at 12:00 -> should be open
-        now_open = timezone.now().replace(year=2026, month=6, day=15, hour=12, minute=0) # June 15 2026 is Monday
+        now_open = timezone.make_aware(
+            datetime(2026, 6, 15, 12, 0),
+            timezone.get_current_timezone(),
+        )
         assert laundry.id in get_open_laundry_ids(now_open)
 
         # Create holiday override for that date closing the shop
@@ -362,5 +368,3 @@ class TestModernizationFeatures:
         with pytest.raises(Exception) as excinfo:
             serializer_out.is_valid(raise_exception=True)
         assert "service coverage area" in str(excinfo.value)
-
-
