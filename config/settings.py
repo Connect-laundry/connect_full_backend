@@ -298,7 +298,7 @@ REST_FRAMEWORK = {
         'password_reset_ip': os.getenv('THROTTLE_PASSWORD_RESET_IP', '5/hour'),
         'password_reset_account': os.getenv('THROTTLE_PASSWORD_RESET_ACCOUNT', '3/hour'),
         'reset_password_ip': os.getenv('THROTTLE_RESET_PASSWORD_IP', '10/hour'),
-        'payment_create': os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
+        'payment_create': '10000/hour' if DEBUG else os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
         'admin_search': os.getenv('THROTTLE_ADMIN_SEARCH', '120/minute'),
     },
 }

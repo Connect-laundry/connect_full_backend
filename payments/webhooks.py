@@ -174,6 +174,16 @@ def paystack_webhook(request):
                 payment.transition_to(Payment.Status.SUCCESS, save=False)
                 payment.raw_response = _sanitize_webhook_payload(event_data.get('data', {}), reference)
                 payment.paid_at = timezone.now()
+                
+                # Update payment method dynamically from Paystack gateway channel
+                channel = event_data.get('data', {}).get('channel')
+                if channel == 'mobile_money':
+                    payment.payment_method = Payment.Method.MOMO
+                elif channel == 'card':
+                    payment.payment_method = Payment.Method.CARD
+                elif channel in {'bank', 'bank_transfer', 'transfer'}:
+                    payment.payment_method = Payment.Method.TRANS
+                
                 payment.save()
                 
                 # Update order payment status
