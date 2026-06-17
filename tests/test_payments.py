@@ -387,3 +387,176 @@ class TestPaystackWebhookAbuse:
         order.refresh_from_db()
         assert payment.status == Payment.Status.FAILED
         assert order.payment_status == Order.PaymentStatus.UNPAID
+
+    def test_get_payment_status_success(self):
+        customer, order, payment = _build_pending_payment('ORD-STATUS-SUCCESS')
+        client = _auth_client(customer)
+        response = client.get(reverse('payment_status', kwargs={'reference': payment.transaction_reference}))
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data['status'] == 'success'
+        assert data['data']['payment_status'] == Payment.Status.PENDING
+        assert data['data']['order_status'] == order.status
+
+    def test_get_payment_status_not_owner_returns_404(self):
+        _, _, payment = _build_pending_payment('ORD-STATUS-NOT-OWNER')
+        other_user = User.objects.create_user(
+            email='other-payments-status@example.com',
+            phone='233555900999',
+            password='StrongPass123!',
+        )
+        client = _auth_client(other_user)
+        response = client.get(reverse('payment_status', kwargs={'reference': payment.transaction_reference}))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestHardenPaymentAudit:
+    @patch('payments.services.paystack.PaystackService.initialize_transaction')
+    def test_payment_initialize_idempotency(self, mock_init):
+        customer, order = _build_order()
+        client = _auth_client(customer)
+        mock_init.return_value = {
+            'status': True,
+            'data': {
+                'authorization_url': 'https://paystack.example/authorize',
+                'access_code': 'ACCESS123',
+            }
+        }
+
+        # Initialize first time
+        response_1 = client.post(
+            reverse('payment_initialize'),
+            {'order_id': str(order.id), 'payment_method': 'CARD'},
+            format='json',
+        )
+        assert response_1.status_code == status.HTTP_200_OK
+        ref_1 = response_1.json()['data']['reference']
+
+        # Initialize second time with same parameters
+        response_2 = client.post(
+            reverse('payment_initialize'),
+            {'order_id': str(order.id), 'payment_method': 'CARD'},
+            format='json',
+        )
+        assert response_2.status_code == status.HTTP_200_OK
+        ref_2 = response_2.json()['data']['reference']
+
+        # Assert same reference is returned
+        assert ref_1 == ref_2
+        assert Payment.objects.filter(order=order).count() == 1
+
+    def test_payment_state_machine_validation(self):
+        customer, order = _build_order()
+        payment = Payment.objects.create(
+            user=customer,
+            order=order,
+            amount=Decimal('25.00'),
+            currency='GHS',
+            transaction_reference='ORD-STATE-TEST',
+            payment_method=Payment.Method.CARD,
+            status=Payment.Status.SUCCESS,
+        )
+
+        # Transitioning from terminal SUCCESS to FAILED must raise ValueError
+        with pytest.raises(ValueError, match="Cannot transition payment from terminal state"):
+            payment.transition_to(Payment.Status.FAILED)
+
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_celery_reconciliation_task(self, mock_verify):
+        from payments.tasks import reconcile_pending_payments
+        from django.utils import timezone
+        
+        customer, order, payment = _build_pending_payment('ORD-RECONCILE-TEST')
+        # Set created_at to 15 minutes ago to trigger reconciliation
+        Payment.objects.filter(id=payment.id).update(created_at=timezone.now() - timezone.timedelta(minutes=15))
+        
+        mock_verify.return_value = {
+            'status': True,
+            'data': {
+                'status': 'success',
+                'amount': 2500,
+                'currency': 'GHS',
+                'reference': payment.transaction_reference,
+                'metadata': {
+                    'order_id': str(order.id),
+                    'user_id': str(customer.id),
+                },
+            }
+        }
+
+        # Run task
+        result = reconcile_pending_payments()
+        assert "Reconciled 1 payments" in result
+
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == Payment.Status.SUCCESS
+        assert order.payment_status == Order.PaymentStatus.PAID
+        assert order.status == Order.Status.CONFIRMED
+
+    def test_get_receipt_unauthorized_returns_404(self):
+        customer, order, payment = _build_pending_payment('ORD-RECEIPT-AUTH')
+        other_user = User.objects.create_user(
+            email='other-receipt-user@example.com',
+            phone='233555900888',
+            password='StrongPass123!',
+        )
+        client = _auth_client(other_user)
+        response = client.get(reverse('payment_receipt', kwargs={'reference': payment.transaction_reference}))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_get_receipt_owner_success(self):
+        customer, order, payment = _build_pending_payment('ORD-RECEIPT-SUCCESS')
+        payment.status = Payment.Status.SUCCESS
+        payment.paid_at = timezone.now()
+        payment.save()
+
+        client = _auth_client(customer)
+        response = client.get(reverse('payment_receipt', kwargs={'reference': payment.transaction_reference}))
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data['transaction_reference'] == payment.transaction_reference
+        assert data['order_no'] == order.order_no
+
+    def test_get_analytics_and_owner_stats(self):
+        customer, order, payment = _build_pending_payment('ORD-ANALYTICS-TEST')
+        payment.status = Payment.Status.SUCCESS
+        payment.paid_at = timezone.now()
+        payment.save()
+
+        # Try with customer (must fail)
+        client_cust = _auth_client(customer)
+        response_anal = client_cust.get(reverse('payment_analytics'))
+        assert response_anal.status_code == status.HTTP_403_FORBIDDEN
+
+        # Create admin and test analytics
+        admin_user = User.objects.create_user(
+            email='admin-analytics@example.com',
+            phone='233555900777',
+            password='StrongPass123!',
+            role='ADMIN'
+        )
+        client_admin = _auth_client(admin_user)
+        response_anal_admin = client_admin.get(reverse('payment_analytics'))
+        assert response_anal_admin.status_code == status.HTTP_200_OK
+        data_anal = response_anal_admin.json()
+        assert float(data_anal['total_revenue']) == 25.00
+
+        # Create owner and test owner-stats
+        owner_user = User.objects.create_user(
+            email='owner-stats-user@example.com',
+            phone='233555900666',
+            password='StrongPass123!',
+            role='OWNER'
+        )
+        # Reassign laundry owner to verify stats filtering
+        order.laundry.owner = owner_user
+        order.laundry.save()
+
+        client_owner = _auth_client(owner_user)
+        response_owner_stats = client_owner.get(reverse('payment_owner_stats'))
+        assert response_owner_stats.status_code == status.HTTP_200_OK
+        data_owner = response_owner_stats.json()
+        assert float(data_owner['total_revenue']) == 25.00
+

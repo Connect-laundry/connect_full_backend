@@ -1,7 +1,6 @@
 import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
 from django.conf import settings
 
 class Payment(models.Model):
@@ -42,6 +41,20 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for {self.order.order_no} ({self.status})"
+
+    def transition_to(self, new_status, save=True):
+        """Strict transition function for Payment state machine."""
+        if self.status == new_status:
+            return False
+            
+        terminal_states = [self.Status.SUCCESS, self.Status.FAILED, self.Status.EXPIRED]
+        if self.status in terminal_states:
+            raise ValueError(f"Cannot transition payment from terminal state '{self.status}' to '{new_status}'")
+            
+        self.status = new_status
+        if save:
+            self.save(update_fields=['status', 'updated_at'])
+        return True
 
 class WebhookEvent(models.Model):
     """Tracks processed webhook events to prevent double processing."""

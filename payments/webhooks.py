@@ -13,6 +13,10 @@ from django.views.decorators.http import require_POST
 from ordering.models import Order
 from .models import Payment, WebhookEvent
 from config.redaction import mask_reference, summarize_exception
+from marketplace.services.audit import record_audit
+from ordering.services.order_state_machine import OrderStateMachine
+from marketplace.services.notification_service import NotificationService
+from marketplace.models import Notification
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,7 @@ def _validate_webhook_payment(payment, payload):
 
     return True, None
 
+
 @csrf_exempt
 @require_POST
 def paystack_webhook(request):
@@ -96,8 +101,6 @@ def paystack_webhook(request):
     event_type = event_data.get('event')
 
     # 3. Webhook Replay Protection.
-    # Prefer Paystack's event id; fall back to a deterministic hash of the
-    # verified payload so replay protection still applies when id is missing.
     dedup_key = str(event_id) if event_id else 'sha512:' + hash_computed
     try:
         _, created = WebhookEvent.objects.get_or_create(event_id=dedup_key)
@@ -127,36 +130,79 @@ def paystack_webhook(request):
                     )
                     return HttpResponse(status=200) # Safe exit
 
-                # 6. Idempotency Check
-                if payment.status == Payment.Status.SUCCESS:
+                # 6. Idempotency Check / Terminal state validation
+                if payment.status in [Payment.Status.SUCCESS, Payment.Status.FAILED, Payment.Status.EXPIRED]:
                     logger.info(
-                        "Payment already marked as success; skipping webhook replay",
+                        f"Payment already in terminal state '{payment.status}'; skipping webhook",
                         extra={"reference": mask_reference(reference)},
                     )
                     return HttpResponse(status=200)
 
                 is_valid, failure_reason = _validate_webhook_payment(payment, event_data.get('data', {}))
                 if not is_valid:
-                    payment.status = Payment.Status.FAILED
+                    payment.transition_to(Payment.Status.FAILED, save=False)
                     payment.raw_response = _sanitize_webhook_payload(event_data.get('data', {}), reference)
                     payment.save(update_fields=['status', 'raw_response', 'updated_at'])
+                    
+                    record_audit(
+                        action="PAYMENT_WEBHOOK_REJECTED",
+                        actor=None,
+                        request=request,
+                        target_type="Payment",
+                        target_id=str(payment.id),
+                        target_repr=f"Payment {reference} Webhook Rejected",
+                        metadata={"reason": failure_reason, "amount": str(payment.amount)}
+                    )
+                    
+                    NotificationService.notify_user(
+                        user=payment.user,
+                        title="Payment Attempt Failed",
+                        body=f"Your payment attempt for order {payment.order.order_no} failed.",
+                        type=Notification.Type.ORDER,
+                        category="PAYMENT_FAILED",
+                        related_order=payment.order,
+                        dedup_key=f"pay_failed_webhook_{payment.id}"
+                    )
+                    
                     logger.warning(
                         "Webhook rejected",
                         extra={"reference": mask_reference(reference), "reason": failure_reason},
                     )
                     return HttpResponse(status=400)
 
-                # 7. Update Status
-                payment.status = Payment.Status.SUCCESS
+                # 7. Update Status using strict transitions
+                payment.transition_to(Payment.Status.SUCCESS, save=False)
                 payment.raw_response = _sanitize_webhook_payload(event_data.get('data', {}), reference)
                 payment.paid_at = timezone.now()
                 payment.save()
                 
-                # Update order
+                # Update order payment status
                 order = payment.order
-                order.status = Order.Status.CONFIRMED
                 order.payment_status = Order.PaymentStatus.PAID
-                order.save(update_fields=['status', 'payment_status', 'updated_at'])
+                order.save(update_fields=['payment_status', 'updated_at'])
+                
+                # Transition order using OrderStateMachine to trigger audit/history logs & signals
+                OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=None)
+                
+                record_audit(
+                    action="PAYMENT_WEBHOOK_CONFIRMED",
+                    actor=None,
+                    request=request,
+                    target_type="Payment",
+                    target_id=str(payment.id),
+                    target_repr=f"Payment {reference} Confirmed via Webhook",
+                    metadata={"amount": str(payment.amount), "order_id": str(order.id)}
+                )
+                
+                NotificationService.notify_user(
+                    user=payment.user,
+                    title="Payment Successful",
+                    body=f"Your payment of GHS {payment.amount} for order {order.order_no} was successful.",
+                    type=Notification.Type.ORDER,
+                    category="PAYMENT_SUCCESS",
+                    related_order=order,
+                    dedup_key=f"pay_success_webhook_{payment.id}"
+                )
                 
                 logger.info("Webhook success confirmed", extra={"reference": mask_reference(reference)})
         except Exception as e:
