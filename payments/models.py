@@ -10,6 +10,7 @@ class Payment(models.Model):
         TRANS = 'BANK_TRANSFER', _('Bank Transfer')
         CASH = 'CASH', _('Cash on Delivery')
         WALLET = 'WALLET', _('Wallet Balance')
+        MOMO = 'MOBILE_MONEY', _('Mobile Money')
 
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending')
