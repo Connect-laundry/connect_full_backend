@@ -634,3 +634,12 @@ try:
 except Exception:
     pass
 
+# Celery Beat Schedule Configuration
+CELERY_BEAT_SCHEDULE = {
+    'reconcile-pending-payments-every-10m': {
+        'task': 'payments.tasks.reconcile_pending_payments',
+        'schedule': 600.0,  # 10 minutes (600 seconds)
+    },
+}
+
+
