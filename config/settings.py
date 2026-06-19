@@ -185,10 +185,17 @@ default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', default_db_url),
-        conn_max_age=600,
+        # Neon's pooler drops idle SSL connections well before 600s, causing
+        # "SSL connection has been closed unexpectedly".  Use 0 (fresh
+        # connection per request) in production; keep a short-lived pool in dev.
+        conn_max_age=int(os.getenv('CONN_MAX_AGE', '0' if not DEBUG else '60')),
+        conn_health_checks=True,
         ssl_require=not DEBUG
     )
 }
+
+# Django 4.1+ — verify each connection is alive before handing it to a view.
+CONN_HEALTH_CHECKS = True
 
 # Set the appropriate database engine
 if USE_POSTGIS:
