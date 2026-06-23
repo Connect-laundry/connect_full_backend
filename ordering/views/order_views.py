@@ -329,6 +329,26 @@ class OrderViewSet(viewsets.ModelViewSet):
             "results": serializer.data
         })
 
+    @action(detail=True, methods=['get'])
+    def tracking(self, request, pk=None):
+        """
+        Aggregated tracking payload for the customer order detail / tracking screen.
+
+        Returns header info, derived OTP, milestone timeline (one entry per
+        backend Order.Status the order has reached or could reach), item
+        breakdown, charges/payment summary, laundry info, and the full
+        OrderStatusHistory activity log. The schema is stable even when the
+        order is brand new — fields that don't apply yet return null/empty.
+        """
+        from .tracking_view import build_tracking_payload  # local import to avoid cycle
+        order = self.get_object()
+        payload = build_tracking_payload(order, request=request)
+        return Response({
+            "status": "success",
+            "message": "Order tracking snapshot.",
+            "data": payload,
+        })
+
 class CouponViewSet(viewsets.GenericViewSet):
     """Viewset for validating and listing available coupons."""
     serializer_class = CouponSerializer
