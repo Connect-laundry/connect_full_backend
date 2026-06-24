@@ -270,7 +270,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Order.objects.filter(user=self.request.user).prefetch_related('items')
 
     def get_serializer_class(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'active']:
             return OrderDetailSerializer
         return OrderCreateSerializer
 
