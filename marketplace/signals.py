@@ -47,42 +47,12 @@ def notify_on_order_creation(sender, instance, created, **kwargs):
         )
 
 
-@receiver(order_status_changed)
-def notify_on_status_change(sender, order, from_status, to_status, user, **kwargs):
-    """Notify the customer on important order status updates."""
-    status_content = {
-        Order.Status.CONFIRMED: {
-            "title": "Order Confirmed",
-            "body": f"Your order {order.order_no} has been accepted by the laundry."
-        },
-        Order.Status.PICKED_UP: {
-            "title": "Laundry Picked Up",
-            "body": f"The rider has picked up your laundry."
-        },
-        Order.Status.OUT_FOR_DELIVERY: {
-            "title": "Out for Delivery",
-            "body": "Your fresh laundry is on its way to you!"
-        },
-        Order.Status.DELIVERED: {
-            "title": "Laundry Delivered",
-            "body": "Your order has been delivered. Thank you for choosing Connect Laundry!"
-        },
-        Order.Status.CANCELLED: {
-            "title": "Order Cancelled",
-            "body": f"Order {order.order_no} has been cancelled."
-        }
-    }
-
-    if to_status in status_content:
-        content = status_content[to_status]
-        _safe_delay(
-            create_notification,
-            user_id=str(order.user.id),
-            title=content["title"],
-            body=content["body"],
-            notification_type='ORDER',
-            related_order_id=str(order.id)
-        )
+# NOTE: Customer order-lifecycle notifications are handled exclusively by
+# ordering/signals.py::trigger_order_notifications (via NotificationService,
+# which deduplicates and applies push preferences). A second customer handler
+# previously lived here and produced DUPLICATE notifications on every status
+# change — it has been removed. This module retains only the laundry-owner
+# notification (on order creation) and the admin-audience triggers below.
 
 
 # ---------------------------------------------------------------------------

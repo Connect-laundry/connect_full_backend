@@ -1,7 +1,10 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 # pyre-ignore[missing-module]
-from .models import Notification, Feedback, PushDevice, LegalPage, UserLegalAcceptance
+from .models import (
+    Notification, Feedback, PushDevice, LegalPage, UserLegalAcceptance,
+    NotificationPreference,
+)
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -29,6 +32,26 @@ class PushDeviceSerializer(serializers.ModelSerializer):
             'web_p256dh', 'web_auth'
         ]
         read_only_fields = ['id', 'is_active', 'last_registered_at']
+
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationPreference
+        fields = [
+            'push_enabled', 'order_updates', 'payment_updates', 'promotions',
+            'campaigns', 'quiet_hours_start', 'quiet_hours_end', 'updated_at',
+        ]
+        read_only_fields = ['updated_at']
+
+    def validate_quiet_hours_start(self, value):
+        if value is not None and not (0 <= value <= 23):
+            raise serializers.ValidationError('quiet_hours_start must be 0-23.')
+        return value
+
+    def validate_quiet_hours_end(self, value):
+        if value is not None and not (0 <= value <= 23):
+            raise serializers.ValidationError('quiet_hours_end must be 0-23.')
+        return value
 
 
 class WebPushSubscriptionKeysSerializer(serializers.Serializer):

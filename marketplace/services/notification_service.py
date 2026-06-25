@@ -10,8 +10,9 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
-from marketplace.models import Notification
+from marketplace.models import Notification, NotificationPreference
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -26,6 +27,34 @@ class NotificationService:
         if user is not None:
             qs = qs.filter(user=user)
         return qs.first()
+
+    @staticmethod
+    def get_preferences(user):
+        """Return (creating if needed) the user's NotificationPreference."""
+        pref, _ = NotificationPreference.objects.get_or_create(user=user)
+        return pref
+
+    @classmethod
+    def _push_permitted(cls, user, *, type, category, priority):
+        """Decide whether a push may be sent, honouring per-user toggles and
+        quiet hours. In-app persistence is unaffected — this only gates push.
+
+        URGENT notifications bypass quiet hours (but still respect an explicit
+        category opt-out / master push-off)."""
+        try:
+            pref = cls.get_preferences(user)
+        except Exception:  # pragma: no cover - never block on pref lookup
+            return True
+
+        if not pref.allows_push(type=type, category=category):
+            return False
+
+        if priority != Notification.Priority.URGENT:
+            local_hour = timezone.localtime(timezone.now()).hour
+            if pref.in_quiet_hours(local_hour):
+                return False
+
+        return True
 
     @classmethod
     def notify_user(
@@ -63,7 +92,11 @@ class NotificationService:
             dedup_key=dedup_key,
         )
 
-        if push and getattr(settings, 'EXPO_PUSH_ENABLED', False):
+        if (
+            push
+            and getattr(settings, 'EXPO_PUSH_ENABLED', False)
+            and cls._push_permitted(user, type=type, category=category, priority=priority)
+        ):
             cls._queue_push(notification.id)
 
         return notification
