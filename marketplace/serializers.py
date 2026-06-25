@@ -3,7 +3,7 @@ from rest_framework import serializers
 # pyre-ignore[missing-module]
 from .models import (
     Notification, Feedback, PushDevice, LegalPage, UserLegalAcceptance,
-    NotificationPreference,
+    NotificationPreference, NotificationCampaign,
 )
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -12,9 +12,50 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'body', 'type', 'audience', 'category',
             'priority', 'action_url', 'is_read', 'created_at', 'read_at',
-            'related_order',
+            'related_order', 'campaign', 'push_status', 'delivered_at',
+            'opened_at', 'clicked_at',
         ]
-        read_only_fields = ['id', 'created_at', 'read_at']
+        read_only_fields = [
+            'id', 'created_at', 'read_at', 'campaign', 'push_status',
+            'delivered_at', 'opened_at', 'clicked_at',
+        ]
+
+
+class NotificationCampaignSerializer(serializers.ModelSerializer):
+    """Full campaign representation with computed engagement rates."""
+    delivery_rate = serializers.FloatField(read_only=True)
+    open_rate = serializers.FloatField(read_only=True)
+    click_rate = serializers.FloatField(read_only=True)
+    failure_rate = serializers.FloatField(read_only=True)
+    conversion_rate = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = NotificationCampaign
+        fields = [
+            'id', 'name', 'segment', 'segment_params', 'title', 'body',
+            'image_url', 'action_url', 'promo_code', 'notification_type', 'category',
+            'priority', 'status', 'scheduled_for', 'expires_at',
+            'recipients_count', 'delivered_count', 'skipped_count',
+            'failed_count', 'opened_count', 'clicked_count',
+            'converted_count', 'revenue_generated',
+            'delivery_rate', 'open_rate', 'click_rate', 'failure_rate', 'conversion_rate',
+            'created_by', 'created_at', 'sent_at',
+        ]
+        read_only_fields = [
+            'id', 'status', 'recipients_count', 'delivered_count',
+            'skipped_count', 'failed_count', 'opened_count', 'clicked_count',
+            'converted_count', 'revenue_generated',
+            'created_by', 'created_at', 'sent_at',
+        ]
+
+    def validate(self, attrs):
+        segment = attrs.get('segment', getattr(self.instance, 'segment', None))
+        params = attrs.get('segment_params', getattr(self.instance, 'segment_params', {}) or {})
+        if segment == NotificationCampaign.Segment.CUSTOM and not params.get('user_ids'):
+            raise serializers.ValidationError(
+                {'segment_params': 'CUSTOM segment requires a non-empty "user_ids" list.'}
+            )
+        return attrs
 
 class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,7 +80,8 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
         model = NotificationPreference
         fields = [
             'push_enabled', 'order_updates', 'payment_updates', 'promotions',
-            'campaigns', 'quiet_hours_start', 'quiet_hours_end', 'updated_at',
+            'campaigns', 'referrals', 'weekly_tips',
+            'quiet_hours_start', 'quiet_hours_end', 'updated_at',
         ]
         read_only_fields = ['updated_at']
 

@@ -70,6 +70,8 @@ class NotificationService:
         related_order=None,
         dedup_key='',
         push=True,
+        campaign=None,
+        promo_code='',
     ):
         """Create a USER-audience notification and (optionally) queue a push."""
         if user is None:
@@ -78,6 +80,12 @@ class NotificationService:
         existing = cls._dedup_exists(Notification.Audience.USER, dedup_key, user=user)
         if existing:
             return existing
+
+        push_allowed = (
+            push
+            and getattr(settings, 'EXPO_PUSH_ENABLED', False)
+            and cls._push_permitted(user, type=type, category=category, priority=priority)
+        )
 
         notification = Notification.objects.create(
             user=user,
@@ -90,13 +98,16 @@ class NotificationService:
             action_url=action_url,
             related_order=related_order,
             dedup_key=dedup_key,
+            campaign=campaign,
+            promo_code=promo_code,
+            push_status=(
+                Notification.PushStatus.PENDING if push_allowed
+                else Notification.PushStatus.SKIPPED if push
+                else Notification.PushStatus.NONE
+            ),
         )
 
-        if (
-            push
-            and getattr(settings, 'EXPO_PUSH_ENABLED', False)
-            and cls._push_permitted(user, type=type, category=category, priority=priority)
-        ):
+        if push_allowed:
             cls._queue_push(notification.id)
 
         return notification

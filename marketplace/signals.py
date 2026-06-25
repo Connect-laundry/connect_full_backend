@@ -184,6 +184,14 @@ def admin_notify_payment(sender, instance, created, **kwargs):
                     related_order=getattr(instance, 'order', None),
                     dedup_key=f'payment_success_user:{instance.id}',
                 )
+                # Credit any recent campaign that drove this paid order.
+                def _attribute():
+                    from marketplace.services.campaign_service import CampaignService
+                    CampaignService.attribute_conversion(
+                        instance.user, order=getattr(instance, 'order', None),
+                        value=instance.amount,
+                    )
+                _safe(_attribute)
         else:  # FAILED
             NotificationService.notify_admins(
                 title="Payment failed",

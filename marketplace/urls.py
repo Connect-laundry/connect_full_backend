@@ -4,10 +4,12 @@ from .views.faq import FAQView
 from .views.feedback import FeedbackView
 from .views.notifications import NotificationViewSet
 from .views.special_offer import SpecialOfferViewSet
+from .views.campaigns import CampaignViewSet
 from .views.legal import SupportLegalDocumentDetailView, SupportLegalDocumentListView
 
 router = DefaultRouter()
 router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'campaigns', CampaignViewSet, basename='campaign')
 router.register(r'home/special-offers', SpecialOfferViewSet, basename='special-offer')
 
 urlpatterns = [

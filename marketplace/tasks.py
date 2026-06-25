@@ -5,6 +5,8 @@ import logging
 import requests
 from django.conf import settings
 # pyre-ignore[missing-module]
+from django.utils import timezone
+# pyre-ignore[missing-module]
 from django.contrib.auth import get_user_model
 # pyre-ignore[missing-module]
 from marketplace.models import Notification, PushDevice
@@ -133,9 +135,13 @@ def send_real_push(self, notification_id):
             "category": notification.category,
             "relatedOrder": str(notification.related_order_id) if notification.related_order_id else None,
             "actionUrl": notification.action_url or None,
+            "promoCode": notification.promo_code or None,
         }
         sent = deliver_push(notification.title, notification.body, data, tokens)
         if sent:
+            notification.push_status = Notification.PushStatus.SENT
+            notification.delivered_at = timezone.now()
+            notification.save(update_fields=['push_status', 'delivered_at'])
             logger.info(
                 "Push notifications sent",
                 extra={"notification_id": str(notification.id), "count": sent},
@@ -145,6 +151,21 @@ def send_real_push(self, notification_id):
         pass
     except requests.RequestException as e:
         logger.error("Push delivery failed", extra={"error": summarize_exception(e)})
+        # On the final attempt, mark the notification failed and roll the
+        # failure up to its campaign (idempotent: only counts once, at exhaustion).
+        if self.request.retries >= self.max_retries:
+            try:
+                notif = Notification.objects.filter(id=notification_id).first()
+                if notif and notif.push_status != Notification.PushStatus.FAILED:
+                    notif.push_status = Notification.PushStatus.FAILED
+                    notif.save(update_fields=['push_status'])
+                    if notif.campaign_id:
+                        from django.db.models import F
+                        Notification.campaign.field.related_model.objects.filter(
+                            pk=notif.campaign_id
+                        ).update(failed_count=F('failed_count') + 1)
+            except Exception:  # pragma: no cover - defensive
+                pass
         raise
     return 0
 
@@ -245,6 +266,33 @@ def abandoned_booking_reminder(abandoned_hours=6):
     return delivered
 
 
+@shared_task(name="marketplace.tasks.process_scheduled_campaigns")
+def process_scheduled_campaigns():
+    """Run any SCHEDULED campaign whose scheduled_for has arrived.
+
+    Drives admin "schedule for later" sends (tomorrow 8am, Black Friday, etc.).
+    Expired campaigns are marked FAILED and skipped. Each campaign is handed to
+    run_campaign so a single slow campaign can't block the sweep.
+    """
+    from marketplace.models import NotificationCampaign
+
+    now = timezone.now()
+    due = NotificationCampaign.objects.filter(
+        status=NotificationCampaign.Status.SCHEDULED,
+        scheduled_for__isnull=False,
+        scheduled_for__lte=now,
+    )
+    queued = 0
+    for campaign in due:
+        if campaign.is_expired:
+            campaign.status = NotificationCampaign.Status.FAILED
+            campaign.save(update_fields=['status'])
+            continue
+        run_campaign.delay(str(campaign.id))
+        queued += 1
+    if queued:
+        logger.info("Scheduled campaigns queued", extra={"count": queued})
+    return queued
 @shared_task(name="marketplace.tasks.enqueue_rainy_day_promo")
 def enqueue_rainy_day_promo():
     """Create and queue a rainy-day promo campaign when the weather feed says rain is likely."""

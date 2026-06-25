@@ -93,3 +93,13 @@ class PaymentCreateThrottle(SimpleRateThrottle):
 
 class AdminSearchThrottle(UserRateThrottle):
     scope = 'admin_search'
+
+
+class NotifTrackThrottle(SimpleRateThrottle):
+    """Per-user limit on notification open/click tracking events."""
+    scope = 'notif_track'
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
