@@ -68,6 +68,14 @@ services:
         value: GHS
       - key: EXPO_PUSH_ENABLED
         value: "True"
+      - key: WEATHER_PROMO_ENABLED
+        value: "True"
+      - key: WEATHER_PROMO_PROVIDER
+        value: open-meteo
+      - key: WEATHER_PROMO_LATITUDE
+        value: "5.6037"
+      - key: WEATHER_PROMO_LONGITUDE
+        value: "-0.1870"
       - key: SENTRY_DSN
         sync: false
       - key: INTERNAL_HEALTH_TOKEN
@@ -131,6 +139,75 @@ services:
         value: GHS
       - key: EXPO_PUSH_ENABLED
         value: "True"
+      - key: SENTRY_DSN
+        sync: false
+      - key: CLERK_APPLICATION_ID
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_JWT_ISSUER
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: CLERK_JWT_AUDIENCE
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+
+  - type: worker
+    name: connect-laundry-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    command: celery -A config beat --loglevel=info
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: connectlaundry-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: connectlaundry-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: connectlaundry-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: connect-laundry-backend
+          property: envVar:SECRET_KEY
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: PAYMENT_CURRENCY
+        value: GHS
+      - key: EXPO_PUSH_ENABLED
+        value: "True"
+      - key: WEATHER_PROMO_ENABLED
+        value: "True"
+      - key: WEATHER_PROMO_PROVIDER
+        value: open-meteo
+      - key: WEATHER_PROMO_LATITUDE
+        value: "5.6037"
+      - key: WEATHER_PROMO_LONGITUDE
+        value: "-0.1870"
       - key: SENTRY_DSN
         sync: false
       - key: CLERK_APPLICATION_ID

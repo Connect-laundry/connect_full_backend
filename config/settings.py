@@ -533,6 +533,28 @@ MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', '')
 # OCR provider for AI-assisted price-list import. '' / 'null' = stub (no extraction).
 OCR_PROVIDER = os.getenv('OCR_PROVIDER', '').lower()
 
+# Rainy-day promo weather feed. Disabled by default so production can opt in
+# after choosing the exact city/coordinate target.
+WEATHER_PROMO_ENABLED = os.getenv('WEATHER_PROMO_ENABLED', 'False') == 'True'
+WEATHER_PROMO_PROVIDER = os.getenv('WEATHER_PROMO_PROVIDER', 'open-meteo').lower()
+WEATHER_PROMO_OPEN_METEO_URL = os.getenv(
+    'WEATHER_PROMO_OPEN_METEO_URL',
+    'https://api.open-meteo.com/v1/forecast',
+)
+WEATHER_PROMO_LATITUDE = os.getenv('WEATHER_PROMO_LATITUDE', '')
+WEATHER_PROMO_LONGITUDE = os.getenv('WEATHER_PROMO_LONGITUDE', '')
+WEATHER_PROMO_LOOKAHEAD_HOURS = int(os.getenv('WEATHER_PROMO_LOOKAHEAD_HOURS', 6))
+WEATHER_PROMO_RAIN_PROBABILITY_THRESHOLD = int(
+    os.getenv('WEATHER_PROMO_RAIN_PROBABILITY_THRESHOLD', 60)
+)
+WEATHER_PROMO_MIN_RAIN_MM = float(os.getenv('WEATHER_PROMO_MIN_RAIN_MM', 0.1))
+WEATHER_PROMO_TITLE = os.getenv('WEATHER_PROMO_TITLE', 'Rainy day laundry rescue')
+WEATHER_PROMO_BODY = os.getenv(
+    'WEATHER_PROMO_BODY',
+    'Rain is likely today. Schedule a pickup and keep laundry day dry.',
+)
+WEATHER_PROMO_ACTION_URL = os.getenv('WEATHER_PROMO_ACTION_URL', '/home')
+
 
 # Unfold Admin Configuration
 from django.urls import reverse_lazy
@@ -642,10 +664,31 @@ except Exception:
     pass
 
 # Celery Beat Schedule Configuration
+from celery.schedules import crontab  # noqa: E402
+
 CELERY_BEAT_SCHEDULE = {
     'reconcile-pending-payments-every-10m': {
         'task': 'payments.tasks.reconcile_pending_payments',
         'schedule': 600.0,  # 10 minutes (600 seconds)
+    },
+    # Re-engagement campaigns (Duolingo-style). Times are server-local; the
+    # per-user quiet-hours check in NotificationService still defers pushes
+    # that would land during a user's quiet window.
+    'abandoned-booking-reminder-hourly': {
+        'task': 'marketplace.tasks.abandoned_booking_reminder',
+        'schedule': 3600.0,  # hourly sweep for orders placed but unpaid
+    },
+    'weekly-pending-orders-reminder': {
+        'task': 'marketplace.tasks.weekly_pending_orders_reminder',
+        'schedule': crontab(day_of_week='mon', hour=10, minute=0),
+    },
+    'inactivity-reactivation-daily': {
+        'task': 'marketplace.tasks.inactivity_reactivation',
+        'schedule': crontab(hour=11, minute=0),  # daily; monthly per-user cap
+    },
+    'rainy-day-promo-hourly': {
+        'task': 'marketplace.tasks.enqueue_rainy_day_promo',
+        'schedule': 3600.0,
     },
 }
 

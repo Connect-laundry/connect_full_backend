@@ -5,9 +5,11 @@ from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
-from marketplace.models import Notification, PushDevice
+from marketplace.models import Notification, PushDevice, NotificationPreference
 # pyre-ignore[missing-module]
-from ..serializers import NotificationSerializer, PushDeviceSerializer
+from ..serializers import (
+    NotificationSerializer, PushDeviceSerializer, NotificationPreferenceSerializer,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -82,6 +84,26 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             "status": "success",
             "message": "All notifications marked as read"
+        })
+
+    @decorators.action(detail=False, methods=['get', 'patch'], url_path='preferences')
+    def preferences(self, request):
+        """Get or update the current user's notification preferences."""
+        pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+
+        if request.method == 'PATCH':
+            serializer = NotificationPreferenceSerializer(pref, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({
+                "status": "success",
+                "message": "Preferences updated",
+                "data": serializer.data,
+            })
+
+        return Response({
+            "status": "success",
+            "data": NotificationPreferenceSerializer(pref).data,
         })
 
     @decorators.action(detail=False, methods=['post', 'delete'], url_path='push-device')

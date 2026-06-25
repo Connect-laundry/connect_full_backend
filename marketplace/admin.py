@@ -12,6 +12,8 @@ from .models import (
     FailedTask,
     PushDevice,
     Notification,
+    NotificationPreference,
+    NotificationCampaign,
     AuditLog,
     LegalPage,
     UserLegalAcceptance,
@@ -29,6 +31,33 @@ class NotificationAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user')
+
+
+@admin.register(NotificationPreference)
+class NotificationPreferenceAdmin(ModelAdmin):
+    list_display = ('user', 'push_enabled', 'order_updates', 'payment_updates',
+                    'promotions', 'campaigns', 'updated_at')
+    list_filter = ('push_enabled', 'order_updates', 'payment_updates', 'promotions', 'campaigns')
+    search_fields = ('user__email',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(NotificationCampaign)
+class NotificationCampaignAdmin(ModelAdmin):
+    list_display = ('name', 'segment', 'status', 'recipients_count',
+                    'delivered_count', 'skipped_count', 'scheduled_for', 'sent_at')
+    list_filter = ('segment', 'status', 'notification_type')
+    search_fields = ('name', 'title', 'body')
+    readonly_fields = ('id', 'recipients_count', 'delivered_count', 'skipped_count',
+                       'created_at', 'sent_at')
+    actions = ['send_now']
+
+    @admin.action(description='Send selected campaigns now')
+    def send_now(self, request, queryset):
+        from .tasks import run_campaign
+        for campaign in queryset:
+            run_campaign.delay(str(campaign.id))
+        self.message_user(request, f"Queued {queryset.count()} campaign(s) for delivery.")
 
 
 @admin.register(AuditLog)
