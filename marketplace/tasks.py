@@ -79,7 +79,15 @@ def deliver_push(title, body, data, tokens):
         return 0
 
     messages = [
-        {"to": token, "sound": "default", "title": title, "body": body, "data": data or {}}
+        {
+            "to": token,
+            "sound": "default",
+            "title": title,
+            "body": body,
+            "data": data or {},
+            # image_url is included when provided (iOS shows as attachment preview).
+            **({"image": data.get("imageUrl")} if isinstance(data, dict) and data.get("imageUrl") else {}),
+        }
         for token in valid_tokens
     ]
 
@@ -136,6 +144,12 @@ def send_real_push(self, notification_id):
             "relatedOrder": str(notification.related_order_id) if notification.related_order_id else None,
             "actionUrl": notification.action_url or None,
             "promoCode": notification.promo_code or None,
+            # Pass campaign image_url so iOS can render a rich attachment.
+            "imageUrl": (
+                notification.campaign.image_url
+                if notification.campaign_id and notification.campaign.image_url
+                else None
+            ),
         }
         sent = deliver_push(notification.title, notification.body, data, tokens)
         if sent:

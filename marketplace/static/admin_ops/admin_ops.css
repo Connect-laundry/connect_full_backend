@@ -23,7 +23,7 @@
 #aops-header {
   position: fixed;
   top: 14px;
-  right: 20px;
+  right: 280px;
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -88,7 +88,7 @@
 #aops-bell-panel {
   position: fixed;
   top: 58px;
-  right: 20px;
+  right: 180px;
   width: 380px;
   max-height: 70vh;
   background: var(--aops-bg);
