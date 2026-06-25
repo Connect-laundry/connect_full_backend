@@ -310,6 +310,7 @@ class PreferencesAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+
 @override_settings(EXPO_PUSH_ENABLED=True)
 class AnalyticsTrackingTests(APITestCase):
     def setUp(self):

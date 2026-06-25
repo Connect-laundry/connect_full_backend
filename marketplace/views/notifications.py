@@ -114,7 +114,6 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
                 "clicked_at": notification.clicked_at,
             },
         })
-
     @decorators.action(detail=False, methods=['get', 'patch'], url_path='preferences')
     def preferences(self, request):
         """Get or update the current user's notification preferences."""

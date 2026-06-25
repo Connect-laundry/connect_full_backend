@@ -49,7 +49,6 @@ class CampaignService:
             days = int(params.get('active_days', 14))
             cutoff = timezone.now() - timedelta(days=days)
             return customers.filter(last_login__gte=cutoff)
-
         if segment == Segment.INACTIVE:
             days = int(params.get('inactive_days', 14))
             cutoff = timezone.now() - timedelta(days=days)
@@ -73,7 +72,6 @@ class CampaignService:
         if segment == Segment.CUSTOM:
             ids = params.get('user_ids') or []
             return customers.filter(pk__in=ids)
-
         if segment == Segment.PENDING_ORDERS:
             active = ['PENDING', 'CONFIRMED', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
             return customers.filter(orders__status__in=active).distinct()
@@ -228,7 +226,6 @@ class CampaignService:
             campaign.save(update_fields=['status'])
             logger.info("Campaign skipped: expired", extra={'campaign_id': str(campaign.id)})
             return 0, 0
-
         recipients = list(cls.resolve_recipients(campaign.segment, campaign.segment_params))
         campaign.status = NotificationCampaign.Status.SENDING
         campaign.recipients_count = len(recipients)

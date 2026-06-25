@@ -293,8 +293,6 @@ def process_scheduled_campaigns():
     if queued:
         logger.info("Scheduled campaigns queued", extra={"count": queued})
     return queued
-
-
 @shared_task(name="marketplace.tasks.enqueue_rainy_day_promo")
 def enqueue_rainy_day_promo():
     """Create and queue a rainy-day promo campaign when the weather feed says rain is likely."""
