@@ -3,6 +3,8 @@ from rest_framework import viewsets, permissions, decorators, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
+from config.throttling import NotifTrackThrottle
+# pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
 from marketplace.models import Notification, PushDevice, NotificationPreference
@@ -84,6 +86,33 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             "status": "success",
             "message": "All notifications marked as read"
+        })
+
+    @decorators.action(
+        detail=True, methods=['post'], url_path='track',
+        throttle_classes=[NotifTrackThrottle],
+    )
+    def track(self, request, pk=None):
+        """Record an engagement event for a notification.
+
+        Body: {"event": "opened" | "clicked"}. Idempotent — repeated events
+        only count once. Drives campaign open/click analytics. Scoped to the
+        requesting user's own notifications via get_object()/get_queryset().
+        """
+        notification = self.get_object()
+        event = (request.data.get('event') or 'opened').lower()
+        if event == 'clicked':
+            notification.mark_clicked()
+        else:
+            notification.mark_opened()
+        return Response({
+            "status": "success",
+            "message": f"Notification {event} recorded",
+            "data": {
+                "id": str(notification.id),
+                "opened_at": notification.opened_at,
+                "clicked_at": notification.clicked_at,
+            },
         })
 
     @decorators.action(detail=False, methods=['get', 'patch'], url_path='preferences')

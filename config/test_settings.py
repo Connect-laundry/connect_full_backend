@@ -134,6 +134,7 @@ REST_FRAMEWORK = {
         'reset_password_ip': '3/hour',
         'payment_create': '10/minute',
         'admin_search': '1000/minute',
+        'notif_track': '6000/minute',
     }
 }
 

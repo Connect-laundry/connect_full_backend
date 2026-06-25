@@ -44,19 +44,54 @@ class NotificationPreferenceAdmin(ModelAdmin):
 
 @admin.register(NotificationCampaign)
 class NotificationCampaignAdmin(ModelAdmin):
-    list_display = ('name', 'segment', 'status', 'recipients_count',
-                    'delivered_count', 'skipped_count', 'scheduled_for', 'sent_at')
-    list_filter = ('segment', 'status', 'notification_type')
+    list_display = ('name', 'segment', 'status', 'audience_preview', 'recipients_count',
+                    'delivered_count', 'open_rate_display', 'click_rate_display',
+                    'scheduled_for', 'sent_at')
+    list_filter = ('segment', 'status', 'notification_type', 'priority')
     search_fields = ('name', 'title', 'body')
     readonly_fields = ('id', 'recipients_count', 'delivered_count', 'skipped_count',
-                       'created_at', 'sent_at')
+                       'failed_count', 'opened_count', 'clicked_count',
+                       'analytics_summary', 'created_at', 'sent_at')
     actions = ['send_now']
+
+    @display(description='Audience (est.)')
+    def audience_preview(self, obj):
+        """Live count of the segment so admins see reach before sending."""
+        from .services.campaign_service import CampaignService
+        try:
+            return CampaignService.resolve_recipients(obj.segment, obj.segment_params).count()
+        except Exception:
+            return '—'
+
+    @display(description='Open rate')
+    def open_rate_display(self, obj):
+        return f"{obj.open_rate}%"
+
+    @display(description='Click rate')
+    def click_rate_display(self, obj):
+        return f"{obj.click_rate}%"
+
+    @display(description='Analytics')
+    def analytics_summary(self, obj):
+        return format_html(
+            "Delivered {} / {} ({}%) · Opened {} ({}%) · Clicked {} ({}%) · Failed {} ({}%)",
+            obj.delivered_count, obj.recipients_count, obj.delivery_rate,
+            obj.opened_count, obj.open_rate,
+            obj.clicked_count, obj.click_rate,
+            obj.failed_count, obj.failure_rate,
+        )
 
     @admin.action(description='Send selected campaigns now')
     def send_now(self, request, queryset):
         from .tasks import run_campaign
+        from .services.audit import record_audit
         for campaign in queryset:
             run_campaign.delay(str(campaign.id))
+            record_audit(
+                action='campaign.send', request=request,
+                target_type='NotificationCampaign', target_id=str(campaign.id),
+                target_repr=campaign.name, metadata={'via': 'admin_action'},
+            )
         self.message_user(request, f"Queued {queryset.count()} campaign(s) for delivery.")
 
 

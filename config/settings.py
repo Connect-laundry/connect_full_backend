@@ -307,6 +307,8 @@ REST_FRAMEWORK = {
         'reset_password_ip': os.getenv('THROTTLE_RESET_PASSWORD_IP', '10/hour'),
         'payment_create': '10000/hour' if DEBUG else os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
         'admin_search': os.getenv('THROTTLE_ADMIN_SEARCH', '120/minute'),
+        # Notification open/click tracking — generous but bounds abuse.
+        'notif_track': os.getenv('THROTTLE_NOTIF_TRACK', '120/minute'),
     },
 }
 
@@ -689,6 +691,11 @@ CELERY_BEAT_SCHEDULE = {
     'rainy-day-promo-hourly': {
         'task': 'marketplace.tasks.enqueue_rainy_day_promo',
         'schedule': 3600.0,
+    },
+    # Picks up admin-scheduled campaigns ("send later") once their time arrives.
+    'process-scheduled-campaigns-every-minute': {
+        'task': 'marketplace.tasks.process_scheduled_campaigns',
+        'schedule': 60.0,
     },
 }
 
