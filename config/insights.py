@@ -18,23 +18,24 @@ from django.utils import timezone
 
 from analytics import metrics
 
-# (key, label, emoji icon) — drives the left navigation + routing.
+# (key, label, icon_key) — drives the left navigation + routing.
+# icon_key maps to SVG paths defined in the template; no emoji used.
 SECTIONS = [
-    ("overview", "Overview", "📊"),
-    ("realtime", "Realtime", "⚡"),
-    ("users", "Users", "👥"),
-    ("orders", "Orders", "📦"),
-    ("revenue", "Revenue", "💰"),
-    ("laundries", "Laundries", "🧺"),
-    ("notifications", "Notifications", "🔔"),
-    ("marketing", "Marketing", "🎯"),
-    ("referrals", "Referrals", "👋"),
-    ("funnels", "Funnels", "📈"),
-    ("retention", "Retention", "❤️"),
-    ("ai-insights", "AI Insights", "🤖"),
-    ("errors", "Errors", "⚠️"),
-    ("system-health", "System Health", "🖥️"),
-    ("reports", "Reports", "📄"),
+    ("overview",      "Overview",      "grid"),
+    ("realtime",      "Realtime",      "activity"),
+    ("users",         "Users",         "users"),
+    ("orders",        "Orders",        "package"),
+    ("revenue",       "Revenue",       "trending-up"),
+    ("laundries",     "Laundries",     "droplets"),
+    ("notifications", "Notifications", "bell"),
+    ("marketing",     "Marketing",     "megaphone"),
+    ("referrals",     "Referrals",     "share"),
+    ("funnels",       "Funnels",       "filter"),
+    ("retention",     "Retention",     "refresh-cw"),
+    ("ai-insights",   "AI Insights",   "cpu"),
+    ("errors",        "Errors",        "alert-triangle"),
+    ("system-health", "System Health", "server"),
+    ("reports",       "Reports",       "file-text"),
 ]
 SECTION_KEYS = {s[0] for s in SECTIONS}
 
@@ -418,7 +419,7 @@ def insights_view(request, section="overview"):
         "title": "Connect Insights",
         "section_key": section,
         "section_label": dict((k, l) for k, l, _ in SECTIONS)[section],
-        "sections": [{"key": k, "label": l, "icon": i} for k, l, i in SECTIONS],
+        "sections": [{"key": k, "label": l, "icon_key": i} for k, l, i in SECTIONS],
         "days": days,
         "day_options": [1, 7, 30, 90],
         "show_filters": section in FILTERABLE,
