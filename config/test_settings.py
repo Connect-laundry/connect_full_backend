@@ -147,6 +147,13 @@ PAYSTACK_SECRET_KEY = 'test-paystack-secret'
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = 24
 PAYMENT_CURRENCY = 'GHS'
 
+# Connect Insights — Sentry Issues API + report recipients (test defaults).
+SENTRY_API_BASE = 'https://sentry.io/api/0'
+SENTRY_API_TOKEN = ''
+SENTRY_ORG_SLUG = ''
+SENTRY_PROJECT_SLUG = ''
+ANALYTICS_REPORT_RECIPIENTS = []
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

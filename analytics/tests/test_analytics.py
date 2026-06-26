@@ -116,3 +116,44 @@ class ServerSignalTests(APITestCase):
                              pickup_date=timezone.now(), address="A")
         self.assertTrue(
             AnalyticsEvent.objects.filter(event_name='ORDER_CREATED', user=self.user).exists())
+
+
+class PruneOldEventsTests(APITestCase):
+    def test_prune_old_events(self):
+        from analytics.tasks import prune_old_events
+        from datetime import timedelta
+        
+        # Create a recent event
+        e_recent = AnalyticsEvent.objects.create(event_name='APP_OPEN')
+        
+        # Create an old event (we will update its created_at to bypass auto_now_add)
+        e_old = AnalyticsEvent.objects.create(event_name='APP_OPEN')
+        cutoff_date = timezone.now() - timedelta(days=181)
+        AnalyticsEvent.objects.filter(id=e_old.id).update(created_at=cutoff_date)
+        
+        # Run prune task with default retention (180 days)
+        prune_old_events()
+        
+        # Assert e_recent still exists, but e_old is deleted
+        self.assertTrue(AnalyticsEvent.objects.filter(id=e_recent.id).exists())
+        self.assertFalse(AnalyticsEvent.objects.filter(id=e_old.id).exists())
+
+    def test_prune_old_events_custom_retention(self):
+        from analytics.tasks import prune_old_events
+        from django.test import override_settings
+        from datetime import timedelta
+        
+        e_recent = AnalyticsEvent.objects.create(event_name='APP_OPEN')
+        e_old = AnalyticsEvent.objects.create(event_name='APP_OPEN')
+        # make it 35 days old
+        cutoff_date = timezone.now() - timedelta(days=35)
+        AnalyticsEvent.objects.filter(id=e_old.id).update(created_at=cutoff_date)
+        
+        # Run prune task with custom retention of 30 days
+        with override_settings(ANALYTICS_RETENTION_DAYS=30):
+            prune_old_events()
+            
+        # Assert e_recent still exists, but e_old is deleted
+        self.assertTrue(AnalyticsEvent.objects.filter(id=e_recent.id).exists())
+        self.assertFalse(AnalyticsEvent.objects.filter(id=e_old.id).exists())
+

@@ -469,6 +469,17 @@ if (
         before_send=_before_send_sentry,
     )
 
+# Sentry Issues API (read-only) — powers the Connect Insights → Errors panel.
+# The DSN can only *send* events; querying issues needs an org auth token.
+# Create one at: Settings → Account → API → Auth Tokens (scope: project:read).
+SENTRY_API_BASE = os.getenv('SENTRY_API_BASE', 'https://sentry.io/api/0')
+SENTRY_API_TOKEN = os.getenv('SENTRY_API_TOKEN', '')
+SENTRY_ORG_SLUG = os.getenv('SENTRY_ORG_SLUG', '')
+SENTRY_PROJECT_SLUG = os.getenv('SENTRY_PROJECT_SLUG', '')
+
+# Scheduled analytics email reports — comma-separated admin recipients.
+ANALYTICS_REPORT_RECIPIENTS = _parse_csv_env('ANALYTICS_REPORT_RECIPIENTS')
+
 LOGGING_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'INFO')
 
 LOGGING = {
@@ -617,9 +628,9 @@ UNFOLD = {
                         "link": reverse_lazy("admin:index"),
                     },
                     {
-                        "title": _("Analytics"),
+                        "title": _("Connect Insights"),
                         "icon": "insights",
-                        "link": reverse_lazy("admin-analytics-dashboard"),
+                        "link": reverse_lazy("insights-home"),
                     },
                     {
                         "title": _("Orders"),
@@ -670,11 +681,17 @@ try:
     initialize_google_credentials()
 except Exception:
     pass
+# Analytics Retention Configuration
+ANALYTICS_RETENTION_DAYS = 180
 
 # Celery Beat Schedule Configuration
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
+    'prune-old-analytics-events-daily': {
+        'task': 'analytics.tasks.prune_old_events',
+        'schedule': crontab(hour=3, minute=0),  # daily at 3:00 AM
+    },
     'reconcile-pending-payments-every-10m': {
         'task': 'payments.tasks.reconcile_pending_payments',
         'schedule': 600.0,  # 10 minutes (600 seconds)
@@ -702,6 +719,22 @@ CELERY_BEAT_SCHEDULE = {
     'process-scheduled-campaigns-every-minute': {
         'task': 'marketplace.tasks.process_scheduled_campaigns',
         'schedule': 60.0,
+    },
+    # Scheduled analytics email reports (no-op unless ANALYTICS_REPORT_RECIPIENTS set).
+    'analytics-report-daily': {
+        'task': 'analytics.reports.email_period_report',
+        'schedule': crontab(hour=7, minute=0),
+        'kwargs': {'period': 'daily'},
+    },
+    'analytics-report-weekly': {
+        'task': 'analytics.reports.email_period_report',
+        'schedule': crontab(day_of_week='mon', hour=7, minute=30),
+        'kwargs': {'period': 'weekly'},
+    },
+    'analytics-report-monthly': {
+        'task': 'analytics.reports.email_period_report',
+        'schedule': crontab(day_of_month='1', hour=8, minute=0),
+        'kwargs': {'period': 'monthly'},
     },
 }
 

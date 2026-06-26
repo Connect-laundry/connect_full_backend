@@ -1,0 +1,153 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="display:flex;gap:20px;align-items:flex-start;max-width:1400px;margin:0 auto;">
+
+  <!-- Left navigation -->
+  <nav style="flex:0 0 200px;position:sticky;top:16px;">
+    <div style="font-weight:800;font-size:18px;margin-bottom:12px;color:#9333ea;">Connect Insights</div>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      {% for s in sections %}
+        <a href="{% url 'insights-section' s.key %}?days={{ days }}"
+           style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;text-decoration:none;
+                  {% if s.key == section_key %}background:#9333ea;color:#fff;font-weight:700;{% else %}color:#333;{% endif %}">
+          <span>{{ s.icon }}</span><span style="font-size:13px;">{{ s.label }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <div style="flex:1;min-width:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
+      <h1 style="margin:0;font-size:22px;">{{ section_label }}</h1>
+      <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label for="days" style="font-weight:600;">Period:</label>
+        <select id="days" name="days" onchange="this.form.submit()"
+                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;">
+          {% for opt in day_options %}
+            <option value="{{ opt }}" {% if opt == days %}selected{% endif %}>
+              {% if opt == 1 %}Today{% else %}Last {{ opt }} days{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        {% if show_filters %}
+        <select name="city" onchange="this.form.submit()"
+                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;">
+          <option value="">All cities</option>
+          {% for c in cities %}
+            <option value="{{ c }}" {% if c == selected_city %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+        <select name="laundry_id" onchange="this.form.submit()"
+                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;max-width:200px;">
+          <option value="">All laundries</option>
+          {% for l in laundries %}
+            <option value="{{ l.id }}" {% if l.id == selected_laundry %}selected{% endif %}>{{ l.name }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </form>
+    </div>
+
+    {% if cards %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+      {% for c in cards %}
+        {% include "admin/_analytics_card.html" with label=c.label value=c.value suffix=c.suffix %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if insights %}
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+      {% for ins in insights %}
+        <div style="background:#fff;border:1px solid #eee;border-left:4px solid {% if ins.positive %}#16a34a{% else %}#dc2626{% endif %};border-radius:10px;padding:12px 16px;">
+          <div style="font-weight:600;color:#1a1a1a;">{{ ins.text }}</div>
+          {% if ins.recommendation %}<div style="color:#666;font-size:13px;margin-top:4px;">💡 {{ ins.recommendation }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if charts_json != "[]" %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;margin-bottom:24px;">
+      <!-- canvases injected by JS below -->
+    </div>
+    <div id="insights-charts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;margin-bottom:24px;"></div>
+    {% endif %}
+
+    {% for t in tables %}
+    <div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;margin-bottom:20px;overflow:auto;">
+      <div style="font-weight:700;margin-bottom:12px;">{{ t.title }}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr>
+          {% for col in t.columns %}<th style="text-align:left;border-bottom:2px solid #9333ea;padding:6px 8px;">{{ col }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for row in t.rows %}
+          <tr>{% for cell in row %}<td style="border-bottom:1px solid #f0f0f0;padding:6px 8px;">{{ cell }}</td>{% endfor %}</tr>
+          {% empty %}
+          <tr><td colspan="{{ t.columns|length }}" style="padding:12px;color:#999;">No data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+
+    {% if is_reports %}
+    <div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;margin-bottom:20px;">
+      <div style="font-weight:700;margin-bottom:12px;">Generate report</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=csv&days={{ days }}">Orders CSV</a>
+        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=xlsx&days={{ days }}">Orders Excel</a>
+        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=pdf&days={{ days }}">Orders PDF</a>
+        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=payments&fmt=xlsx&days={{ days }}">Payments Excel</a>
+        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=events&fmt=csv&days={{ days }}">Events CSV</a>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if notes %}
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 16px;color:#6b21a8;font-size:13px;">
+      {% for note in notes %}<div style="margin:2px 0;">ℹ️ {{ note }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="insights-data" type="application/json">{{ charts_json|safe }}</script>
+<script>
+(function () {
+  var holder = document.getElementById('insights-charts');
+  if (!holder || typeof Chart === 'undefined') return;
+  var charts; try { charts = JSON.parse(document.getElementById('insights-data').textContent); } catch (e) { return; }
+  var PURPLE = '#9333ea';
+  var PALETTE = ['#9333ea','#c084fc','#7e22ce','#a855f7','#d8b4fe','#6b21a8'];
+  charts.forEach(function (c) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;';
+    wrap.innerHTML = '<div style="font-weight:700;margin-bottom:12px;">' + c.title + '</div>';
+    var canvas = document.createElement('canvas'); canvas.height = 200; wrap.appendChild(canvas);
+    holder.appendChild(wrap);
+    var isPie = c.kind === 'doughnut' || c.kind === 'pie';
+    new Chart(canvas, {
+      type: c.kind,
+      data: {
+        labels: c.labels,
+        datasets: [{
+          label: c.label || '',
+          data: c.values,
+          borderColor: PURPLE,
+          backgroundColor: isPie ? PALETTE : (c.kind === 'line' ? 'rgba(147,51,234,0.15)' : PURPLE),
+          fill: c.kind === 'line',
+          tension: 0.3,
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: isPie } } }
+    });
+  });
+})();
+</script>
+{% endblock %}

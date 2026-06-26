@@ -28,6 +28,7 @@ from config.views.health import health_check
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from marketplace.views.legal import PublicLegalHtmlView
 from config.admin_analytics import analytics_dashboard_view, analytics_export_view
+from config.insights import insights_view
 
 root_target = '/api/docs/' if settings.DEBUG else '/health/'
 
@@ -50,6 +51,8 @@ urlpatterns = [
         content_type='text/html'
     ), name='pwa_offline'),
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
+    path('admin/insights/', insights_view, name='insights-home'),
+    path('admin/insights/<str:section>/', insights_view, name='insights-section'),
     path('admin/analytics-dashboard/', analytics_dashboard_view, name='admin-analytics-dashboard'),
     path('admin/analytics-export/', analytics_export_view, name='admin-analytics-export'),
     path('admin/', admin.site.urls),
