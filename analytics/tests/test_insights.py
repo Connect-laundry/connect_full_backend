@@ -85,6 +85,17 @@ class InsightsPageTests(APITestCase):
         r = self.client.get(reverse('insights-home'))
         self.assertEqual(r.status_code, 200)
 
+    def test_overview_emits_cards_charts_and_local_chartjs(self):
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse('insights-section', kwargs={'section': 'overview'})).content.decode()
+        # KPI cards rendered server-side (visible even if JS fails).
+        self.assertIn('Revenue today', html)
+        # Chart holder + chart payload present.
+        self.assertIn('insights-charts', html)
+        self.assertIn('ovRev', html)
+        # Chart.js is self-hosted (no hard dependency on an external CDN).
+        self.assertIn('insights/chart.umd.min.js', html)
+
     def test_unknown_section_404(self):
         self.client.force_login(self.admin)
         r = self.client.get(reverse('insights-section', kwargs={'section': 'bogus'}))

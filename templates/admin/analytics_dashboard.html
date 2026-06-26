@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block content %}
 <div style="max-width:1200px;margin:0 auto;">
@@ -58,7 +58,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'insights/chart.umd.min.js' %}"></script>
 <script id="analytics-data" type="application/json">{{ charts_json|safe }}</script>
 <script>
 (function () {
