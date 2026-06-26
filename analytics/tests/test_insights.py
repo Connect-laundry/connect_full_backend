@@ -96,6 +96,19 @@ class InsightsPageTests(APITestCase):
         # Chart.js is self-hosted (no hard dependency on an external CDN).
         self.assertIn('insights/chart.umd.min.js', html)
 
+    def test_nav_uses_svg_icons_no_emoji(self):
+        """Design-system check: the left nav must use the inline SVG icon
+        sprite (not emoji glyphs) so the UI looks like a professional product."""
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse('insights-section', kwargs={'section': 'overview'})).content.decode()
+        # Sprite + at least the overview reference present.
+        self.assertIn('id="ic-icon-grid"', html)
+        self.assertIn('href="#ic-icon-grid"', html)
+        # None of the previous-iteration nav emojis should appear in the rendered HTML.
+        for glyph in ('📊', '⚡', '👥', '📦', '💰', '🧺', '🔔', '🎯', '👋',
+                       '📈', '❤️', '🤖', '⚠️', '🖥️', '📄'):
+            self.assertNotIn(glyph, html, f"Found emoji {glyph!r} in rendered nav")
+
     def test_unknown_section_404(self):
         self.client.force_login(self.admin)
         r = self.client.get(reverse('insights-section', kwargs={'section': 'bogus'}))
