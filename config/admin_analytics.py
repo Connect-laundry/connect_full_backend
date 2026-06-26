@@ -4,7 +4,7 @@ A single staff-only page that surfaces the same numbers as the DRF dashboard
 endpoints (via analytics.metrics) as KPI cards + Chart.js charts, with a date
 window selector and CSV/Excel/PDF export buttons.
 """
-import csv
+import defusedcsv.csv as defused_csv
 import json
 from datetime import timedelta
 
@@ -74,7 +74,7 @@ def analytics_export_view(request):
     if fmt == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{dataset}_{days}d.csv"'
-        writer = csv.writer(response)
+        writer = defused_csv.writer(response)
         writer.writerow(header)
         writer.writerows(rows)
         return response
