@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block content %}
 <div style="display:flex;gap:20px;align-items:flex-start;max-width:1400px;margin:0 auto;">
@@ -116,12 +116,14 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'insights/chart.umd.min.js' %}"
+        onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';s.onload=function(){window.__renderInsightsCharts&&window.__renderInsightsCharts();};document.head.appendChild(s);"></script>
 <script id="insights-data" type="application/json">{{ charts_json|safe }}</script>
 <script>
-(function () {
+window.__renderInsightsCharts = function () {
   var holder = document.getElementById('insights-charts');
-  if (!holder || typeof Chart === 'undefined') return;
+  if (!holder || typeof Chart === 'undefined' || holder.dataset.rendered) return;
+  holder.dataset.rendered = '1';
   var charts; try { charts = JSON.parse(document.getElementById('insights-data').textContent); } catch (e) { return; }
   var PURPLE = '#9333ea';
   var PALETTE = ['#9333ea','#c084fc','#7e22ce','#a855f7','#d8b4fe','#6b21a8'];
@@ -148,6 +150,9 @@
       options: { responsive: true, plugins: { legend: { display: isPie } } }
     });
   });
-})();
+};
+// Render now if Chart.js (self-hosted) is already loaded; the script tag's
+// onerror handler re-invokes this after loading the CDN fallback.
+if (typeof Chart !== 'undefined') { window.__renderInsightsCharts(); }
 </script>
 {% endblock %}
