@@ -54,3 +54,7 @@ pywebpush==2.3.0
 openpyxl==3.1.5
 google-cloud-vision==3.9.0
 
+
+# Analytics dashboard exports (Excel/PDF)
+openpyxl==3.1.5
+reportlab==5.0.0

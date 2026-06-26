@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     'logistics',
     'payments',
     'laundries',
+    'analytics',
     'django_celery_results',
     'cloudinary',
     'cloudinary_storage',
