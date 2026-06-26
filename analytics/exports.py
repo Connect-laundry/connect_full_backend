@@ -7,6 +7,35 @@ deployment hasn't installed them yet.
 from django.http import HttpResponse
 
 
+def build_summary_pdf(title, kpi_pairs):
+    """Build a one-page KPI-summary PDF from [(label, value), ...]. Returns bytes."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    import io
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
+                            topMargin=2 * cm, bottomMargin=2 * cm)
+    styles = getSampleStyleSheet()
+    elements = [Paragraph(title, styles['Title']), Spacer(1, 16)]
+    data = [['Metric', 'Value']] + [[str(k), str(v)] for k, v in kpi_pairs]
+    table = Table(data, colWidths=[10 * cm, 6 * cm])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9333ea')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f3ff')]),
+        ('PADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    return buffer.getvalue()
+
+
 def build_rows_export(fmt, filename, header, rows, title=''):
     """Return an HttpResponse for `fmt` in {'xlsx', 'pdf'}. Falls back to a
     400-style plain response for unknown formats."""

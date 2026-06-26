@@ -17,6 +17,7 @@ from django.utils import timezone
 from ordering.models import Order
 from payments.models import Payment
 from laundries.models.review import Review
+from laundries.models.laundry import Laundry
 from marketplace.models import Notification, NotificationCampaign
 from .models import AnalyticsEvent
 
@@ -72,11 +73,13 @@ def executive_metrics():
     }
 
 
-def user_metrics(days=30):
+def user_metrics(days=30, city=None, laundry_id=None):
     days = clamp_days(days)
     now = timezone.now()
     since = now - timedelta(days=days)
     ev = AnalyticsEvent.objects.filter(created_at__gte=since, user__isnull=False)
+    if city:
+        ev = ev.filter(user__addresses__city__iexact=city).distinct()
 
     def active_since(delta):
         return ev.filter(created_at__gte=now - delta).values('user').distinct().count()
@@ -86,6 +89,8 @@ def user_metrics(days=30):
         .annotate(users=Count('user', distinct=True)).order_by('day')
     )
     new_users = User.objects.filter(role='CUSTOMER', created_at__gte=since)
+    if city:
+        new_users = new_users.filter(addresses__city__iexact=city).distinct()
 
     return {
         "window_days": days,
@@ -102,10 +107,18 @@ def user_metrics(days=30):
     }
 
 
-def order_metrics(days=30):
+def _apply_order_filters(qs, city=None, laundry_id=None):
+    if laundry_id:
+        qs = qs.filter(laundry_id=laundry_id)
+    if city:
+        qs = qs.filter(laundry__city__iexact=city)
+    return qs
+
+
+def order_metrics(days=30, city=None, laundry_id=None):
     days = clamp_days(days)
     since = timezone.now() - timedelta(days=days)
-    qs = Order.objects.filter(created_at__gte=since)
+    qs = _apply_order_filters(Order.objects.filter(created_at__gte=since), city, laundry_id)
 
     created = qs.count()
     completed = qs.filter(status__in=['DELIVERED', 'COMPLETED']).count()
@@ -132,11 +145,17 @@ def order_metrics(days=30):
     }
 
 
-def revenue_metrics(days=30):
+def revenue_metrics(days=30, city=None, laundry_id=None):
     days = clamp_days(days)
     since = timezone.now() - timedelta(days=days)
     paid = Payment.objects.filter(status='SUCCESS', paid_at__gte=since)
     attempts = Payment.objects.filter(created_at__gte=since)
+    if laundry_id:
+        paid = paid.filter(order__laundry_id=laundry_id)
+        attempts = attempts.filter(order__laundry_id=laundry_id)
+    if city:
+        paid = paid.filter(order__laundry__city__iexact=city)
+        attempts = attempts.filter(order__laundry__city__iexact=city)
 
     gross = paid.aggregate(t=Coalesce(Sum('amount'), Decimal('0')))['t'].quantize(Decimal('0.01'))
     fee_rate = Decimal(str(getattr(settings, 'PLATFORM_FEE_RATE', 0.05)))
@@ -189,6 +208,193 @@ def referral_metrics():
         "referrers": customers.filter(referrals__isnull=False).distinct().count(),
         "referral_share_of_signups": rate(referred.count(), total_customers),
         "top_referrers": [{'email': r['email'], 'referrals': r['n']} for r in top],
+    }
+
+
+def laundry_metrics(days=30):
+    days = clamp_days(days)
+    since = timezone.now() - timedelta(days=days)
+    orders = Order.objects.filter(created_at__gte=since)
+
+    top_by_orders = (
+        orders.values('laundry_id', 'laundry__name')
+        .annotate(n=Count('id')).order_by('-n')[:10]
+    )
+    top_by_revenue = (
+        orders.filter(payment_status='PAID')
+        .values('laundry_id', 'laundry__name')
+        .annotate(total=Coalesce(Sum('total_amount'), Decimal('0'))).order_by('-total')[:10]
+    )
+    top_by_rating = (
+        Review.objects.values('laundry_id', 'laundry__name')
+        .annotate(avg=Avg('rating'), n=Count('id'))
+        .filter(n__gte=1).order_by('-avg')[:10]
+    )
+
+    return {
+        "window_days": days,
+        "total_laundries": Laundry.objects.count(),
+        "active_laundries": Laundry.objects.filter(is_active=True).count(),
+        "top_by_orders": [
+            {'name': r['laundry__name'] or 'Unknown', 'orders': r['n']} for r in top_by_orders
+        ],
+        "top_by_revenue": [
+            {'name': r['laundry__name'] or 'Unknown', 'revenue': str(r['total'])}
+            for r in top_by_revenue
+        ],
+        "top_by_rating": [
+            {'name': r['laundry__name'] or 'Unknown', 'rating': round(r['avg'], 2), 'reviews': r['n']}
+            for r in top_by_rating
+        ],
+    }
+
+
+def retention_metrics(days=30):
+    """Stickiness + N-day retention from AnalyticsEvent.
+
+    Computed over users active in the window: distinct active days per user give
+    returning-rate and stickiness; per-cohort D1/D7/D30 use each user's
+    first-seen date. Bounded to active users (fine to ~1M events); move to a
+    cohort rollup table beyond that.
+    """
+    from django.db.models import Min, Max
+
+    days = clamp_days(days)
+    now = timezone.now()
+    since = now - timedelta(days=days)
+
+    ev = AnalyticsEvent.objects.filter(created_at__gte=since, user__isnull=False)
+    # Per-user first/last seen + distinct active days.
+    per_user = (
+        ev.values('user')
+        .annotate(first=Min('created_at'), last=Max('created_at'),
+                  active_days=Count(TruncDate('created_at'), distinct=True))
+    )
+    rows = list(per_user)
+    active_users = len(rows)
+    returning = sum(1 for r in rows if r['active_days'] >= 2)
+
+    dau = ev.filter(created_at__gte=now - timedelta(days=1)).values('user').distinct().count()
+    mau = ev.filter(created_at__gte=now - timedelta(days=30)).values('user').distinct().count()
+
+    def n_day_retention(n):
+        # Cohort: users first-seen at least n+1 days ago (so day-n is observable).
+        cohort = [r for r in rows if (now - r['first']).days >= n + 1]
+        if not cohort:
+            return 0.0
+        retained = sum(1 for r in cohort if (r['last'] - r['first']).days >= n)
+        return rate(retained, len(cohort))
+
+    return {
+        "window_days": days,
+        "active_users": active_users,
+        "returning_users": returning,
+        "returning_rate": rate(returning, active_users),
+        "stickiness": rate(dau, mau),  # DAU/MAU
+        "day_1_retention": n_day_retention(1),
+        "day_7_retention": n_day_retention(7),
+        "day_30_retention": n_day_retention(30),
+    }
+
+
+def _period_delta(current, previous):
+    if not previous:
+        return None
+    return round(((current - previous) / previous) * 100, 1)
+
+
+def ai_insights(days=7):
+    """Rule-based insight cards: compare the current window to the prior one and
+    surface notable deltas + a recommendation. Not an ML model — deterministic
+    heuristics over the same aggregates the dashboards use."""
+    days = clamp_days(days, default=7)
+    now = timezone.now()
+    cur_start = now - timedelta(days=days)
+    prev_start = now - timedelta(days=days * 2)
+
+    def revenue_between(a, b):
+        return Payment.objects.filter(status='SUCCESS', paid_at__gte=a, paid_at__lt=b)\
+            .aggregate(t=Coalesce(Sum('amount'), Decimal('0')))['t']
+
+    def orders_between(a, b):
+        return Order.objects.filter(created_at__gte=a, created_at__lt=b).count()
+
+    def new_users_between(a, b):
+        return User.objects.filter(role='CUSTOMER', created_at__gte=a, created_at__lt=b).count()
+
+    cur_rev, prev_rev = revenue_between(cur_start, now), revenue_between(prev_start, cur_start)
+    cur_ord, prev_ord = orders_between(cur_start, now), orders_between(prev_start, cur_start)
+    cur_users, prev_users = new_users_between(cur_start, now), new_users_between(prev_start, cur_start)
+
+    insights = []
+
+    def add(metric, cur, prev, good_up=True, fmt=str, recommend_down='', recommend_up=''):
+        delta = _period_delta(float(cur), float(prev))
+        if delta is None:
+            return
+        direction = 'up' if delta >= 0 else 'down'
+        positive = (delta >= 0) == good_up
+        text = f"{metric} {'increased' if delta >= 0 else 'decreased'} {abs(delta)}% vs the prior {days} days ({fmt(prev)} → {fmt(cur)})."
+        rec = (recommend_up if delta >= 0 else recommend_down)
+        insights.append({
+            "metric": metric, "delta": delta, "direction": direction,
+            "positive": positive, "text": text, "recommendation": rec,
+        })
+
+    add("Revenue", cur_rev, prev_rev, good_up=True,
+        fmt=lambda v: f"GHS {Decimal(str(v)).quantize(Decimal('0.01'))}",
+        recommend_down="Consider a rainy-day or reactivation campaign to lift revenue.",
+        recommend_up="Momentum is positive — sustain with a referral push.")
+    add("Orders", cur_ord, prev_ord, good_up=True,
+        recommend_down="Order volume is dropping — run a promo or weekly reminder campaign.")
+    add("New customers", cur_users, prev_users, good_up=True,
+        recommend_down="Acquisition slowed — boost the referral bonus or marketing spend.")
+
+    # Behavioural: highest-CTR campaign.
+    top_campaign = (
+        NotificationCampaign.objects.filter(delivered_count__gt=0)
+        .order_by('-clicked_count').values('name', 'clicked_count', 'delivered_count').first()
+    )
+    if top_campaign:
+        ctr = rate(top_campaign['clicked_count'], top_campaign['delivered_count'])
+        insights.append({
+            "metric": "Top campaign", "delta": None, "direction": "flat", "positive": True,
+            "text": f"'{top_campaign['name']}' has the highest engagement at {ctr}% CTR.",
+            "recommendation": "Reuse its copy/timing for the next broadcast.",
+        })
+
+    # Revenue forecast: naive linear projection from current run-rate.
+    daily_rate = (cur_rev / days) if days else Decimal('0')
+    forecast_30 = (daily_rate * 30).quantize(Decimal('0.01'))
+
+    return {
+        "window_days": days,
+        "insights": insights,
+        "revenue_forecast_30d": str(forecast_30),
+    }
+
+
+def realtime_feed(limit=15):
+    now = timezone.now()
+    active_window = now - timedelta(minutes=30)
+    ev = AnalyticsEvent.objects.filter(created_at__gte=active_window)
+    return {
+        "active_sessions": ev.exclude(session_id='').values('session_id').distinct().count(),
+        "active_users": ev.filter(user__isnull=False).values('user').distinct().count(),
+        "events_last_30m": ev.count(),
+        "by_platform_now": list(ev.values('platform').annotate(count=Count('id')).order_by('-count')),
+        "recent_events": list(
+            AnalyticsEvent.objects.order_by('-created_at')
+            .values('event_name', 'platform', 'screen_name', 'created_at')[:limit]
+        ),
+        "recent_orders": list(
+            Order.objects.order_by('-created_at')
+            .values('order_no', 'status', 'total_amount', 'created_at')[:limit]
+        ),
+        "recent_payments": list(
+            Payment.objects.order_by('-created_at')
+            .values('transaction_reference', 'status', 'amount', 'created_at')[:limit]
+        ),
     }
 
 
