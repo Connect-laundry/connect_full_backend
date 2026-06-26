@@ -1,12 +1,17 @@
+from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView, TemplateView
 from django.conf import settings
 from marketplace.views.legal import PublicLegalHtmlView
+from config.admin_analytics import analytics_dashboard_view, analytics_export_view
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
+    path('admin/analytics-dashboard/', analytics_dashboard_view, name='admin-analytics-dashboard'),
+    path('admin/analytics-export/', analytics_export_view, name='admin-analytics-export'),
+    path('admin/', admin.site.urls),
     path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
     path('manifest.webmanifest', TemplateView.as_view(
         template_name='pwa/manifest.html',
@@ -30,6 +35,7 @@ urlpatterns = [
     path('api/v1/orders/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
+    path('api/v1/analytics/', include('analytics.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),

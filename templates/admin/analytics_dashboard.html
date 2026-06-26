@@ -1,0 +1,103 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="max-width:1200px;margin:0 auto;">
+
+  <!-- Controls -->
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <form method="get" style="display:flex;gap:8px;align-items:center;">
+      <label for="days" style="font-weight:600;">Date range:</label>
+      <select id="days" name="days" onchange="this.form.submit()"
+              style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;">
+        {% for opt in day_options %}
+          <option value="{{ opt }}" {% if opt == days %}selected{% endif %}>Last {{ opt }} days</option>
+        {% endfor %}
+      </select>
+    </form>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=csv&days={{ days }}">Orders CSV</a>
+      <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=xlsx&days={{ days }}">Orders Excel</a>
+      <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=pdf&days={{ days }}">Orders PDF</a>
+      <a class="button" href="{% url 'admin-analytics-export' %}?dataset=payments&fmt=xlsx&days={{ days }}">Payments Excel</a>
+    </div>
+  </div>
+
+  <!-- KPI cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+    {% include "admin/_analytics_card.html" with label="Revenue today" value=executive.revenue_today suffix=" GHS" %}
+    {% include "admin/_analytics_card.html" with label="Revenue this month" value=executive.revenue_this_month suffix=" GHS" %}
+    {% include "admin/_analytics_card.html" with label="Orders today" value=executive.orders_today %}
+    {% include "admin/_analytics_card.html" with label="Active users (30m)" value=executive.active_users_now %}
+    {% include "admin/_analytics_card.html" with label="New users today" value=executive.new_users_today %}
+    {% include "admin/_analytics_card.html" with label="Pending orders" value=executive.pending_orders %}
+    {% include "admin/_analytics_card.html" with label="DAU / WAU / MAU" value=users.dau %}
+    {% include "admin/_analytics_card.html" with label="Avg rating" value=executive.avg_rating %}
+  </div>
+
+  <!-- Secondary KPI row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+    {% include "admin/_analytics_card.html" with label="Gross revenue" value=revenue.gross_revenue suffix=" GHS" %}
+    {% include "admin/_analytics_card.html" with label="Platform revenue" value=revenue.platform_revenue suffix=" GHS" %}
+    {% include "admin/_analytics_card.html" with label="Payment success rate" value=revenue.payment_success_rate suffix="%" %}
+    {% include "admin/_analytics_card.html" with label="Order completion rate" value=orders.completion_rate suffix="%" %}
+    {% include "admin/_analytics_card.html" with label="Avg order value" value=orders.average_order_value suffix=" GHS" %}
+    {% include "admin/_analytics_card.html" with label="Referred users" value=referrals.total_referred_users %}
+    {% include "admin/_analytics_card.html" with label="Notif. open rate" value=notifications.open_rate suffix="%" %}
+    {% include "admin/_analytics_card.html" with label="Notif. conversion" value=notifications.conversion_rate suffix="%" %}
+  </div>
+
+  <!-- Charts -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;">
+    {% include "admin/_analytics_chart.html" with cid="dauChart" heading="Daily Active Users" %}
+    {% include "admin/_analytics_chart.html" with cid="ordersChart" heading="Orders per Day" %}
+    {% include "admin/_analytics_chart.html" with cid="revenueChart" heading="Revenue per Day" %}
+    {% include "admin/_analytics_chart.html" with cid="orderFunnelChart" heading="Booking Funnel" %}
+    {% include "admin/_analytics_chart.html" with cid="notifFunnelChart" heading="Notification Funnel" %}
+    {% include "admin/_analytics_chart.html" with cid="cityChart" heading="Revenue by City" %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="analytics-data" type="application/json">{{ charts_json|safe }}</script>
+<script>
+(function () {
+  var raw = document.getElementById('analytics-data').textContent;
+  var d; try { d = JSON.parse(raw); } catch (e) { return; }
+  if (typeof Chart === 'undefined') return;
+
+  var PURPLE = '#9333ea';
+  function line(id, rows, xKey, yKey, label) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, {
+      type: 'line',
+      data: {
+        labels: rows.map(function (r) { return r[xKey]; }),
+        datasets: [{ label: label, data: rows.map(function (r) { return Number(r[yKey]); }),
+          borderColor: PURPLE, backgroundColor: 'rgba(147,51,234,0.15)', fill: true, tension: 0.3 }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+  function bar(id, rows, xKey, yKey, label) {
+    var el = document.getElementById(id); if (!el) return;
+    new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: rows.map(function (r) { return r[xKey]; }),
+        datasets: [{ label: label, data: rows.map(function (r) { return Number(r[yKey]); }),
+          backgroundColor: PURPLE }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+
+  line('dauChart', d.dau || [], 'day', 'users', 'DAU');
+  bar('ordersChart', d.orders_by_day || [], 'day', 'count', 'Orders');
+  line('revenueChart', d.revenue_by_day || [], 'day', 'total', 'Revenue');
+  bar('orderFunnelChart', d.order_funnel || [], 'stage', 'count', 'Orders');
+  bar('notifFunnelChart', d.notification_funnel || [], 'stage', 'count', 'Notifications');
+  bar('cityChart', d.revenue_by_city || [], 'city', 'total', 'Revenue');
+})();
+</script>
+{% endblock %}

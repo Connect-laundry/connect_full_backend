@@ -1,0 +1,7 @@
+{% load i18n %}
+<div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+  <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">{{ label }}</div>
+  <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin-top:6px;">
+    {% if value is None %}—{% else %}{{ value }}{{ suffix }}{% endif %}
+  </div>
+</div>

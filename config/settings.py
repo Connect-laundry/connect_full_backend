@@ -96,6 +96,7 @@ INSTALLED_APPS += [
     'logistics',
     'payments',
     'laundries',
+    'analytics',
     'django_celery_results',
 ]
 
@@ -614,6 +615,11 @@ UNFOLD = {
                         "title": _("Dashboard"),
                         "icon": "dashboard",
                         "link": reverse_lazy("admin:index"),
+                    },
+                    {
+                        "title": _("Analytics"),
+                        "icon": "insights",
+                        "link": reverse_lazy("admin-analytics-dashboard"),
                     },
                     {
                         "title": _("Orders"),
