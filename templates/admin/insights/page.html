@@ -1,121 +1,634 @@
 {% extends "admin/base_site.html" %}
 {% load i18n static %}
 
-{% block content %}
-<div style="display:flex;gap:20px;align-items:flex-start;max-width:1400px;margin:0 auto;">
+{% block extrastyle %}
+<style>
+/* ============================================================
+   Connect Insights — Design System
+   Font: Inter (loaded by Unfold skeleton)
+   Accent: --ic-accent  #6366f1  (indigo)
+   Surface: white / --ic-surface-2 #f8f8fa
+   ============================================================ */
 
-  <!-- Left navigation -->
-  <nav style="flex:0 0 200px;position:sticky;top:16px;">
-    <div style="font-weight:800;font-size:18px;margin-bottom:12px;color:#9333ea;">Connect Insights</div>
-    <div style="display:flex;flex-direction:column;gap:2px;">
+:root {
+  --ic-accent:        #6366f1;
+  --ic-accent-light:  #eef2ff;
+  --ic-accent-dark:   #4338ca;
+  --ic-surface:       #ffffff;
+  --ic-surface-2:     #f8f8fa;
+  --ic-border:        #e8e8ed;
+  --ic-border-strong: #d1d1db;
+  --ic-text-primary:  #111118;
+  --ic-text-secondary:#52525f;
+  --ic-text-muted:    #8b8b9a;
+  --ic-positive:      #16a34a;
+  --ic-positive-bg:   #f0fdf4;
+  --ic-negative:      #dc2626;
+  --ic-negative-bg:   #fef2f2;
+  --ic-info-bg:       #f5f5ff;
+  --ic-info-border:   #c7d2fe;
+  --ic-info-text:     #3730a3;
+  --ic-radius:        8px;
+  --ic-radius-lg:     12px;
+  --ic-shadow-sm:     0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+  --ic-transition:    150ms ease;
+}
+
+/* Layout ---------------------------------------------------- */
+.ic-layout {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  max-width: 1440px;
+  margin: 0 auto;
+  min-height: calc(100vh - 120px);
+}
+
+/* Sidebar nav ----------------------------------------------- */
+.ic-nav {
+  flex: 0 0 212px;
+  position: sticky;
+  top: 16px;
+  padding-right: 12px;
+  padding-bottom: 40px;
+}
+
+.ic-nav__heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ic-text-muted);
+  padding: 0 10px 8px;
+  margin-bottom: 2px;
+}
+
+.ic-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ic-nav__item a {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--ic-radius);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ic-text-secondary);
+  transition: background var(--ic-transition), color var(--ic-transition);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ic-nav__item a:hover {
+  background: var(--ic-surface-2);
+  color: var(--ic-text-primary);
+}
+
+.ic-nav__item--active a {
+  background: var(--ic-accent);
+  color: #fff;
+}
+
+.ic-nav__item--active a:hover {
+  background: var(--ic-accent-dark);
+  color: #fff;
+}
+
+.ic-nav__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  opacity: .75;
+}
+
+.ic-nav__item--active .ic-nav__icon {
+  opacity: 1;
+}
+
+/* Content area ---------------------------------------------- */
+.ic-content {
+  flex: 1;
+  min-width: 0;
+  padding-left: 4px;
+}
+
+/* Page header ----------------------------------------------- */
+.ic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.ic-header__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ic-text-primary);
+  margin: 0;
+  letter-spacing: -.01em;
+}
+
+/* Filter form ----------------------------------------------- */
+.ic-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ic-filters__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ic-text-secondary);
+}
+
+.ic-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--ic-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8b9a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border: 1px solid var(--ic-border-strong);
+  border-radius: var(--ic-radius);
+  padding: 5px 28px 5px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ic-text-primary);
+  cursor: pointer;
+  transition: border-color var(--ic-transition), box-shadow var(--ic-transition);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ic-select:hover {
+  border-color: var(--ic-accent);
+}
+
+.ic-select:focus {
+  outline: none;
+  border-color: var(--ic-accent);
+  box-shadow: 0 0 0 3px var(--ic-accent-light);
+}
+
+/* Metric cards ---------------------------------------------- */
+.ic-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.ic-card {
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border);
+  border-radius: var(--ic-radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--ic-shadow-sm);
+}
+
+.ic-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ic-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ic-card__value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ic-text-primary);
+  margin-top: 6px;
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Insight callouts ------------------------------------------ */
+.ic-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.ic-insight {
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border);
+  border-radius: var(--ic-radius-lg);
+  border-left-width: 3px;
+  padding: 12px 16px;
+}
+
+.ic-insight--positive { border-left-color: var(--ic-positive); }
+.ic-insight--negative { border-left-color: var(--ic-negative); }
+
+.ic-insight__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ic-text-primary);
+  line-height: 1.5;
+}
+
+.ic-insight__rec {
+  font-size: 12px;
+  color: var(--ic-text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.ic-insight__rec-label {
+  font-weight: 600;
+  color: var(--ic-text-muted);
+}
+
+/* Chart panels ---------------------------------------------- */
+.ic-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.ic-panel {
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border);
+  border-radius: var(--ic-radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--ic-shadow-sm);
+}
+
+.ic-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ic-text-primary);
+  margin-bottom: 16px;
+  letter-spacing: -.005em;
+}
+
+/* Data tables ----------------------------------------------- */
+.ic-table-wrap {
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border);
+  border-radius: var(--ic-radius-lg);
+  box-shadow: var(--ic-shadow-sm);
+  margin-bottom: 20px;
+  overflow: auto;
+}
+
+.ic-table-wrap__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ic-text-primary);
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--ic-border);
+}
+
+.ic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ic-table thead th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ic-text-muted);
+  background: var(--ic-surface-2);
+  border-bottom: 1px solid var(--ic-border);
+  white-space: nowrap;
+}
+
+.ic-table tbody tr {
+  transition: background var(--ic-transition);
+}
+
+.ic-table tbody tr:hover {
+  background: var(--ic-surface-2);
+}
+
+.ic-table tbody td {
+  padding: 8px 14px;
+  color: var(--ic-text-primary);
+  border-bottom: 1px solid var(--ic-border);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ic-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ic-table__empty td {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--ic-text-muted);
+  font-size: 13px;
+}
+
+/* Reports section ------------------------------------------- */
+.ic-reports {
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border);
+  border-radius: var(--ic-radius-lg);
+  box-shadow: var(--ic-shadow-sm);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.ic-reports__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ic-text-primary);
+  margin-bottom: 14px;
+}
+
+.ic-reports__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ic-text-primary);
+  background: var(--ic-surface);
+  border: 1px solid var(--ic-border-strong);
+  border-radius: var(--ic-radius);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--ic-transition), border-color var(--ic-transition), color var(--ic-transition);
+}
+
+.ic-btn:hover {
+  background: var(--ic-surface-2);
+  border-color: var(--ic-accent);
+  color: var(--ic-accent);
+}
+
+/* Notes / info box ------------------------------------------ */
+.ic-notes {
+  background: var(--ic-info-bg);
+  border: 1px solid var(--ic-info-border);
+  border-radius: var(--ic-radius-lg);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ic-notes__item {
+  font-size: 12px;
+  color: var(--ic-info-text);
+  line-height: 1.6;
+}
+
+/* Reduced motion -------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .ic-nav__item a,
+  .ic-select,
+  .ic-table tbody tr,
+  .ic-btn {
+    transition: none;
+  }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── SVG icon map ────────────────────────────────────────────────────────── #}
+{# Each icon_key used in SECTIONS maps to a 16×16 Lucide-style SVG path.     #}
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="ic-icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+    </symbol>
+    <symbol id="ic-icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </symbol>
+    <symbol id="ic-icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </symbol>
+    <symbol id="ic-icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+    </symbol>
+    <symbol id="ic-icon-trending-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+    </symbol>
+    <symbol id="ic-icon-droplets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>
+    </symbol>
+    <symbol id="ic-icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </symbol>
+    <symbol id="ic-icon-megaphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m3 11 19-9-9 19-2-8-8-2z"/>
+    </symbol>
+    <symbol id="ic-icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+    </symbol>
+    <symbol id="ic-icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    </symbol>
+    <symbol id="ic-icon-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </symbol>
+    <symbol id="ic-icon-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+    </symbol>
+    <symbol id="ic-icon-alert-triangle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m10.29 3.86-8.17 14A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .88-1.46l-8.17-14a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </symbol>
+    <symbol id="ic-icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+    </symbol>
+    <symbol id="ic-icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+    </symbol>
+    <symbol id="ic-icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </symbol>
+  </defs>
+</svg>
+
+{# ── Auto-refresh for Realtime section ─────────────────────────────────── #}
+{% if section_key == "realtime" %}
+<meta http-equiv="refresh" content="20">
+{% endif %}
+
+<div class="ic-layout">
+
+  {# ── Left navigation ───────────────────────────────────────────────────── #}
+  <nav class="ic-nav" aria-label="Connect Insights navigation">
+    <div class="ic-nav__heading">Connect Insights</div>
+    <ul class="ic-nav__list">
       {% for s in sections %}
+      <li class="ic-nav__item{% if s.key == section_key %} ic-nav__item--active{% endif %}">
         <a href="{% url 'insights-section' s.key %}?days={{ days }}"
-           style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;text-decoration:none;
-                  {% if s.key == section_key %}background:#9333ea;color:#fff;font-weight:700;{% else %}color:#333;{% endif %}">
-          <span>{{ s.icon }}</span><span style="font-size:13px;">{{ s.label }}</span>
+           {% if s.key == section_key %}aria-current="page"{% endif %}>
+          <svg class="ic-nav__icon" aria-hidden="true">
+            <use href="#ic-icon-{{ s.icon_key }}"/>
+          </svg>
+          {{ s.label }}
         </a>
+      </li>
       {% endfor %}
-    </div>
+    </ul>
   </nav>
 
-  <!-- Content -->
-  <div style="flex:1;min-width:0;">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-      <h1 style="margin:0;font-size:22px;">{{ section_label }}</h1>
-      <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <label for="days" style="font-weight:600;">Period:</label>
-        <select id="days" name="days" onchange="this.form.submit()"
-                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;">
+  {# ── Content ──────────────────────────────────────────────────────────── #}
+  <div class="ic-content">
+
+    {# Page header + filters #}
+    <header class="ic-header">
+      <h1 class="ic-header__title">{{ section_label }}</h1>
+      <form method="get" class="ic-filters" aria-label="Filters">
+        <span class="ic-filters__label">Period:</span>
+        <select id="ic-period" name="days" class="ic-select" onchange="this.form.submit()" aria-label="Time period">
           {% for opt in day_options %}
-            <option value="{{ opt }}" {% if opt == days %}selected{% endif %}>
-              {% if opt == 1 %}Today{% else %}Last {{ opt }} days{% endif %}
-            </option>
+          <option value="{{ opt }}" {% if opt == days %}selected{% endif %}>
+            {% if opt == 1 %}Today{% else %}Last {{ opt }} days{% endif %}
+          </option>
           {% endfor %}
         </select>
         {% if show_filters %}
-        <select name="city" onchange="this.form.submit()"
-                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;">
+        <select name="city" class="ic-select" onchange="this.form.submit()" aria-label="City">
           <option value="">All cities</option>
           {% for c in cities %}
-            <option value="{{ c }}" {% if c == selected_city %}selected{% endif %}>{{ c }}</option>
+          <option value="{{ c }}" {% if c == selected_city %}selected{% endif %}>{{ c }}</option>
           {% endfor %}
         </select>
-        <select name="laundry_id" onchange="this.form.submit()"
-                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;max-width:200px;">
+        <select name="laundry_id" class="ic-select" onchange="this.form.submit()" aria-label="Laundry">
           <option value="">All laundries</option>
           {% for l in laundries %}
-            <option value="{{ l.id }}" {% if l.id == selected_laundry %}selected{% endif %}>{{ l.name }}</option>
+          <option value="{{ l.id }}" {% if l.id == selected_laundry %}selected{% endif %}>{{ l.name }}</option>
           {% endfor %}
         </select>
         {% endif %}
       </form>
-    </div>
+    </header>
 
+    {# Metric cards #}
     {% if cards %}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
+    <div class="ic-cards" role="list">
       {% for c in cards %}
-        {% include "admin/_analytics_card.html" with label=c.label value=c.value suffix=c.suffix %}
+      {% include "admin/_analytics_card.html" with label=c.label value=c.value suffix=c.suffix %}
       {% endfor %}
     </div>
     {% endif %}
 
+    {# AI / heuristic insight callouts #}
     {% if insights %}
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+    <div class="ic-insights" aria-label="Insights">
       {% for ins in insights %}
-        <div style="background:#fff;border:1px solid #eee;border-left:4px solid {% if ins.positive %}#16a34a{% else %}#dc2626{% endif %};border-radius:10px;padding:12px 16px;">
-          <div style="font-weight:600;color:#1a1a1a;">{{ ins.text }}</div>
-          {% if ins.recommendation %}<div style="color:#666;font-size:13px;margin-top:4px;">💡 {{ ins.recommendation }}</div>{% endif %}
+      <div class="ic-insight {% if ins.positive %}ic-insight--positive{% else %}ic-insight--negative{% endif %}">
+        <div class="ic-insight__text">{{ ins.text }}</div>
+        {% if ins.recommendation %}
+        <div class="ic-insight__rec">
+          <span class="ic-insight__rec-label">Recommendation — </span>{{ ins.recommendation }}
         </div>
+        {% endif %}
+      </div>
       {% endfor %}
     </div>
     {% endif %}
 
+    {# Charts #}
     {% if charts_json != "[]" %}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;margin-bottom:24px;">
-      <!-- canvases injected by JS below -->
-    </div>
-    <div id="insights-charts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;margin-bottom:24px;"></div>
+    <div id="insights-charts" class="ic-charts"></div>
     {% endif %}
 
+    {# Data tables #}
     {% for t in tables %}
-    <div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;margin-bottom:20px;overflow:auto;">
-      <div style="font-weight:700;margin-bottom:12px;">{{ t.title }}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr>
-          {% for col in t.columns %}<th style="text-align:left;border-bottom:2px solid #9333ea;padding:6px 8px;">{{ col }}</th>{% endfor %}
-        </tr></thead>
+    <div class="ic-table-wrap">
+      <div class="ic-table-wrap__title">{{ t.title }}</div>
+      <table class="ic-table">
+        <thead>
+          <tr>
+            {% for col in t.columns %}<th scope="col">{{ col }}</th>{% endfor %}
+          </tr>
+        </thead>
         <tbody>
           {% for row in t.rows %}
-          <tr>{% for cell in row %}<td style="border-bottom:1px solid #f0f0f0;padding:6px 8px;">{{ cell }}</td>{% endfor %}</tr>
+          <tr>{% for cell in row %}<td title="{{ cell }}">{{ cell }}</td>{% endfor %}</tr>
           {% empty %}
-          <tr><td colspan="{{ t.columns|length }}" style="padding:12px;color:#999;">No data yet.</td></tr>
+          <tr class="ic-table__empty">
+            <td colspan="{{ t.columns|length }}">No data for this period.</td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     {% endfor %}
 
+    {# Reports export panel #}
     {% if is_reports %}
-    <div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;margin-bottom:20px;">
-      <div style="font-weight:700;margin-bottom:12px;">Generate report</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=csv&days={{ days }}">Orders CSV</a>
-        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=xlsx&days={{ days }}">Orders Excel</a>
-        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=pdf&days={{ days }}">Orders PDF</a>
-        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=payments&fmt=xlsx&days={{ days }}">Payments Excel</a>
-        <a class="button" href="{% url 'admin-analytics-export' %}?dataset=events&fmt=csv&days={{ days }}">Events CSV</a>
+    <div class="ic-reports">
+      <div class="ic-reports__title">Generate export</div>
+      <div class="ic-reports__actions">
+        <a class="ic-btn" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=csv&days={{ days }}">
+          <svg width="12" height="12" aria-hidden="true"><use href="#ic-icon-download"/></svg>
+          Orders CSV
+        </a>
+        <a class="ic-btn" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=xlsx&days={{ days }}">
+          <svg width="12" height="12" aria-hidden="true"><use href="#ic-icon-download"/></svg>
+          Orders Excel
+        </a>
+        <a class="ic-btn" href="{% url 'admin-analytics-export' %}?dataset=orders&fmt=pdf&days={{ days }}">
+          <svg width="12" height="12" aria-hidden="true"><use href="#ic-icon-download"/></svg>
+          Orders PDF
+        </a>
+        <a class="ic-btn" href="{% url 'admin-analytics-export' %}?dataset=payments&fmt=xlsx&days={{ days }}">
+          <svg width="12" height="12" aria-hidden="true"><use href="#ic-icon-download"/></svg>
+          Payments Excel
+        </a>
+        <a class="ic-btn" href="{% url 'admin-analytics-export' %}?dataset=events&fmt=csv&days={{ days }}">
+          <svg width="12" height="12" aria-hidden="true"><use href="#ic-icon-download"/></svg>
+          Events CSV
+        </a>
       </div>
     </div>
     {% endif %}
 
+    {# Info / notes #}
     {% if notes %}
-    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 16px;color:#6b21a8;font-size:13px;">
-      {% for note in notes %}<div style="margin:2px 0;">ℹ️ {{ note }}</div>{% endfor %}
+    <div class="ic-notes" role="note">
+      {% for note in notes %}
+      <p class="ic-notes__item">{{ note }}</p>
+      {% endfor %}
     </div>
     {% endif %}
-  </div>
-</div>
 
+  </div>{# /ic-content #}
+</div>{# /ic-layout #}
+
+{# ── Chart rendering ──────────────────────────────────────────────────── #}
 <script src="{% static 'insights/chart.umd.min.js' %}"
         onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';s.onload=function(){window.__renderInsightsCharts&&window.__renderInsightsCharts();};document.head.appendChild(s);"></script>
 <script id="insights-data" type="application/json">{{ charts_json|safe }}</script>
@@ -124,35 +637,64 @@ window.__renderInsightsCharts = function () {
   var holder = document.getElementById('insights-charts');
   if (!holder || typeof Chart === 'undefined' || holder.dataset.rendered) return;
   holder.dataset.rendered = '1';
-  var charts; try { charts = JSON.parse(document.getElementById('insights-data').textContent); } catch (e) { return; }
-  var PURPLE = '#9333ea';
-  var PALETTE = ['#9333ea','#c084fc','#7e22ce','#a855f7','#d8b4fe','#6b21a8'];
+
+  var charts;
+  try { charts = JSON.parse(document.getElementById('insights-data').textContent); }
+  catch (e) { return; }
+
+  var ACCENT  = '#6366f1';
+  var PALETTE = ['#6366f1','#818cf8','#4338ca','#a5b4fc','#3730a3','#c7d2fe'];
+  var GRID_COLOR = 'rgba(0,0,0,.06)';
+
   charts.forEach(function (c) {
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;';
-    wrap.innerHTML = '<div style="font-weight:700;margin-bottom:12px;">' + c.title + '</div>';
-    var canvas = document.createElement('canvas'); canvas.height = 200; wrap.appendChild(canvas);
+    var wrap  = document.createElement('div');
+    wrap.className = 'ic-panel';
+
+    var title = document.createElement('div');
+    title.className = 'ic-panel__title';
+    title.textContent = c.title;
+    wrap.appendChild(title);
+
+    var canvas = document.createElement('canvas');
+    canvas.height = 200;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', c.title);
+    wrap.appendChild(canvas);
     holder.appendChild(wrap);
+
     var isPie = c.kind === 'doughnut' || c.kind === 'pie';
     new Chart(canvas, {
       type: c.kind,
       data: {
         labels: c.labels,
         datasets: [{
-          label: c.label || '',
-          data: c.values,
-          borderColor: PURPLE,
-          backgroundColor: isPie ? PALETTE : (c.kind === 'line' ? 'rgba(147,51,234,0.15)' : PURPLE),
-          fill: c.kind === 'line',
-          tension: 0.3,
+          label:           c.label || '',
+          data:            c.values,
+          borderColor:     ACCENT,
+          backgroundColor: isPie ? PALETTE : (c.kind === 'line' ? 'rgba(99,102,241,.12)' : ACCENT),
+          fill:            c.kind === 'line',
+          tension:         0.35,
+          borderWidth:     c.kind === 'line' ? 2 : 0,
+          pointRadius:     c.kind === 'line' ? 3 : 0,
+          pointHoverRadius:c.kind === 'line' ? 5 : 0,
         }]
       },
-      options: { responsive: true, plugins: { legend: { display: isPie } } }
+      options: {
+        responsive:  true,
+        animation:   { duration: 200 },
+        plugins: {
+          legend: { display: isPie },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: isPie ? {} : {
+          x: { grid: { color: GRID_COLOR }, ticks: { font: { size: 11 }, maxRotation: 30 } },
+          y: { grid: { color: GRID_COLOR }, ticks: { font: { size: 11 } }, beginAtZero: true }
+        }
+      }
     });
   });
 };
-// Render now if Chart.js (self-hosted) is already loaded; the script tag's
-// onerror handler re-invokes this after loading the CDN fallback.
+
 if (typeof Chart !== 'undefined') { window.__renderInsightsCharts(); }
 </script>
 {% endblock %}
