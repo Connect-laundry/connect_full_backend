@@ -41,18 +41,20 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
     price_breakdown = serializers.SerializerMethodField()
+    payment_reference = serializers.CharField(source='payment.transaction_reference', read_only=True, default='')
     
     class Meta:
         model = Order
         fields = [
-            'id', 'order_no', 'laundryName', 
+            'id', 'order_no', 'laundryName', 'laundry', 
             'status', 'payment_status', 'total_amount', 
             'price_breakdown',
             'pickup_date', 'delivery_date', 
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'address', 
-            'special_instructions', 'items', 'created_at'
+            'special_instructions', 'items', 'created_at',
+            'payment_reference'
         ]
 
     @extend_schema_field(OpenApiTypes.OBJECT)
