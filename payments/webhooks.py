@@ -76,6 +76,12 @@ def paystack_webhook(request):
     payload = request.body
     signature = request.headers.get('x-paystack-signature')
 
+    if not secret:
+        # Without the secret we cannot authenticate the sender; 503 lets
+        # Paystack retry once configuration is restored.
+        logger.error("Paystack webhook received but PAYSTACK_SECRET_KEY is not configured.")
+        return HttpResponse(status=503)
+
     if not signature:
         logger.warning("Webhook received without signature.")
         return HttpResponse(status=401)

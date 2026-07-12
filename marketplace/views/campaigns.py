@@ -60,7 +60,14 @@ class CampaignViewSet(viewsets.ModelViewSet):
         campaign.save(update_fields=['status', 'scheduled_for'])
 
         from marketplace.tasks import run_campaign
-        run_campaign.delay(str(campaign.id))
+        from utils.tasks import safe_task_delay
+        if not safe_task_delay(run_campaign, str(campaign.id)):
+            return Response(
+                {"status": "error",
+                 "message": "Delivery queue is unavailable; the campaign remains scheduled and will "
+                            "be picked up automatically once the queue recovers."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         record_audit(
             action='campaign.send', request=request,

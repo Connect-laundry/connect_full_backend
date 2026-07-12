@@ -2,13 +2,15 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
+from utils.media import SafeMediaModelSerializer, safe_media_url
+
 from ..models.pricing import (
     LaundryPricingItem, LaundryWeightPricing,
     PricingCatalogVersion, ScheduledPriceChange, DeliveryZonePricing
 )
 
 
-class LaundryPricingItemSerializer(serializers.ModelSerializer):
+class LaundryPricingItemSerializer(SafeMediaModelSerializer):
     imageUrl = serializers.SerializerMethodField()
 
     class Meta:
@@ -20,14 +22,7 @@ class LaundryPricingItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'imageUrl', 'created_at', 'updated_at']
 
     def get_imageUrl(self, obj) -> str | None:
-        if not obj.image:
-            return None
-        request = self.context.get('request')
-        try:
-            url = obj.image.url
-        except (ValueError, AttributeError):
-            return None
-        return request.build_absolute_uri(url) if request else url
+        return safe_media_url(obj.image, self.context.get('request'))
 
 
 class PricingItemBulkUpdateRowSerializer(serializers.Serializer):

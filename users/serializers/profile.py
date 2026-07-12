@@ -1,5 +1,6 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+from utils.media import SafeMediaModelSerializer
 from ..models import User, Address
 
 class AddressSerializer(serializers.ModelSerializer):
@@ -15,7 +16,7 @@ class AddressSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         return Address.objects.create(user=user, **validated_data)
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileSerializer(SafeMediaModelSerializer):
     addresses = AddressSerializer(many=True, read_only=True)
     fullName = serializers.CharField(source='get_full_name', read_only=True)
     

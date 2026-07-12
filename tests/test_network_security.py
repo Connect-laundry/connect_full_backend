@@ -85,7 +85,7 @@ class TestNetworkSecurity:
     def test_local_schema_docs_get_dev_only_csp_for_swagger_assets(self):
         request_factory = RequestFactory()
         middleware = SecurityHeadersMiddleware(lambda request: JsonResponse({'ok': True}))
-        request = request_factory.get('/api/schema/swagger-ui/')
+        request = request_factory.get('/api/docs/')
 
         with override_settings(DEBUG=True):
             response = middleware.process_response(request, JsonResponse({'ok': True}))

@@ -1,10 +1,13 @@
 import hashlib
+import logging
 # pyre-ignore[missing-module]
 from django.core.cache import cache
 # pyre-ignore[missing-module]
 from django.http import JsonResponse, HttpResponse
 # pyre-ignore[missing-module]
 from django.utils.decorators import decorator_from_middleware
+
+logger = logging.getLogger(__name__)
 
 class IdempotencyMiddleware:
     """
@@ -65,8 +68,12 @@ class IdempotencyMiddleware:
                 "fingerprint": request_fingerprint,
             }
             cache.set(cache_key, data, 86400)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Failing to cache must not fail the request, but stay visible.
+            logger.warning(
+                "Could not cache idempotent response",
+                extra={"cache_key": cache_key, "error": str(exc)},
+            )
 
     def process_cached_response(self, cached_data):
         """Constructs a response from cached data."""

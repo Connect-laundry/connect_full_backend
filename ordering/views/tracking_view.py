@@ -11,6 +11,7 @@ from typing import Optional
 from ordering.models.base import Order, OrderStatusHistory
 from ordering.services.finance_service import FinanceService
 from ordering.services.order_state_machine import OrderStateMachine
+from utils.media import safe_media_url
 
 
 # The customer milestone timeline. Order matters — this is the visual order
@@ -259,13 +260,7 @@ def _build_charges_and_payment(order: Order) -> dict:
 
 def _build_laundry(order: Order, request=None) -> dict:
     laundry = order.laundry
-    image_url = None
-    if laundry.image:
-        try:
-            url = laundry.image.url
-            image_url = request.build_absolute_uri(url) if request else url
-        except Exception:
-            image_url = None
+    image_url = safe_media_url(laundry.image, request)
 
     return {
         "id": str(laundry.id),

@@ -5,6 +5,7 @@ from django.utils import timezone
 from ..models import User, PasswordResetToken
 from ..serializers.password_reset import ForgotPasswordSerializer, ResetPasswordSerializer
 from ..tasks import send_password_reset_email
+from utils.tasks import safe_task_delay
 from config.throttling import (
     PasswordResetAccountThrottle,
     PasswordResetIPThrottle,
@@ -30,7 +31,12 @@ class ForgotPasswordView(views.APIView):
         if user:
             token_record, raw_token = PasswordResetToken.create_for_user(user)
             reset_link = f"{settings.FRONTEND_URL}/reset-password?resetId={token_record.id}"
-            send_password_reset_email.delay(email, reset_link, raw_token)
+            # Broker outage must not break password reset — send inline if
+            # the queue is unavailable.
+            safe_task_delay(
+                send_password_reset_email, email, reset_link, raw_token,
+                fallback_sync=True,
+            )
 
         return response.Response({
             "message": "If an account exists with this email, you will receive a password reset link shortly."

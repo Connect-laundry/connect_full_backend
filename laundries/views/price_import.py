@@ -133,7 +133,18 @@ class PriceImportViewSet(viewsets.GenericViewSet):
             process_ocr_import(job.id)
         else:
             from laundries.tasks import process_ocr_import
-            transaction.on_commit(lambda: process_ocr_import.delay(job.id))
+            from utils.tasks import safe_task_delay
+
+            def _dispatch_ocr(job_id=job.id):
+                # Broker outage: mark the job failed instead of crashing the
+                # request post-commit; the owner can retry the upload.
+                if not safe_task_delay(process_ocr_import, job_id):
+                    PriceListImportJob.objects.filter(id=job_id).update(
+                        status=PriceListImportJob.Status.FAILED,
+                        error='Processing queue unavailable. Please try again later.',
+                    )
+
+            transaction.on_commit(_dispatch_ocr)
 
         job.refresh_from_db()
         return Response(

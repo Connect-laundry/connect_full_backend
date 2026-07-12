@@ -265,11 +265,26 @@ STORAGES = {
     },
 }
 
-# Use Cloudinary in production or if credentials are found
-if not DEBUG or os.getenv('CLOUDINARY_CLOUD_NAME'):
+# Use Cloudinary only when credentials are actually configured. Selecting the
+# Cloudinary backend without credentials makes every FieldFile.url raise at
+# request time; falling back to filesystem storage keeps media degraded but
+# the API serving. validate_environment flags the missing credentials.
+_CLOUDINARY_CONFIGURED = all([
+    os.getenv('CLOUDINARY_CLOUD_NAME'),
+    os.getenv('CLOUDINARY_API_KEY'),
+    os.getenv('CLOUDINARY_API_SECRET'),
+])
+if _CLOUDINARY_CONFIGURED:
     STORAGES["default"] = {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     }
+elif not DEBUG:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Cloudinary credentials are not fully configured; falling back to "
+        "filesystem media storage. Uploaded media will not persist across "
+        "deploys — set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET."
+    )
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -675,12 +690,16 @@ UNFOLD = {
     },
 }
 
-# Initialize Google Application Credentials from environment JSON if present
+# Initialize Google Application Credentials from environment JSON if present.
+# Optional integration — a failure must not stop boot, but it must be visible.
 try:
     from laundries.utils.credentials import initialize_google_credentials
     initialize_google_credentials()
-except Exception:
-    pass
+except Exception as _gcred_exc:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Google application credentials not initialised: %s", _gcred_exc
+    )
 # Analytics Retention Configuration
 ANALYTICS_RETENTION_DAYS = 180
 
