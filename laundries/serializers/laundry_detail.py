@@ -10,6 +10,7 @@ from .review import ReviewSerializer
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from ..models.opening_hours import OpeningHours
+from utils.media import SafeMediaModelSerializer, safe_media_url
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
@@ -30,12 +31,10 @@ class LaundryServiceSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_itemImage(self, obj):
-        if not obj.item.image:
+        item = getattr(obj, 'item', None)
+        if item is None:
             return None
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.item.image.url)
-        return obj.item.image.url
+        return safe_media_url(item.image, self.context.get('request'))
 
 # pyre-ignore[missing-module]
 from django.core.cache import cache
@@ -52,7 +51,7 @@ class OpeningHoursDetailSerializer(serializers.ModelSerializer):
     def get_dayDisplay(self, obj):
         return obj.get_day_display()
 
-class LaundryDetailSerializer(serializers.ModelSerializer):
+class LaundryDetailSerializer(SafeMediaModelSerializer):
     services = serializers.SerializerMethodField()
     reviews = serializers.SerializerMethodField()
     rating = serializers.FloatField(read_only=True)
@@ -92,12 +91,7 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
-        if not obj.image:
-            return None
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url
+        return safe_media_url(obj.image, self.context.get('request'))
 
     @extend_schema_field(LaundryServiceSerializer(many=True))
     def get_services(self, obj):
@@ -113,9 +107,9 @@ class LaundryDetailSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_isFavorite(self, obj):
-        user = self.context.get('request').user
-        if user.is_authenticated:
-            return Favorite.objects.filter(user=user, laundry=obj).exists()
+        request = self.context.get('request')
+        if request and getattr(request, 'user', None) and request.user.is_authenticated:
+            return Favorite.objects.filter(user=request.user, laundry=obj).exists()
         return False
 
     @extend_schema_field(OpenApiTypes.BOOL)

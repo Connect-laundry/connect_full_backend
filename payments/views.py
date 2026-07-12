@@ -295,7 +295,8 @@ class PaymentInitializeView(APIView):
             metadata=metadata
         )
         
-        if response.get('status'):
+        response_data = response.get('data') if isinstance(response.get('data'), dict) else {}
+        if response.get('status') and response_data.get('access_code') and response_data.get('authorization_url'):
             # 7. Atomic creation of Payment record
             with transaction.atomic():
                 payment, _ = Payment.objects.update_or_create(
@@ -307,7 +308,7 @@ class PaymentInitializeView(APIView):
                         'transaction_reference': reference,
                         'payment_method': payment_method,
                         'status': Payment.Status.PENDING,
-                        'paystack_reference': response['data']['access_code'],
+                        'paystack_reference': response_data['access_code'],
                     },
                 )
                 
@@ -329,11 +330,18 @@ class PaymentInitializeView(APIView):
                 "status": "success",
                 "message": "Payment initialized successfully",
                 "data": {
-                    "authorization_url": response['data']['authorization_url'],
+                    "authorization_url": response_data['authorization_url'],
                     "reference": reference
                 }
             }, status=status.HTTP_200_OK)
-            
+
+        if response.get('status'):
+            # Paystack said OK but the payload is missing checkout fields —
+            # treat as a provider fault, not a client error.
+            logger.error(
+                "Paystack initialization returned incomplete payload",
+                extra={"order_id": str(order.id)},
+            )
         return Response({
             "status": "error",
             "message": response.get('message', 'Payment initialization failed.'),
@@ -352,8 +360,9 @@ class PaymentVerifyView(APIView):
     def get(self, request, reference):
         paystack = PaystackService()
         verify_data = paystack.verify_transaction(reference)
-        
-        if verify_data.get('status') and verify_data['data']['status'] == 'success':
+
+        verify_payload = verify_data.get('data') if isinstance(verify_data.get('data'), dict) else {}
+        if verify_data.get('status') and verify_payload.get('status') == 'success':
             # Use select_for_update() and transaction.atomic()
             with transaction.atomic():
                 payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()

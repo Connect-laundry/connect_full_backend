@@ -43,7 +43,11 @@ class NotificationService:
         category opt-out / master push-off)."""
         try:
             pref = cls.get_preferences(user)
-        except Exception:  # pragma: no cover - never block on pref lookup
+        except Exception as exc:  # pragma: no cover - never block on pref lookup
+            logger.warning(
+                "Notification preference lookup failed; defaulting to push allowed",
+                extra={"user_id": str(getattr(user, 'id', '')), "error": str(exc)},
+            )
             return True
 
         if not pref.allows_push(type=type, category=category):

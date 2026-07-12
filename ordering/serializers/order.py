@@ -10,8 +10,9 @@ from laundries.models.category import Category
 from laundries.models.laundry import Laundry
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
+from utils.media import SafeMediaModelSerializer
 
-class LaunderableItemSerializer(serializers.ModelSerializer):
+class LaunderableItemSerializer(SafeMediaModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
 
     class Meta:

@@ -85,14 +85,26 @@ class NotificationCampaignAdmin(ModelAdmin):
     def send_now(self, request, queryset):
         from .tasks import run_campaign
         from .services.audit import record_audit
+        from utils.tasks import safe_task_delay
+        queued = 0
         for campaign in queryset:
-            run_campaign.delay(str(campaign.id))
+            if not safe_task_delay(run_campaign, str(campaign.id)):
+                continue
+            queued += 1
             record_audit(
                 action='campaign.send', request=request,
                 target_type='NotificationCampaign', target_id=str(campaign.id),
                 target_repr=campaign.name, metadata={'via': 'admin_action'},
             )
-        self.message_user(request, f"Queued {queryset.count()} campaign(s) for delivery.")
+        failed = queryset.count() - queued
+        if failed:
+            self.message_user(
+                request,
+                f"Queued {queued} campaign(s); {failed} could not be queued (delivery queue unavailable).",
+                level='warning',
+            )
+        else:
+            self.message_user(request, f"Queued {queued} campaign(s) for delivery.")
 
 
 @admin.register(AuditLog)

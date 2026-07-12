@@ -5,6 +5,8 @@ from django.utils.deprecation import MiddlewareMixin
 
 DOCS_PATH_PREFIXES = (
     '/api/schema/',
+    '/api/docs/',
+    '/api/redoc/',
 )
 
 API_CSP = "default-src 'none'; frame-ancestors 'none'"
@@ -12,7 +14,7 @@ DEV_DOCS_CSP = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com; "
     "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com fonts.googleapis.com; "
-    "img-src 'self' data:; "
+    "img-src 'self' data: cdn.jsdelivr.net; "
     "font-src 'self' data: fonts.gstatic.com cdn.jsdelivr.net; "
     "connect-src 'self'; "
     "object-src 'none'; "

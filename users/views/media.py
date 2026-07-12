@@ -53,10 +53,25 @@ class MediaUploadView(views.APIView):
             filename = f"{uuid.uuid4().hex}{ext}"
             file_path = f"{folder}/{filename}"
             
-            # Save file
-            saved_path = default_storage.save(file_path, uploaded_file)
-            file_url = default_storage.url(saved_path)
-            
+            # Save file — storage (Cloudinary/local) may be misconfigured or
+            # unreachable; degrade to 503 rather than an unhandled 500.
+            try:
+                saved_path = default_storage.save(file_path, uploaded_file)
+                file_url = default_storage.url(saved_path)
+            except Exception:
+                logger.exception(
+                    "Media storage unavailable during upload",
+                    extra={"request": request, "folder": folder},
+                )
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "File storage is temporarily unavailable. Please try again later.",
+                        "data": {},
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
             # Ensure full URL if needed (though default_storage.url usually gives relative or absolute depending on config)
             if not file_url.startswith('http'):
                 file_url = request.build_absolute_uri(file_url)

@@ -134,8 +134,11 @@ class Laundry(models.Model):
                 # pyre-ignore[missing-module]
                 from django.contrib.gis.geos import Point
                 self.location = Point(float(self.longitude), float(self.latitude))
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Could not sync PostGIS point for laundry %s: %s", self.pk, exc
+                )
         super().save(*args, **kwargs)
 
     # We keep it as a normal field but handle the case where GDAL is missing

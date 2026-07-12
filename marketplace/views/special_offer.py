@@ -4,8 +4,9 @@ from rest_framework import viewsets, permissions
 from ..models.special_offer import SpecialOffer
 # pyre-ignore[missing-module]
 from rest_framework import serializers
+from utils.media import SafeMediaModelSerializer
 
-class SpecialOfferSerializer(serializers.ModelSerializer):
+class SpecialOfferSerializer(SafeMediaModelSerializer):
     class Meta:
         model = SpecialOffer
         fields = ['id', 'title', 'description', 'image', 'order', 'valid_until']

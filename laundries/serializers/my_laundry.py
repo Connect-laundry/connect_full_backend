@@ -7,6 +7,8 @@ from django.db import transaction
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
+from utils.media import SafeMediaModelSerializer, safe_media_url
+
 from ..models.laundry import Laundry
 from ..models.opening_hours import OpeningHours, HolidayOverride
 from ..services.geocoding import GeocodingError, GeocodingUnavailable, get_geocoder
@@ -107,7 +109,7 @@ class OpeningHoursSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class MyLaundrySerializer(serializers.ModelSerializer):
+class MyLaundrySerializer(SafeMediaModelSerializer):
     """Read/write serializer for an owner's own laundry profile."""
 
     imageUrl = serializers.SerializerMethodField()
@@ -137,16 +139,7 @@ class MyLaundrySerializer(serializers.ModelSerializer):
         ]
 
     def get_imageUrl(self, obj) -> str | None:
-        if not obj.image:
-            return None
-        request = self.context.get('request')
-        try:
-            url = obj.image.url
-        except (ValueError, AttributeError):
-            return None
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return safe_media_url(obj.image, self.context.get('request'))
 
     def to_internal_value(self, data):
         """Normalise multipart inputs and fold legacy coordinate fields.

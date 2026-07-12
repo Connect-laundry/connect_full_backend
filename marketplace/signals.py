@@ -14,22 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_delay(task, **kwargs):
-    """
-    Safely dispatch a Celery task.
-    If the broker (Redis) is unavailable, it falls back to synchronous execution
-    so the process still completes and the notification is created.
-    """
-    try:
-        task.delay(**kwargs)
-    except Exception as e:
-        logger.warning(
-            f"Celery broker unavailable, falling back to synchronous execution for {task.name}: {e}"
-        )
-        try:
-            # task.apply() runs the task synchronously in the current process
-            task.apply(kwargs=kwargs)
-        except Exception as sync_err:
-            logger.error(f"Synchronous fallback also failed for {task.name}: {sync_err}")
+    """Dispatch a Celery task without ever raising (sync fallback on broker
+    outage) — see utils.tasks.safe_task_delay."""
+    from utils.tasks import safe_task_delay
+    safe_task_delay(task, fallback_sync=True, **kwargs)
 
 
 @receiver(post_save, sender=Order)
