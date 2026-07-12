@@ -5,6 +5,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV PIP_ROOT_USER_ACTION ignore
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -23,6 +24,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV PIP_ROOT_USER_ACTION ignore
 
 RUN apt-get update && apt-get install -y \
     libpq-dev \
