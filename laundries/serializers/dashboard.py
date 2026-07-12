@@ -7,14 +7,18 @@ from laundries.models.service import LaundryService
 
 class DashboardOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    # Customer contact + pickup location so the laundry owner can reach the
+    # customer and locate the pickup. Phone is now always present because the
+    # customer app captures it before the first order is created.
+    customer_phone = serializers.CharField(source='user.phone', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_no', 'customer_name', 'status', 
-            'status_display', 'total_amount', 'created_at', 
-            'pickup_date', 'delivery_date'
+            'id', 'order_no', 'customer_name', 'customer_phone', 'status',
+            'status_display', 'total_amount', 'created_at',
+            'pickup_date', 'delivery_date', 'pickup_address',
         ]
 
 class DashboardStatsSerializer(serializers.Serializer):
