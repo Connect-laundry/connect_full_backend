@@ -60,7 +60,9 @@ jobs:
           # PYSEC-2025-183 is disputed upstream and has no fixed PyJWT version.
           # The reported risk is weak application-chosen HMAC keys; production
           # SECRET_KEY strength is enforced in config/settings.py.
-          pip-audit -r requirements.txt --ignore-vuln PYSEC-2025-183
+          #
+          # PYSEC-2026-1325 (ecdsa Minerva timing attack) is unfixed and disputed by python-ecdsa maintainers.
+          pip-audit -r requirements.txt --ignore-vuln PYSEC-2025-183 --ignore-vuln PYSEC-2026-1325
 
       - name: Install Semgrep
         run: pip install semgrep
