@@ -5,11 +5,10 @@ from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from rest_framework.parsers import MultiPartParser, FormParser
 # pyre-ignore[missing-module]
-from django.core.files.storage import default_storage
-# pyre-ignore[missing-module]
 from django.conf import settings
 from drf_spectacular.utils import extend_schema
 from laundries.utils.validators import validate_file_upload
+from utils.media import MediaStorageError, save_to_storage
 import uuid
 import os
 import logging
@@ -54,15 +53,13 @@ class MediaUploadView(views.APIView):
             file_path = f"{folder}/{filename}"
             
             # Save file — storage (Cloudinary/local) may be misconfigured or
-            # unreachable; degrade to 503 rather than an unhandled 500.
+            # unreachable; degrade to 503 rather than an unhandled 500. The
+            # shared helper logs the failure with request/backend context.
             try:
-                saved_path = default_storage.save(file_path, uploaded_file)
-                file_url = default_storage.url(saved_path)
-            except Exception:
-                logger.exception(
-                    "Media storage unavailable during upload",
-                    extra={"request": request, "folder": folder},
+                saved_path, file_url = save_to_storage(
+                    file_path, uploaded_file, request=request, folder=folder,
                 )
+            except MediaStorageError:
                 return Response(
                     {
                         "status": "error",

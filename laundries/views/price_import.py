@@ -36,6 +36,7 @@ from ..serializers.price_import import (
 from ..services.ocr import get_ocr_provider
 from ..permissions import IsOwnerRole
 from .pricing import get_owner_laundry
+from utils.media import MediaStorageError, write_media_file
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +121,26 @@ class PriceImportViewSet(viewsets.GenericViewSet):
 
 
         provider = get_ocr_provider()
-        with transaction.atomic():
-            job = PriceListImportJob.objects.create(
-                laundry=laundry,
-                source_image=image,
-                provider=provider.name,
-                status=PriceListImportJob.Status.PROCESSING,
+        # The source image *is* the payload here, so a storage failure can't be
+        # degraded away — return a clean 503. Writing the image inside the
+        # transaction means a storage failure rolls the job back (no orphan).
+        try:
+            with transaction.atomic():
+                job = PriceListImportJob.objects.create(
+                    laundry=laundry,
+                    provider=provider.name,
+                    status=PriceListImportJob.Status.PROCESSING,
+                )
+                write_media_file(
+                    job, 'source_image', image, request=request,
+                    laundry_id=str(laundry.id),
+                )
+        except MediaStorageError:
+            return Response(
+                {'status': 'error',
+                 'message': 'Image storage is temporarily unavailable. Please try again later.',
+                 'data': None},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         import sys
         if 'test' in sys.argv or 'pytest' in sys.modules:

@@ -2,7 +2,11 @@
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
-from utils.media import SafeMediaModelSerializer, safe_media_url
+from utils.media import (
+    OptionalMediaWriteMixin,
+    SafeMediaModelSerializer,
+    safe_media_url,
+)
 
 from ..models.pricing import (
     LaundryPricingItem, LaundryWeightPricing,
@@ -10,7 +14,7 @@ from ..models.pricing import (
 )
 
 
-class LaundryPricingItemSerializer(SafeMediaModelSerializer):
+class LaundryPricingItemSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer):
     imageUrl = serializers.SerializerMethodField()
 
     class Meta:
@@ -20,6 +24,8 @@ class LaundryPricingItemSerializer(SafeMediaModelSerializer):
             'is_active', 'display_order', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'imageUrl', 'created_at', 'updated_at']
+        # Item photo is optional: a storage outage must not 500 a price edit.
+        optional_media_fields = ['image']
 
     def get_imageUrl(self, obj) -> str | None:
         return safe_media_url(obj.image, self.context.get('request'))
