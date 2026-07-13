@@ -5,7 +5,7 @@ celery==5.6.2
 certifi==2026.1.4
 cffi==2.0.0
 cloudinary==1.41.0
-click==8.3.1
+click==8.3.3
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
@@ -26,7 +26,7 @@ ecdsa==0.19.2
 gunicorn==22.0.0
 kombu==5.6.2
 packaging==26.0
-pillow==12.2.0
+pillow==12.3.0
 prompt_toolkit==3.0.52
 psycopg[binary]==3.3.3
 psycopg2-binary==2.9.10
