@@ -15,6 +15,8 @@ os.environ.setdefault('CLERK_JWKS_URL', 'https://ci-clerk.example.test/.well-kno
 os.environ.setdefault('CLERK_JWT_AUDIENCE', 'connect-backend')
 os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
 
+from pathlib import Path
+
 from .settings import BASE_DIR
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -29,6 +31,12 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'test-staticfiles'
+# Keep test uploads out of the repo tree (without this, FileSystemStorage
+# writes to MEDIA_ROOT='' — i.e. the project root — littering laundries/,
+# avatars/, uploads/ etc. with test images).
+import tempfile
+MEDIA_URL = '/media/'
+MEDIA_ROOT = Path(tempfile.gettempdir()) / 'connect-test-media'
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

@@ -113,8 +113,10 @@ def test_media_upload_returns_503_when_storage_unavailable(auth_client):
     Image.new('RGB', (8, 8)).save(output, format='PNG')
     upload = SimpleUploadedFile('x.png', output.getvalue(), content_type='image/png')
 
+    # The view now writes through the shared utils.media.save_to_storage
+    # helper; break the storage at that level.
     with mock.patch(
-        'users.views.media.default_storage.save',
+        'utils.media.default_storage.save',
         side_effect=_BrokenStorageError('cloudinary unreachable'),
     ):
         response = auth_client.post(

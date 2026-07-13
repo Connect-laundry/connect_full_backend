@@ -7,7 +7,12 @@ from django.db import transaction
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 
-from utils.media import SafeMediaModelSerializer, safe_media_url
+from utils.media import (
+    UNSET,
+    SafeMediaModelSerializer,
+    safe_media_url,
+    save_optional_media,
+)
 
 from ..models.laundry import Laundry
 from ..models.opening_hours import OpeningHours, HolidayOverride
@@ -233,6 +238,11 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
 
     def create(self, validated_data):
         opening_hours = validated_data.pop('opening_hours', [])
+        # The logo is optional. Keep it out of the row-creating transaction so a
+        # storage outage (e.g. set-but-invalid Cloudinary creds) degrades to
+        # "registered without a logo" instead of failing the whole registration
+        # with an unhandled 500.
+        image = validated_data.pop('image', None)
         request = self.context['request']
         with transaction.atomic():
             laundry = Laundry.objects.create(
@@ -243,16 +253,34 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
                 **validated_data,
             )
             self._sync_opening_hours(laundry, opening_hours)
+        if image:
+            save_optional_media(
+                laundry, 'image', image, request=request,
+                laundry_id=str(laundry.id),
+            )
         return laundry
 
     def update(self, instance, validated_data):
         opening_hours = validated_data.pop('opening_hours', None)
+        # ``UNSET`` => the client did not touch the logo; ``None`` => clear it.
+        image = validated_data.pop('image', UNSET)
         with transaction.atomic():
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
             if opening_hours is not None:
                 self._sync_opening_hours(instance, opening_hours)
+        if image is not UNSET:
+            if image:
+                # Storage failure leaves the existing logo untouched (a new
+                # upload only replaces it on a successful write).
+                save_optional_media(
+                    instance, 'image', image, request=self.context.get('request'),
+                    laundry_id=str(instance.id),
+                )
+            else:
+                instance.image = None
+                instance.save(update_fields=['image'])
         return instance
 
     @staticmethod
