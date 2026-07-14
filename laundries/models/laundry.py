@@ -37,6 +37,7 @@ class Laundry(models.Model):
         PENDING = "PENDING", _("Pending")
         APPROVED = "APPROVED", _("Approved")
         REJECTED = "REJECTED", _("Rejected")
+        CHANGES_REQUESTED = "CHANGES_REQUESTED", _("Changes Requested")
         SUSPENDED = "SUSPENDED", _("Suspended")
 
     class PricingModel(models.TextChoices):
@@ -100,6 +101,18 @@ class Laundry(models.Model):
     # Approval Timestamps
     approved_at = models.DateTimeField(null=True, blank=True)
     rejected_at = models.DateTimeField(null=True, blank=True)
+    changes_requested_at = models.DateTimeField(null=True, blank=True)
+    # When the owner (re)submitted for review; drives approval-duration analytics.
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    # Reason attached to the latest reject / request-changes / suspend decision.
+    status_reason = models.TextField(_('status reason'), blank=True, default='')
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_laundries',
+    )
 
     # Deactivation (Soft-Delete)
     deactivated_at = models.DateTimeField(null=True, blank=True)

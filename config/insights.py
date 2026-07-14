@@ -168,10 +168,23 @@ def _revenue(days, city=None, laundry_id=None):
 
 def _laundries(days, city=None, laundry_id=None):
     m = metrics.laundry_metrics(days)
+    ap = metrics.laundry_approval_metrics(days)
+    sl, sv = _series(ap["submissions_by_day"], "day", "count")
     return {
         "cards": [
             _card("Total laundries", m["total_laundries"]),
             _card("Active laundries", m["active_laundries"]),
+            _card("Pending approvals", ap["pending"], '', 'Waiting for review'),
+            _card("Changes requested", ap["changes_requested"]),
+            _card("Approval rate", ap["approval_rate"], "%", 'Of decided submissions'),
+            _card("Rejection rate", ap["rejection_rate"], "%"),
+            _card("Avg approval time", ap["avg_approval_hours"] if ap["avg_approval_hours"] is not None else "—",
+                  " h" if ap["avg_approval_hours"] is not None else '', 'Submission → approval'),
+            _card("Submissions (7d)", ap["submissions_last_7d"]),
+            _card("Submissions (30d)", ap["submissions_last_30d"]),
+        ],
+        "charts": [
+            _chart("apSub", "Laundry submissions per day", "bar", sl, sv, "Submissions"),
         ],
         "tables": [
             {"title": "Top by orders", "columns": ["Laundry", "Orders"],

@@ -3,6 +3,19 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from datetime import timedelta
 
+
+def pending_laundries_badge(request):
+    """Sidebar badge: number of laundries waiting for an approval decision."""
+    from laundries.models.laundry import Laundry
+    try:
+        count = Laundry.objects.filter(
+            status=Laundry.ApprovalStatus.PENDING
+        ).count()
+        return str(count) if count else None
+    except Exception:
+        return None
+
+
 def dashboard_callback(request, context):
     """
     Callback function to provide metrics for the Unfold dashboard.
@@ -10,6 +23,7 @@ def dashboard_callback(request, context):
     from users.models import User
     from ordering.models.base import Order
     from payments.models import Payment
+    from laundries.models.laundry import Laundry
 
     # Operational Metrics
     total_users = User.objects.count()
@@ -29,8 +43,18 @@ def dashboard_callback(request, context):
     last_24h = timezone.now() - timedelta(hours=24)
     new_orders_24h = Order.objects.filter(created_at__gte=last_24h).count()
     
+    pending_laundries = Laundry.objects.filter(
+        status=Laundry.ApprovalStatus.PENDING
+    ).count()
+
     context.update({
         "kpi_metrics": [
+            {
+                "title": _("Pending Laundry Approvals"),
+                "metric": pending_laundries,
+                "footer": _("Waiting for your review"),
+                "icon": "approval",
+            },
             {
                 "title": _("Total Revenue"),
                 "metric": f"{total_revenue:,.2f} GHS",

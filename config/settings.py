@@ -437,6 +437,26 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 # Password Reset Settings
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <odamephilip966@gmail.com>')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000' if DEBUG else 'https://app.connectlaundry.com')
+
+# Laundry approval workflow notifications.
+# Comma-separated list of platform-admin recipients for "new laundry awaiting
+# approval" emails. Public base URL used to build admin deep links in emails.
+LAUNDRY_APPROVAL_NOTIFY_EMAILS = [
+    e.strip() for e in os.getenv(
+        'LAUNDRY_APPROVAL_NOTIFY_EMAILS', 'odamephilip966@gmail.com'
+    ).split(',') if e.strip()
+]
+ADMIN_BASE_URL = os.getenv(
+    'ADMIN_BASE_URL',
+    'http://localhost:8000' if DEBUG else 'https://connect-full-backend.onrender.com',
+).rstrip('/')
+
+# Optional SMS notification provider (Part of the pluggable notification layer).
+# Leave empty to keep SMS disabled; e.g. 'twilio' or 'hubtel' once implemented.
+SMS_PROVIDER = os.getenv('SMS_PROVIDER', '')
+LAUNDRY_APPROVAL_NOTIFY_SMS = [
+    n.strip() for n in os.getenv('LAUNDRY_APPROVAL_NOTIFY_SMS', '').split(',') if n.strip()
+]
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
 
@@ -656,6 +676,12 @@ UNFOLD = {
                         "title": _("Laundries"),
                         "icon": "store",
                         "link": reverse_lazy("admin:laundries_laundry_changelist"),
+                    },
+                    {
+                        "title": _("Approval Queue"),
+                        "icon": "approval",
+                        "link": "/admin/laundries/laundry/?status__exact=PENDING",
+                        "badge": "config.admin_dashboard.pending_laundries_badge",
                     },
                 ],
             },

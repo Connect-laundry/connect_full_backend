@@ -207,3 +207,15 @@
   .aops-btn span.aops-label, .aops-kbd { display: none; }
   #aops-bell-panel { right: 8px; width: calc(100vw - 16px); }
 }
+
+/* ---- Laundry approval decision buttons (change page + row actions) ------- */
+a.laundry-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 600;
+  color: #fff !important; border: none !important;
+}
+a.laundry-action:hover { filter: brightness(0.92); }
+a.laundry-action--approve { background: #16a34a !important; }
+a.laundry-action--reject { background: #dc2626 !important; }
+a.laundry-action--changes { background: #f97316 !important; }
+a.laundry-action--suspend { background: #64748b !important; }

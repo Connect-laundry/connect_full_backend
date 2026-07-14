@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <div class="border rounded-md shadow-sm bg-white dark:bg-gray-900 dark:border-gray-800 p-6">
+    <h2 class="font-semibold text-lg mb-1">
+      {% if verb == 'reject' %}Reject “{{ laundry.name }}”
+      {% elif verb == 'request_changes' %}Request changes on “{{ laundry.name }}”
+      {% else %}Suspend “{{ laundry.name }}”{% endif %}
+    </h2>
+    <p class="text-sm text-gray-500 mb-4">
+      {% if verb == 'reject' %}
+        The owner will be notified by email and in-app notification that their laundry was not approved.
+      {% elif verb == 'request_changes' %}
+        The owner will be asked to update their laundry. When they edit and resubmit,
+        it automatically returns to your pending queue.
+      {% else %}
+        The laundry will immediately stop being visible to customers.
+      {% endif %}
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <label for="reason" class="block font-medium mb-2 text-sm">
+        {% if verb == 'request_changes' %}What should the owner fix?{% else %}Reason{% endif %}
+      </label>
+      <textarea id="reason" name="reason" rows="4" required
+                class="border rounded-md shadow-sm w-full px-3 py-2 dark:bg-gray-900 dark:border-gray-700"
+                placeholder="This is sent to the laundry owner — be specific."></textarea>
+
+      <div class="flex gap-3 mt-5">
+        <button type="submit"
+                class="text-white font-medium px-4 py-2 rounded-md
+                       {% if verb == 'reject' or verb == 'suspend' %}bg-red-600 hover:bg-red-700{% else %}bg-orange-500 hover:bg-orange-600{% endif %}">
+          {% if verb == 'reject' %}Reject laundry
+          {% elif verb == 'request_changes' %}Send change request
+          {% else %}Suspend laundry{% endif %}
+        </button>
+        <a href="{% url 'admin:laundries_laundry_change' laundry.pk %}"
+           class="px-4 py-2 rounded-md border font-medium dark:border-gray-700">
+          {% trans "Cancel" %}
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

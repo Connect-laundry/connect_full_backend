@@ -161,6 +161,154 @@ def process_ocr_import(self, job_id):
         job.save(update_fields=['status', 'error', 'updated_at'])
 
 
+@shared_task(bind=True, max_retries=5, autoretry_for=(Exception,), retry_backoff=30, retry_backoff_max=600)
+def send_admin_new_laundry_email(self, laundry_id, resubmission=False):
+    """Email platform admins that a laundry is waiting for approval.
+
+    Retries with backoff on any failure (SMTP outage, transient DNS, ...).
+    Recipients come from settings.LAUNDRY_APPROVAL_NOTIFY_EMAILS.
+    """
+    from django.conf import settings
+    from marketplace.services.providers import get_email_provider, get_sms_provider
+
+    recipients = getattr(settings, 'LAUNDRY_APPROVAL_NOTIFY_EMAILS', [])
+    if not recipients:
+        logger.info("No LAUNDRY_APPROVAL_NOTIFY_EMAILS configured; skipping admin email.")
+        return
+
+    try:
+        laundry = Laundry.objects.select_related('owner').get(id=laundry_id)
+    except Laundry.DoesNotExist:
+        logger.warning("Laundry %s no longer exists; skipping approval email.", laundry_id)
+        return
+
+    base = getattr(settings, 'ADMIN_BASE_URL', '').rstrip('/')
+    change_url = f"{base}/admin/laundries/laundry/{laundry.id}/change/"
+    approve_url = f"{base}/admin/laundries/laundry/{laundry.id}/approve/"
+    reject_url = f"{base}/admin/laundries/laundry/{laundry.id}/reject/"
+    queue_url = f"{base}/admin/laundries/laundry/?status__exact=PENDING"
+
+    owner = laundry.owner
+    owner_name = (owner.get_full_name() or owner.email) if owner else 'Unknown'
+    owner_email = getattr(owner, 'email', '') or '—'
+    owner_phone = getattr(owner, 'phone_number', '') or laundry.phone_number or '—'
+    submitted = laundry.submitted_at or laundry.created_at
+
+    subject = (
+        f"Laundry Resubmitted For Approval: {laundry.name}" if resubmission
+        else f"New Laundry Waiting For Approval: {laundry.name}"
+    )
+    text = (
+        f"{'A laundry was resubmitted' if resubmission else 'A new laundry was submitted'} "
+        f"and is waiting for your approval.\n\n"
+        f"Laundry:   {laundry.name}\n"
+        f"Owner:     {owner_name}\n"
+        f"Phone:     {owner_phone}\n"
+        f"Email:     {owner_email}\n"
+        f"City:      {laundry.city}\n"
+        f"Address:   {laundry.address}\n"
+        f"Submitted: {submitted:%Y-%m-%d %H:%M}\n\n"
+        f"Review:  {change_url}\n"
+        f"Approve: {approve_url}\n"
+        f"Reject:  {reject_url}\n"
+        f"Queue:   {queue_url}\n"
+    )
+
+    def _btn(url, label, color):
+        return (
+            f'<a href="{url}" style="display:inline-block;margin:4px 6px 4px 0;'
+            f'padding:10px 18px;border-radius:8px;background:{color};color:#ffffff;'
+            f'text-decoration:none;font-weight:600;font-family:sans-serif;">{label}</a>'
+        )
+
+    html = f"""
+    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111827;">
+      <h2 style="color:#7e22ce;">{'Laundry resubmitted for approval' if resubmission else 'New laundry waiting for approval'}</h2>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;">
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Laundry</td><td style="padding:6px 0;"><strong>{laundry.name}</strong></td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Owner</td><td style="padding:6px 0;">{owner_name}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Phone</td><td style="padding:6px 0;">{owner_phone}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Email</td><td style="padding:6px 0;">{owner_email}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">City</td><td style="padding:6px 0;">{laundry.city}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Address</td><td style="padding:6px 0;">{laundry.address}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;color:#6b7280;">Submitted</td><td style="padding:6px 0;">{submitted:%Y-%m-%d %H:%M}</td></tr>
+      </table>
+      <div style="margin:20px 0;">
+        {_btn(change_url, 'Open in Admin', '#7e22ce')}
+        {_btn(approve_url, 'Approve', '#16a34a')}
+        {_btn(reject_url, 'Reject', '#dc2626')}
+      </div>
+      <p style="font-size:12px;color:#6b7280;">You can also work through the
+      <a href="{queue_url}" style="color:#7e22ce;">pending approval queue</a>.</p>
+    </div>
+    """
+
+    get_email_provider().send(to=recipients, subject=subject, text=text, html=html)
+    logger.info("Admin approval email sent", extra={"laundry_id": str(laundry.id)})
+
+    # Optional SMS channel — no-op until an SMS provider is configured.
+    sms_numbers = getattr(settings, 'LAUNDRY_APPROVAL_NOTIFY_SMS', [])
+    if sms_numbers:
+        get_sms_provider().send(
+            to=sms_numbers,
+            body=f"Connect: '{laundry.name}' is waiting for laundry approval.",
+        )
+
+
+@shared_task(bind=True, max_retries=5, autoretry_for=(Exception,), retry_backoff=30, retry_backoff_max=600)
+def send_owner_status_email(self, laundry_id, new_status, reason=''):
+    """Email the laundry owner about an approval decision. Retries on failure."""
+    from django.conf import settings
+    from marketplace.services.providers import get_email_provider
+
+    try:
+        laundry = Laundry.objects.select_related('owner').get(id=laundry_id)
+    except Laundry.DoesNotExist:
+        logger.warning("Laundry %s no longer exists; skipping owner email.", laundry_id)
+        return
+
+    owner_email = getattr(laundry.owner, 'email', None)
+    if not owner_email:
+        return
+
+    content = {
+        'APPROVED': (
+            f"Your laundry is live! 🎉",
+            f"Great news — '{laundry.name}' has been approved and is now visible to "
+            f"customers on Connect Laundry.",
+        ),
+        'REJECTED': (
+            f"Your laundry submission was not approved",
+            f"Unfortunately '{laundry.name}' was not approved."
+            + (f"\n\nReason: {reason}" if reason else ""),
+        ),
+        'CHANGES_REQUESTED': (
+            f"Action needed on your laundry submission",
+            f"We reviewed '{laundry.name}' and need a few changes before it can go live."
+            + (f"\n\nWhat to fix: {reason}" if reason else "")
+            + "\n\nUpdate your laundry in the app — it will automatically be resubmitted for review.",
+        ),
+        'SUSPENDED': (
+            f"Your laundry has been suspended",
+            f"'{laundry.name}' has been suspended and is no longer visible to customers."
+            + (f"\n\nReason: {reason}" if reason else ""),
+        ),
+    }
+    if new_status not in content:
+        return
+    subject, body = content[new_status]
+
+    get_email_provider().send(
+        to=[owner_email],
+        subject=subject,
+        text=f"Hello,\n\n{body}\n\n— The Connect Laundry Team",
+    )
+    logger.info(
+        "Owner status email sent",
+        extra={"laundry_id": str(laundry.id), "status": new_status},
+    )
+
+
 @shared_task
 def cache_dashboard_analytics():
     """

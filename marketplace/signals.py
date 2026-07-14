@@ -140,6 +140,19 @@ def admin_notify_laundry_pending(sender, instance, created, **kwargs):
         )
     _safe(_do)
 
+    def _email():
+        # Queue after commit so the task never races an uncommitted row. No
+        # sync fallback — a broker outage must not block owner registration.
+        from django.db import transaction
+        from laundries.tasks import send_admin_new_laundry_email
+        from utils.tasks import safe_task_delay
+
+        laundry_id = str(instance.id)
+        transaction.on_commit(
+            lambda: safe_task_delay(send_admin_new_laundry_email, laundry_id)
+        )
+    _safe(_email)
+
 
 @receiver(post_save, sender='payments.Payment')
 def admin_notify_payment(sender, instance, created, **kwargs):

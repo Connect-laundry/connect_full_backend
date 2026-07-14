@@ -249,6 +249,59 @@ def laundry_metrics(days=30):
     }
 
 
+def laundry_approval_metrics(days=30):
+    """Approval-workflow health: queue size, decision mix, review latency."""
+    days = clamp_days(days)
+    now = timezone.now()
+    since = now - timedelta(days=days)
+
+    statuses = dict(
+        Laundry.objects.values_list('status').annotate(n=Count('id'))
+    )
+    pending = statuses.get(Laundry.ApprovalStatus.PENDING, 0)
+    approved = statuses.get(Laundry.ApprovalStatus.APPROVED, 0)
+    rejected = statuses.get(Laundry.ApprovalStatus.REJECTED, 0)
+    changes_requested = statuses.get(Laundry.ApprovalStatus.CHANGES_REQUESTED, 0)
+    suspended = statuses.get(Laundry.ApprovalStatus.SUSPENDED, 0)
+    decided = approved + rejected
+
+    # Average time from (re)submission to approval, for recent decisions.
+    recent_approved = Laundry.objects.filter(
+        approved_at__isnull=False, approved_at__gte=since,
+    ).values('approved_at', 'submitted_at', 'created_at')
+    durations = [
+        ((r['approved_at'] - (r['submitted_at'] or r['created_at'])).total_seconds() / 3600.0)
+        for r in recent_approved
+        if (r['submitted_at'] or r['created_at']) and r['approved_at'] >= (r['submitted_at'] or r['created_at'])
+    ]
+    avg_approval_hours = round(sum(durations) / len(durations), 1) if durations else None
+
+    submissions = AnalyticsEvent.objects.filter(
+        event_name='laundry_submitted', created_at__gte=since,
+    )
+    # Fall back to laundry rows for submissions predating event tracking.
+    submissions_by_day = _day_series(submissions) or _day_series(
+        Laundry.objects.filter(created_at__gte=since)
+    )
+
+    return {
+        "window_days": days,
+        "pending": pending,
+        "approved": approved,
+        "rejected": rejected,
+        "changes_requested": changes_requested,
+        "suspended": suspended,
+        "approval_rate": rate(approved, decided),
+        "rejection_rate": rate(rejected, decided),
+        "avg_approval_hours": avg_approval_hours,
+        "submissions_last_7d": Laundry.objects.filter(
+            created_at__gte=now - timedelta(days=7)).count(),
+        "submissions_last_30d": Laundry.objects.filter(
+            created_at__gte=now - timedelta(days=30)).count(),
+        "submissions_by_day": submissions_by_day,
+    }
+
+
 def retention_metrics(days=30):
     """Stickiness + N-day retention from AnalyticsEvent.
 

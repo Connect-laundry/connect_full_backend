@@ -5,6 +5,8 @@ from datetime import time
 # pyre-ignore[missing-module]
 from django.db import transaction
 # pyre-ignore[missing-module]
+from django.utils import timezone
+# pyre-ignore[missing-module]
 from rest_framework import serializers
 
 from utils.media import (
@@ -250,6 +252,7 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
                 status=Laundry.ApprovalStatus.PENDING,
                 is_active=False,
                 is_featured=False,
+                submitted_at=timezone.now(),
                 **validated_data,
             )
             self._sync_opening_hours(laundry, opening_hours)
@@ -270,6 +273,17 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
             instance.save()
             if opening_hours is not None:
                 self._sync_opening_hours(instance, opening_hours)
+        # An edit after "changes requested" (or rejection) automatically puts
+        # the laundry back into the admin review queue.
+        if instance.status in (
+            Laundry.ApprovalStatus.CHANGES_REQUESTED,
+            Laundry.ApprovalStatus.REJECTED,
+        ):
+            from ..services.approval import LaundryApprovalService
+            request = self.context.get('request')
+            instance = LaundryApprovalService.resubmit(
+                instance, actor=getattr(request, 'user', None)
+            )
         if image is not UNSET:
             if image:
                 # Storage failure leaves the existing logo untouched (a new
