@@ -76,18 +76,22 @@ class TestLaundryApprovalAudit:
         force_authenticate(req, user=admin)
         return view(req, pk=str(laundry.id))
 
-    def test_approve_writes_audit_and_notifies_owner(self, platform_admin):
+    def test_approve_writes_audit_and_notifies_owner(self, platform_admin, django_capture_on_commit_callbacks):
         laundry = self._laundry()
-        resp = self._call('approve', platform_admin, laundry)
+        # Owner notification/email fire via transaction.on_commit (approval is
+        # atomic; side effects run only after a successful commit).
+        with django_capture_on_commit_callbacks(execute=True):
+            resp = self._call('approve', platform_admin, laundry)
         assert resp.status_code == 200
         assert AuditLog.objects.filter(
             action=AuditLog.Action.LAUNDRY_APPROVED, target_id=str(laundry.id)).exists()
         assert Notification.objects.filter(
             user=laundry.owner, category='LAUNDRY_APPROVED').exists()
 
-    def test_reject_writes_audit_and_notifies_owner(self, platform_admin):
+    def test_reject_writes_audit_and_notifies_owner(self, platform_admin, django_capture_on_commit_callbacks):
         laundry = self._laundry()
-        resp = self._call('reject', platform_admin, laundry, reason='Incomplete docs')
+        with django_capture_on_commit_callbacks(execute=True):
+            resp = self._call('reject', platform_admin, laundry, reason='Incomplete docs')
         assert resp.status_code == 200
         log = AuditLog.objects.filter(
             action=AuditLog.Action.LAUNDRY_REJECTED, target_id=str(laundry.id)).first()
