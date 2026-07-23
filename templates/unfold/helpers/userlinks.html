@@ -7,6 +7,14 @@
                 {% include "unfold/helpers/label.html" with text=environment.0 type=environment.1 %}
             {% endif %}
 
+            <!-- Top Navigation Back Button -->
+            <button type="button"
+                    title="Go Back"
+                    onclick="window.history.back();"
+                    class="flex items-center gap-1.5 cursor-pointer leading-none px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition-all shadow-sm">
+                <span class="material-symbols-outlined text-base">arrow_back</span>
+                <span class="hidden sm:inline text-xs font-medium">Back</span>
+            </button>
             <!-- Top Navigation Refresh Button -->
             <button type="button"
                     title="Refresh Page"
