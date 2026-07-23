@@ -1,24 +1,17 @@
 import os
 import psycopg
 from urllib.parse import urlparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Get DATABASE_URL or fallback
-db_url = os.environ.get('DATABASE_URL', 'postgresql://neondb_owner:npg_bZNvqDo6MC1i@ep-round-haze-afaxzo0c-pooler.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require')
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    print("DATABASE_URL is not set in environment. Please set DATABASE_URL or add it to .env")
+    exit(1)
 
-result = urlparse(db_url)
-username = result.username
-password = result.password
-database = result.path[1:]
-hostname = result.hostname
-port = result.port
-
-conn = psycopg.connect(
-    dbname=database,
-    user=username,
-    password=password,
-    host=hostname,
-    port=port
-)
+conn = psycopg.connect(db_url)
 
 with conn.cursor() as cursor:
     cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")

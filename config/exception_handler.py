@@ -6,7 +6,11 @@ from rest_framework.response import Response
 from rest_framework import status
 # pyre-ignore[missing-module]
 from rest_framework.exceptions import Throttled
+# pyre-ignore[missing-module]
+from django.db.utils import InterfaceError, OperationalError
 import logging
+
+from config.resilience import RETRY_AFTER_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +25,27 @@ def custom_exception_handler(exc, context):
     Custom exception handler to ensure throttled requests and other errors
     return a consistent JSON envelope.
     """
-    response = exception_handler(exc, context)
     request = context.get('request')
     request_id = getattr(request, 'request_id', None)
+
+    # Database unreachable (Supabase/Neon down, quota suspension, dropped pooler
+    # connection) — degrade to a structured 503 instead of a 500.
+    if isinstance(exc, (OperationalError, InterfaceError)):
+        path = getattr(request, 'path', 'unknown')
+        logger.error("Database unavailable (DRF) at %s", path, exc_info=True,
+                     extra={'request': request})
+        data = {
+            "status": "error",
+            "message": "Service temporarily unavailable. Please try again shortly.",
+            "data": {},
+        }
+        if request_id:
+            data["request_id"] = request_id
+        response = Response(data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response["Retry-After"] = str(RETRY_AFTER_SECONDS)
+        return response
+
+    response = exception_handler(exc, context)
 
     if response is None:
         path = getattr(request, 'path', 'unknown')
