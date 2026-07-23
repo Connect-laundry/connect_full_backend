@@ -3,25 +3,10 @@ import django
 import socket
 from urllib.parse import urlparse
 
-# 1. Resolve Host IP manually to bypass DNS issues
-host = "ep-round-haze-afaxzo0c-pooler.c-2.us-west-2.aws.neon.tech"
-try:
-    ip = socket.gethostbyname(host)
-    print(f"Resolved {host} to {ip}")
-except Exception as e:
-    print(f"Failed to resolve {host}: {e}")
-    ip = host # Fallback
-
-# 2. Setup Database URL with IP
 import sys
 sys.path.append(os.getcwd())
 from dotenv import load_dotenv
 load_dotenv()
-
-db_url = os.getenv('DATABASE_URL')
-if db_url and host in db_url:
-    # We must be careful with SSL if using IP, but let's try
-    os.environ['DATABASE_URL'] = db_url.replace(host, ip)
 
 # 3. Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
