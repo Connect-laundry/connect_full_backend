@@ -23,6 +23,7 @@ import sys
 
 try:
     import psycopg  # psycopg 3, already a project dependency
+    from psycopg import sql
 except ImportError:  # pragma: no cover
     sys.exit("psycopg (v3) is required: pip install 'psycopg[binary]'")
 
@@ -56,7 +57,8 @@ def _tables(conn):
 
 def _row_count(conn, table):
     with conn.cursor() as cur:
-        cur.execute(f'SELECT count(*) FROM public."{table}";')
+        query = sql.SQL('SELECT count(*) FROM public.{}').format(sql.Identifier(table))
+        cur.execute(query)
         return cur.fetchone()[0]
 
 
