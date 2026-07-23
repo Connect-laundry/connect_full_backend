@@ -102,6 +102,7 @@ INSTALLED_APPS += [
 
 MIDDLEWARE = [
     'laundries.middleware.JSONErrorMiddleware',
+    'config.middleware.database_availability.DatabaseAvailabilityMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'config.middleware.security.SecurityHeadersMiddleware',
@@ -197,6 +198,14 @@ DATABASES = {
 
 # Django 4.1+ — verify each connection is alive before handing it to a view.
 CONN_HEALTH_CHECKS = True
+
+# Fail fast when the database is unreachable (Supabase pooler down, Neon quota
+# suspension) so requests return a graceful 503 quickly instead of hanging until
+# the gunicorn worker times out. libpq connect_timeout is in seconds.
+DATABASES['default'].setdefault('OPTIONS', {})
+DATABASES['default']['OPTIONS'].setdefault(
+    'connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '10'))
+)
 
 # Set the appropriate database engine
 if USE_POSTGIS:
