@@ -16,6 +16,12 @@ class JSONErrorMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
+        # Only handle API endpoints or requests explicitly expecting JSON.
+        # Admin and web views should fall back to Django's HTML error handlers.
+        accept_header = request.headers.get('Accept', '')
+        if not (request.path.startswith('/api/') or 'application/json' in accept_header):
+            return None
+
         logger.error(
             "Unhandled exception at %s",
             request.path,
