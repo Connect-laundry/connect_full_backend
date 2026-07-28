@@ -1,4 +1,6 @@
+import uuid
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -9,6 +11,7 @@ from rest_framework.test import APIClient
 
 from laundries.models.category import Category
 from laundries.models.laundry import Laundry
+from laundries.models.pricing import LaundryPricingItem
 from laundries.models.service import LaundryService
 from ordering.models import LaunderableItem, Order
 from payments.models import Payment
@@ -91,6 +94,188 @@ def _booking_payload(laundry, item, service_type):
         'special_instructions': 'Handle carefully.',
         'payment_method': 'CARD',
     }
+
+
+def _build_pricing_catalog_laundry(prefix='Pricing'):
+    """A laundry on the owner-defined LaundryPricingItem catalog.
+
+    These laundries have no LaundryService/Category rows, so the vendor menu
+    exposes the free-form ``category`` label as the service type.
+    """
+    owner = User.objects.create_user(
+        email=f'{prefix.lower()}-owner@example.com',
+        phone='233555902001',
+        password='StrongPass123!',
+        role=User.Role.OWNER,
+    )
+    customer = User.objects.create_user(
+        email=f'{prefix.lower()}-customer@example.com',
+        phone='233555902002',
+        password='StrongPass123!',
+    )
+    laundry = Laundry.objects.create(
+        name=f'{prefix} Laundry',
+        description='Owner-priced test laundry',
+        address='Accra',
+        city='Accra',
+        latitude='5.603700',
+        longitude='-0.187000',
+        phone_number='0240000003',
+        owner=owner,
+        status=Laundry.ApprovalStatus.APPROVED,
+        is_active=True,
+    )
+    pricing_item = LaundryPricingItem.objects.create(
+        laundry=laundry,
+        item_name='Shirt (Wash Only)',
+        category='Wash Only',
+        unit_price='6.00',
+        is_active=True,
+    )
+    return customer, laundry, pricing_item
+
+
+@pytest.mark.django_db
+class TestBookingCreatePricingCatalog:
+    """Bookings against owner-defined price lists (no global Category rows).
+
+    The client sends the free-form service label ("Wash Only") as
+    ``service_type`` because that is all the vendor menu has. Feeding that into
+    a UUID column used to raise ``"Wash Only" is not a valid UUID`` and fail
+    every booking for these laundries.
+    """
+
+    @patch('ordering.views.order_views.PaymentService.create_payment_intent')
+    def test_booking_create_accepts_non_uuid_service_label(self, mock_payment):
+        customer, laundry, pricing_item = _build_pricing_catalog_laundry('LabelService')
+        mock_payment.return_value = {
+            'transaction_id': 'ORD-pricing-123',
+            'amount': '12.00',
+            'currency': 'GHS',
+            'status': 'PENDING',
+            'payment_method': 'CARD',
+            'authorization_url': 'https://paystack.test/authorize',
+            'access_code': 'access-pricing',
+        }
+        client = _auth_client(customer)
+        payload = {
+            'laundry': str(laundry.id),
+            'pickup_date': (timezone.now() + timedelta(days=1)).isoformat(),
+            'pickup_address': 'Pickup Address',
+            'delivery_address': 'Delivery Address',
+            'items': [
+                {
+                    'item': str(pricing_item.id),
+                    'service_type': 'Wash Only',
+                    'quantity': 2,
+                }
+            ],
+            'payment_method': 'CARD',
+        }
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        order = Order.objects.get(id=response.data['id'])
+        line = order.items.get()
+        assert line.name == 'Shirt (Wash Only)'
+        assert line.quantity == 2
+        assert line.price == Decimal('6.00')
+        # No global catalog rows exist for this laundry, so both FKs stay null.
+        assert line.item is None
+        assert line.service_type is None
+
+    @patch('ordering.views.order_views.PaymentService.create_payment_intent')
+    def test_booking_create_over_raw_api_path_returns_priced_order(self, mock_payment):
+        """Full request path: literal URL, JSON body, middleware, serializer, DB."""
+        customer, laundry, pricing_item = _build_pricing_catalog_laundry('RawPath')
+        mock_payment.return_value = {
+            'transaction_id': 'ORD-rawpath-1',
+            'amount': '18.00',
+            'currency': 'GHS',
+            'status': 'PENDING',
+            'payment_method': 'CARD',
+            'authorization_url': 'https://paystack.test/authorize',
+            'access_code': 'access-rawpath',
+        }
+        client = _auth_client(customer)
+
+        response = client.post(
+            '/api/v1/booking/create/',
+            data={
+                'laundry': str(laundry.id),
+                'pickup_date': (timezone.now() + timedelta(days=1)).isoformat(),
+                'pickup_address': 'Accra Pickup',
+                'delivery_address': 'Accra Delivery',
+                'items': [
+                    {
+                        'item': str(pricing_item.id),
+                        'service_type': 'Wash Only',
+                        'quantity': 3,
+                    }
+                ],
+                'payment_method': 'CARD',
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        order = Order.objects.get(id=response.data['id'])
+        assert order.order_no
+        line = order.items.get()
+        assert (line.name, line.quantity, line.price) == (
+            'Shirt (Wash Only)',
+            3,
+            Decimal('6.00'),
+        )
+        # 3 x 6.00 must flow through into the persisted total.
+        assert order.total_amount >= Decimal('18.00')
+
+    def test_booking_create_rejects_unknown_pricing_item(self):
+        customer, laundry, _ = _build_pricing_catalog_laundry('UnknownItem')
+        client = _auth_client(customer)
+        payload = {
+            'laundry': str(laundry.id),
+            'pickup_date': (timezone.now() + timedelta(days=1)).isoformat(),
+            'pickup_address': 'Pickup Address',
+            'delivery_address': 'Delivery Address',
+            'items': [
+                {
+                    'item': str(uuid.uuid4()),
+                    'service_type': 'Wash Only',
+                    'quantity': 1,
+                }
+            ],
+            'payment_method': 'CARD',
+        }
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
+
+    def test_booking_create_rejects_non_uuid_item_reference(self):
+        customer, laundry, _ = _build_pricing_catalog_laundry('NonUuidItem')
+        client = _auth_client(customer)
+        payload = {
+            'laundry': str(laundry.id),
+            'pickup_date': (timezone.now() + timedelta(days=1)).isoformat(),
+            'pickup_address': 'Pickup Address',
+            'delivery_address': 'Delivery Address',
+            'items': [
+                {
+                    'item': 'Shirt (Wash Only)',
+                    'service_type': 'Wash Only',
+                    'quantity': 1,
+                }
+            ],
+            'payment_method': 'CARD',
+        }
+
+        response = client.post(reverse('booking-create'), payload, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert Order.objects.filter(user=customer, laundry=laundry).count() == 0
 
 
 @pytest.mark.django_db
