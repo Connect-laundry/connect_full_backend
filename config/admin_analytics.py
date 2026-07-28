@@ -5,7 +5,7 @@ endpoints (via analytics.metrics) as KPI cards + Chart.js charts, with a date
 window selector and CSV/Excel/PDF export buttons.
 """
 try:
-    import defusedcsv as csv
+    import defusedcsv.csv as csv
 except ImportError:
     import csv  # noqa: F401
 import json

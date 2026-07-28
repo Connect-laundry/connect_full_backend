@@ -7,7 +7,7 @@ from django.http import JsonResponse
 # pyre-ignore[missing-module]
 from rest_framework import status
 
-from config.resilience import database_unavailable_response
+from config.resilience import database_unavailable_response, is_database_unavailable
 
 class DeactivationMiddleware(MiddlewareMixin):
     """

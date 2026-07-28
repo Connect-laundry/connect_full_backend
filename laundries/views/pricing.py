@@ -179,7 +179,7 @@ class PricingItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='template')
     def download_template(self, request):
         try:
-            import defusedcsv as csv
+            import defusedcsv.csv as csv
         except ImportError:
             import csv  # noqa: F401
         from django.http import HttpResponse
@@ -214,7 +214,7 @@ class PricingItemViewSet(viewsets.ModelViewSet):
         
         if filename.endswith('.csv'):
             try:
-                import defusedcsv as csv
+                import defusedcsv.csv as csv
             except ImportError:
                 import csv  # noqa: F401
             import io
