@@ -27,12 +27,79 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class CampaignDispatchResult:
+    """Outcome of asking for a campaign to be sent."""
+    QUEUED = 'queued'            # handed to Celery, or delivered inline
+    ALREADY_SENDING = 'sending'  # a send is already in flight
+    EMPTY = 'empty'              # the segment currently matches nobody
+    UNAVAILABLE = 'unavailable'  # broker down and the audience is too large
+
+    def __init__(self, outcome, audience=0):
+        self.outcome = outcome
+        self.audience = audience
+
+    @property
+    def ok(self):
+        return self.outcome == self.QUEUED
+
+    def __repr__(self):  # pragma: no cover - debugging aid
+        return f"<CampaignDispatchResult {self.outcome} audience={self.audience}>"
+
+
 class CampaignService:
     # ---- Segmentation ----------------------------------------------------
 
     @staticmethod
     def _customers():
         return User.objects.filter(role='CUSTOMER', is_active=True)
+
+    # ---- Dispatch --------------------------------------------------------
+
+    @classmethod
+    def audience_size(cls, campaign):
+        """Live size of a campaign's segment, or None when unresolvable."""
+        try:
+            return cls.resolve_recipients(campaign.segment, campaign.segment_params).count()
+        except Exception:
+            return None
+
+    @classmethod
+    def dispatch(cls, campaign):
+        """Request delivery of ``campaign`` now.
+
+        The single entry point behind every "send" affordance — the REST API,
+        the Campaign Center UI and the Django admin action — so none of them
+        can drift on guard rails or on broker-outage behaviour.
+
+        Prefers the Celery worker. If the broker is unreachable, a campaign at
+        or under ``PUSH_INLINE_MAX_RECIPIENTS`` is delivered inline (each push
+        is one short HTTPS call to Expo) rather than being dropped; anything
+        larger stays SCHEDULED for the worker instead of blocking the caller.
+        """
+        # Imported lazily: marketplace.tasks imports models, and utils.tasks is
+        # only needed at call time.
+        from marketplace.tasks import run_campaign
+        from utils.tasks import safe_task_delay
+
+        if campaign.status == NotificationCampaign.Status.SENDING:
+            return CampaignDispatchResult(CampaignDispatchResult.ALREADY_SENDING)
+
+        audience = cls.audience_size(campaign) or 0
+        if not audience:
+            return CampaignDispatchResult(CampaignDispatchResult.EMPTY, 0)
+
+        campaign.status = NotificationCampaign.Status.SCHEDULED
+        campaign.scheduled_for = timezone.now()
+        campaign.save(update_fields=['status', 'scheduled_for'])
+
+        inline_limit = getattr(settings, 'PUSH_INLINE_MAX_RECIPIENTS', 200)
+        queued = safe_task_delay(
+            run_campaign, str(campaign.id), fallback_sync=audience <= inline_limit,
+        )
+        if not queued:
+            return CampaignDispatchResult(CampaignDispatchResult.UNAVAILABLE, audience)
+
+        return CampaignDispatchResult(CampaignDispatchResult.QUEUED, audience)
 
     @classmethod
     def resolve_recipients(cls, segment, params=None):

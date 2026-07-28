@@ -168,7 +168,12 @@ class Command(BaseCommand):
     def check_expo(self):
         if not settings.EXPO_PUSH_ENABLED:
             return WARN, 'EXPO_PUSH_ENABLED=False — pushes are recorded as SKIPPED.'
-        return PASS, 'push delivery enabled.'
+        if not getattr(settings, 'EXPO_ACCESS_TOKEN', ''):
+            return WARN, (
+                'EXPO_ACCESS_TOKEN not set — if "Enhanced Security for Push Notifications" '
+                'is enabled on the Expo project, every send is rejected.'
+            )
+        return PASS, 'push delivery enabled with an access token.'
 
     def check_sentry(self):
         dsn = os.getenv('SENTRY_DSN', '')

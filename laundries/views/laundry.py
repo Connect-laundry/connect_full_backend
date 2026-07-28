@@ -7,7 +7,7 @@ from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.db import models
 # pyre-ignore[missing-module]
-from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Q, Prefetch
+from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Min, Q, Prefetch
 # pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
@@ -76,19 +76,42 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 is_active=True
             ).select_related('owner').annotate(
                 rating=Avg('reviews__rating'),
-                reviewsCount=Count('reviews'),
+                # distinct=True is required: joining reviews, orders and
+                # laundry_services in one annotate() fans the rows out, so a
+                # plain Count would report reviews x orders x services.
+                reviewsCount=Count('reviews', distinct=True),
                 active_order_count=Count(
                     'orders',
-                    filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY'])
-                )
+                    filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']),
+                    distinct=True,
+                ),
+                # Price signals for the discovery cards. Avg/Min are unaffected
+                # by the row fan-out above (every service row is duplicated the
+                # same number of times), so they stay correct.
+                avg_price=Avg(
+                    'laundry_services__price',
+                    filter=Q(laundry_services__is_available=True),
+                ),
+                min_service_price=Min(
+                    'laundry_services__price',
+                    filter=Q(laundry_services__is_available=True),
+                ),
             ).order_by('-created_at')
         except Exception as e:
             logger.error(f"Error in Laundry base queryset: {e}", exc_info=True)
             # Fallback must include same annotations to avoid Serializer errors
             queryset = Laundry.objects.all().select_related('owner').annotate(
                 rating=Avg('reviews__rating'),
-                reviewsCount=Count('reviews'),
-                active_order_count=models.Value(0, output_field=models.IntegerField())
+                reviewsCount=Count('reviews', distinct=True),
+                active_order_count=models.Value(0, output_field=models.IntegerField()),
+                avg_price=Avg(
+                    'laundry_services__price',
+                    filter=Q(laundry_services__is_available=True),
+                ),
+                min_service_price=Min(
+                    'laundry_services__price',
+                    filter=Q(laundry_services__is_available=True),
+                ),
             ).order_by('-created_at')
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
@@ -175,9 +198,9 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         # 5. Cheapest Sorting Logic
         cheapest = self.request.query_params.get('cheapest') == 'true'
         if cheapest:
-            queryset = queryset.annotate(
-                avg_price=Avg('laundry_services__price')
-            ).order_by(F('avg_price').asc(nulls_last=True))
+            # avg_price is already annotated on the base queryset (and there it
+            # correctly ignores unavailable services), so just order by it.
+            queryset = queryset.order_by(F('avg_price').asc(nulls_last=True))
         
         # 6. Featured Filter
         if self.request.query_params.get('is_featured') == 'true' or self.request.query_params.get('featured') == 'true':
@@ -227,6 +250,8 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(id__in=open_ids).exclude(vacation_mode=True)
 
         queryset = queryset.distinct()
+        if not queryset.ordered:
+            queryset = queryset.order_by('-created_at')
         return queryset
 
     def get_serializer_class(self):

@@ -46,13 +46,21 @@ class NotificationPreferenceAdmin(ModelAdmin):
 class NotificationCampaignAdmin(ModelAdmin):
     list_display = ('name', 'segment', 'status', 'audience_preview', 'recipients_count',
                     'delivered_count', 'open_rate_display', 'click_rate_display',
-                    'scheduled_for', 'sent_at')
+                    'scheduled_for', 'sent_at', 'campaign_center_link')
     list_filter = ('segment', 'status', 'notification_type', 'priority')
     search_fields = ('name', 'title', 'body')
     readonly_fields = ('id', 'recipients_count', 'delivered_count', 'skipped_count',
                        'failed_count', 'opened_count', 'clicked_count',
                        'analytics_summary', 'created_at', 'sent_at')
     actions = ['send_now']
+
+    @display(description='Campaign Center')
+    def campaign_center_link(self, obj):
+        """Deep link to the richer send/analytics UI for this campaign."""
+        from django.urls import reverse
+        return format_html(
+            '<a href="{}">Open</a>', reverse('campaign-center-detail', args=[obj.id])
+        )
 
     @display(description='Audience (est.)')
     def audience_preview(self, obj):
@@ -83,28 +91,53 @@ class NotificationCampaignAdmin(ModelAdmin):
 
     @admin.action(description='Send selected campaigns now')
     def send_now(self, request, queryset):
-        from .tasks import run_campaign
+        """Bulk send. Shares CampaignService.dispatch with the API and the
+        Campaign Center, so guard rails and broker-outage handling match."""
         from .services.audit import record_audit
-        from utils.tasks import safe_task_delay
-        queued = 0
+        from .services.campaign_service import CampaignService, CampaignDispatchResult
+
+        queued, skipped_empty, already_sending, unavailable = [], [], [], []
+
         for campaign in queryset:
-            if not safe_task_delay(run_campaign, str(campaign.id)):
-                continue
-            queued += 1
-            record_audit(
-                action='campaign.send', request=request,
-                target_type='NotificationCampaign', target_id=str(campaign.id),
-                target_repr=campaign.name, metadata={'via': 'admin_action'},
-            )
-        failed = queryset.count() - queued
-        if failed:
+            result = CampaignService.dispatch(campaign)
+            if result.outcome == CampaignDispatchResult.QUEUED:
+                queued.append(campaign.name)
+                record_audit(
+                    action='campaign.send', request=request,
+                    target_type='NotificationCampaign', target_id=str(campaign.id),
+                    target_repr=campaign.name,
+                    metadata={'via': 'admin_action', 'audience': result.audience},
+                )
+            elif result.outcome == CampaignDispatchResult.EMPTY:
+                skipped_empty.append(campaign.name)
+            elif result.outcome == CampaignDispatchResult.ALREADY_SENDING:
+                already_sending.append(campaign.name)
+            else:
+                unavailable.append(campaign.name)
+
+        if queued:
+            self.message_user(request, f"Queued {len(queued)} campaign(s) for delivery.")
+        if skipped_empty:
             self.message_user(
                 request,
-                f"Queued {queued} campaign(s); {failed} could not be queued (delivery queue unavailable).",
-                level='warning',
+                f"Skipped {len(skipped_empty)} campaign(s) whose segment matches no users: "
+                + ', '.join(skipped_empty[:5]),
+                level=messages.WARNING,
             )
-        else:
-            self.message_user(request, f"Queued {queued} campaign(s) for delivery.")
+        if already_sending:
+            self.message_user(
+                request,
+                f"Skipped {len(already_sending)} campaign(s) already sending: "
+                + ', '.join(already_sending[:5]),
+                level=messages.WARNING,
+            )
+        if unavailable:
+            self.message_user(
+                request,
+                f"{len(unavailable)} campaign(s) could not be queued (delivery queue "
+                "unavailable); they remain scheduled and will send once it recovers.",
+                level=messages.ERROR,
+            )
 
 
 @admin.register(AuditLog)

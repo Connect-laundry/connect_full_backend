@@ -36,7 +36,7 @@ class AdminLaundryViewSet(viewsets.GenericViewSet):
     """
     Platform administration endpoints for vetting laundry businesses.
     """
-    queryset = Laundry.objects.all()
+    queryset = Laundry.objects.all().order_by('-created_at')
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     serializer_class = AdminLaundryApprovalSerializer
 

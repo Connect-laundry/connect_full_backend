@@ -66,11 +66,31 @@ def _deactivate_tokens(tokens):
     return updated
 
 
-def deliver_push(title, body, data, tokens):
-    """Send one Expo push batch and clean up invalid tokens from the receipt.
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
+# Expo accepts at most 100 messages per /push/send call.
+EXPO_BATCH_SIZE = 100
 
-    Returns the number of messages accepted by Expo. Tokens that Expo reports
-    as `DeviceNotRegistered` (or otherwise invalid) are deactivated so we stop
+
+def expo_push_headers():
+    """Headers for the Expo push API, including the access token when set.
+
+    Expo projects with "Enhanced Security for Push Notifications" enabled
+    reject unauthenticated sends, so ``EXPO_ACCESS_TOKEN`` must be configured
+    for those projects or nothing reaches a device.
+    """
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    token = getattr(settings, 'EXPO_ACCESS_TOKEN', '')
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def deliver_push(title, body, data, tokens):
+    """Send Expo push batches and clean up invalid tokens from the tickets.
+
+    Returns the number of messages Expo accepted. Tokens Expo reports as
+    `DeviceNotRegistered` (or otherwise invalid) are deactivated so we stop
     pushing to dead devices. Safe to call from any task — never raises for
     per-token errors; only network failures propagate (to allow Celery retry).
     """
@@ -78,43 +98,86 @@ def deliver_push(title, body, data, tokens):
     if not valid_tokens:
         return 0
 
-    messages = [
-        {
-            "to": token,
-            "sound": "default",
-            "title": title,
-            "body": body,
-            "data": data or {},
-            # image_url is included when provided (iOS shows as attachment preview).
-            **({"image": data.get("imageUrl")} if isinstance(data, dict) and data.get("imageUrl") else {}),
-        }
-        for token in valid_tokens
-    ]
+    accepted = 0
+    dead = []
+    ticket_ids = []
 
-    response = requests.post(
-        "https://exp.host/--/api/v2/push/send",
-        json=messages,
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
-        timeout=10,
-    )
-    response.raise_for_status()
+    for start in range(0, len(valid_tokens), EXPO_BATCH_SIZE):
+        batch = valid_tokens[start:start + EXPO_BATCH_SIZE]
+        messages = [
+            {
+                "to": token,
+                "sound": "default",
+                "title": title,
+                "body": body,
+                "data": data or {},
+                # image_url is included when provided (iOS shows as attachment preview).
+                **({"image": data.get("imageUrl")} if isinstance(data, dict) and data.get("imageUrl") else {}),
+            }
+            for token in batch
+        ]
 
-    # Inspect per-message tickets and reap dead tokens.
-    try:
-        tickets = response.json().get('data', [])
-        dead = []
-        for token, ticket in zip(valid_tokens, tickets):
+        response = requests.post(
+            EXPO_PUSH_URL,
+            json=messages,
+            headers=expo_push_headers(),
+            timeout=10,
+        )
+
+        # Expo returns structured errors (e.g. an invalid or missing access
+        # token) in the body; surface them instead of a bare status code.
+        if response.status_code >= 400:
+            detail = response.text[:500]
+            logger.error(
+                "Expo push API rejected the request",
+                extra={"status": response.status_code, "detail": detail},
+            )
+            response.raise_for_status()
+
+        try:
+            tickets = response.json().get('data', [])
+        except ValueError as exc:  # pragma: no cover - malformed response
+            logger.warning("Could not parse Expo push response", extra={"error": str(exc)})
+            continue
+
+        for token, ticket in zip(batch, tickets):
             if not isinstance(ticket, dict):
                 continue
             if ticket.get('status') == 'error':
                 code = (ticket.get('details') or {}).get('error')
+                # 'message' is reserved on LogRecord; use a distinct key.
+                logger.warning(
+                    "Expo rejected a push message",
+                    extra={"error": code, "expo_message": ticket.get('message')},
+                )
                 if code == 'DeviceNotRegistered':
                     dead.append(token)
-        _deactivate_tokens(dead)
-    except (ValueError, KeyError) as exc:  # pragma: no cover - malformed response
-        logger.warning("Could not parse Expo push receipt", extra={"error": str(exc)})
+                continue
+            accepted += 1
+            if ticket.get('id'):
+                ticket_ids.append(ticket['id'])
 
-    return len(messages)
+    _deactivate_tokens(dead)
+    return accepted
+
+
+def fetch_push_receipts(ticket_ids):
+    """Resolve Expo ticket ids to delivery receipts.
+
+    A ticket only means Expo queued the message; the receipt says whether
+    APNs/FCM accepted it. Deactivates tokens reported as `DeviceNotRegistered`
+    is not possible here (receipts are keyed by ticket), so callers log.
+    """
+    if not ticket_ids:
+        return {}
+    response = requests.post(
+        EXPO_RECEIPTS_URL,
+        json={"ids": list(ticket_ids)},
+        headers=expo_push_headers(),
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json().get('data', {}) or {}
 
 
 @shared_task(

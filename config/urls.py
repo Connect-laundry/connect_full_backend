@@ -29,6 +29,15 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from marketplace.views.legal import PublicLegalHtmlView
 from config.admin_analytics import analytics_dashboard_view, analytics_export_view
 from config.insights import insights_view
+from marketplace.campaign_center import (
+    campaign_audience_view,
+    campaign_compose_view,
+    campaign_detail_view,
+    campaign_list_view,
+    campaign_schedule_view,
+    campaign_send_view,
+    campaign_test_view,
+)
 
 root_target = '/api/docs/' if settings.DEBUG else '/health/'
 
@@ -53,6 +62,15 @@ urlpatterns = [
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
     path('admin/insights/', insights_view, name='insights-home'),
     path('admin/insights/<str:section>/', insights_view, name='insights-section'),
+    # Campaign Center — must precede admin.site.urls so /admin/campaigns/ is ours.
+    path('admin/campaigns/', campaign_list_view, name='campaign-center'),
+    path('admin/campaigns/new/', campaign_compose_view, name='campaign-center-new'),
+    path('admin/campaigns/audience/', campaign_audience_view, name='campaign-center-audience'),
+    path('admin/campaigns/<uuid:pk>/', campaign_detail_view, name='campaign-center-detail'),
+    path('admin/campaigns/<uuid:pk>/edit/', campaign_compose_view, name='campaign-center-edit'),
+    path('admin/campaigns/<uuid:pk>/send/', campaign_send_view, name='campaign-center-send'),
+    path('admin/campaigns/<uuid:pk>/schedule/', campaign_schedule_view, name='campaign-center-schedule'),
+    path('admin/campaigns/<uuid:pk>/test/', campaign_test_view, name='campaign-center-test'),
     path('admin/analytics-dashboard/', analytics_dashboard_view, name='admin-analytics-dashboard'),
     path('admin/analytics-export/', analytics_export_view, name='admin-analytics-export'),
     path('admin/', admin.site.urls),
