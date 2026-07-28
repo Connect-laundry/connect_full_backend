@@ -141,7 +141,8 @@ class PricingCatalogVersion(models.Model):
         unique_together = ('laundry', 'version_number')
 
     def __str__(self):
-        return f"Version {self.version_number} - {self.laundry.name}"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        return f"Version {self.version_number} - {laundry_name}"
 
 
 class ScheduledPriceChange(models.Model):
@@ -162,7 +163,8 @@ class ScheduledPriceChange(models.Model):
         ordering = ['effective_at']
 
     def __str__(self):
-        return f"Scheduled change for {self.laundry.name} on {self.effective_at} (Applied: {self.is_applied})"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        return f"Scheduled change for {laundry_name} on {self.effective_at} (Applied: {self.is_applied})"
 
 
 class DeliveryZonePricing(models.Model):
@@ -183,5 +185,6 @@ class DeliveryZonePricing(models.Model):
         ordering = ['min_distance_km']
 
     def __str__(self):
-        return f"{self.min_distance_km}-{self.max_distance_km} km: Fee GHS {self.delivery_fee} ({self.laundry.name})"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        return f"{self.min_distance_km}-{self.max_distance_km} km: Fee GHS {self.delivery_fee} ({laundry_name})"
 

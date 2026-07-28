@@ -191,11 +191,16 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 
     @display(description="Open in Clerk")
     def clerk_dashboard_link(self, obj):
-        if not obj.clerk_user_id:
+        if not obj or not obj.clerk_user_id:
             return "-"
-        template = getattr(settings, 'CLERK_DASHBOARD_USER_URL_TEMPLATE', '')
-        url = template.format(clerk_user_id=obj.clerk_user_id)
-        return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">Open in Clerk Dashboard</a>', url)
+        template = getattr(settings, 'CLERK_DASHBOARD_USER_URL_TEMPLATE', '') or ''
+        if not template or '{clerk_user_id}' not in template:
+            return "-"
+        try:
+            url = template.format(clerk_user_id=obj.clerk_user_id)
+            return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">Open in Clerk Dashboard</a>', url)
+        except Exception:
+            return "-"
 
     @admin.action(description="Force resync selected users from Clerk")
     def resync_clerk_users(self, request, queryset):

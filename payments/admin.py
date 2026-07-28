@@ -25,9 +25,14 @@ class PaymentAdmin(ModelAdmin):
 
     @display(description="Order")
     def order_link(self, obj):
-        from django.urls import reverse
-        url = reverse("admin:ordering_order_change", args=[obj.order.id])
-        return format_html('<a href="{}" class="font-mono text-primary-600 underline">{}</a>', url, obj.order.order_no)
+        if not obj or not obj.order:
+            return "—"
+        try:
+            from django.urls import reverse
+            url = reverse("admin:ordering_order_change", args=[obj.order.id])
+            return format_html('<a href="{}" class="font-mono text-primary-600 underline">{}</a>', url, obj.order.order_no)
+        except Exception:
+            return getattr(obj.order, 'order_no', '—')
 
     @display(description="Amount", ordering="amount")
     def display_amount(self, obj):

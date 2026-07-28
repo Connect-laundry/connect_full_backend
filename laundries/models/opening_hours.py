@@ -31,7 +31,10 @@ class OpeningHours(models.Model):
         ordering = ['day', 'opening_time']
 
     def __str__(self):
-        return f"{self.laundry.name} - {self.get_day_display()}: {self.opening_time} to {self.closing_time}"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        if self.is_closed:
+            return f"{laundry_name} - {self.get_day_display()}: Closed"
+        return f"{laundry_name} - {self.get_day_display()}: {self.opening_time or '?'} to {self.closing_time or '?'}"
 
 
 class HolidayOverride(models.Model):
@@ -54,6 +57,7 @@ class HolidayOverride(models.Model):
         unique_together = ('laundry', 'date')
 
     def __str__(self):
-        status_str = "Closed" if self.is_closed else f"{self.opening_time}-{self.closing_time}"
-        return f"{self.laundry.name} on {self.date}: {status_str} ({self.note})"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        status_str = "Closed" if self.is_closed else f"{self.opening_time or '?'}-{self.closing_time or '?'}"
+        return f"{laundry_name} on {self.date}: {status_str} ({self.note})"
 

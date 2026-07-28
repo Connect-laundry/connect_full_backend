@@ -147,43 +147,55 @@ class LaundryAdmin(ModelAdmin):
 
     @display(description="Owner contact")
     def owner_contact(self, obj):
+        if not obj:
+            return "—"
         owner = getattr(obj, 'owner', None)
         if owner is None:
             return "—"
-        owner_url = reverse('admin:users_user_change', args=[owner.pk])
-        return format_html(
-            '<a href="{}" class="text-primary-600 underline">{}</a><br>{}<br>{}',
-            owner_url,
-            owner.get_full_name() or owner.email,
-            owner.email,
-            getattr(owner, 'phone_number', '') or obj.phone_number or '',
-        )
+        try:
+            owner_url = reverse('admin:users_user_change', args=[owner.pk])
+            owner_name = owner.get_full_name() or owner.email
+            phone = getattr(owner, 'phone', None) or getattr(owner, 'phone_number', '') or getattr(obj, 'phone_number', '') or ''
+            return format_html(
+                '<a href="{}" class="text-primary-600 underline">{}</a><br>{}<br>{}',
+                owner_url,
+                owner_name,
+                owner.email,
+                phone,
+            )
+        except Exception:
+            return owner.email if hasattr(owner, 'email') else "—"
 
     @display(description="Opening hours (as submitted)")
     def hours_summary(self, obj):
         if obj is None or obj.pk is None:
             return "—"
-        rows = obj.opening_hours.order_by('day')
-        if not rows.exists():
-            return "No opening hours submitted"
-        return format_html(
-            '<table style="border-collapse:collapse">{}</table>',
-            format_html_join(
-                '',
-                '<tr><td style="padding:2px 16px 2px 0;font-weight:600">{}</td>'
-                '<td style="padding:2px 0">{}</td></tr>',
-                (
-                    (
-                        oh.get_day_display(),
-                        "Closed" if oh.is_closed else (
-                            f"{oh.opening_time:%H:%M} – {oh.closing_time:%H:%M}"
-                            + (" (+1 day)" if oh.is_overnight else "")
-                        ),
-                    )
-                    for oh in rows
+        try:
+            rows = obj.opening_hours.order_by('day')
+            if not rows.exists():
+                return "No opening hours submitted"
+            
+            formatted_rows = []
+            for oh in rows:
+                if oh.is_closed:
+                    time_str = "Closed"
+                elif oh.opening_time and oh.closing_time:
+                    time_str = f"{oh.opening_time:%H:%M} – {oh.closing_time:%H:%M}" + (" (+1 day)" if oh.is_overnight else "")
+                else:
+                    time_str = "Hours unconfigured"
+                formatted_rows.append((oh.get_day_display(), time_str))
+
+            return format_html(
+                '<table style="border-collapse:collapse">{}</table>',
+                format_html_join(
+                    '',
+                    '<tr><td style="padding:2px 16px 2px 0;font-weight:600">{}</td>'
+                    '<td style="padding:2px 0">{}</td></tr>',
+                    formatted_rows,
                 ),
-            ),
-        )
+            )
+        except Exception:
+            return "Error loading opening hours"
 
     # --------------------------------------------------------- decision engine
 
@@ -292,10 +304,13 @@ class ReviewAdmin(ModelAdmin):
 
     @display(description="Rating")
     def rating_stars(self, obj):
-        return format_html(
-            '<span class="text-yellow-500">{}</span>',
-            "★" * obj.rating + "☆" * (5 - obj.rating)
-        )
+        rating = getattr(obj, 'rating', 0) or 0
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            rating = 0
+        stars = "★" * rating + "☆" * max(0, 5 - rating)
+        return format_html('<span class="text-yellow-500">{}</span>', stars)
 
 
 @admin.register(Favorite)

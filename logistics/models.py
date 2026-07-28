@@ -23,7 +23,9 @@ class DeliveryAssignment(models.Model):
     status = models.CharField(max_length=20, default='ASSIGNED') # ASSIGNED, IN_TRANSIT, COMPLETED
 
     def __str__(self):
-        return f"{self.assignment_type} - Order {self.order.order_no} - {self.driver.email}"
+        order_no = self.order.order_no if getattr(self, 'order', None) else 'N/A'
+        driver_email = self.driver.email if getattr(self, 'driver', None) else 'Unassigned'
+        return f"{self.assignment_type} - Order {order_no} - {driver_email}"
 
 class TrackingLog(models.Model):
     """Audit trail of order movements and status changes."""
@@ -43,4 +45,5 @@ class TrackingLog(models.Model):
         ordering = ['-timestamp']
 
     def __str__(self):
-        return f"{self.order.order_no} - {self.status} @ {self.timestamp}"
+        order_no = self.order.order_no if getattr(self, 'order', None) else 'N/A'
+        return f"{order_no} - {self.status} @ {self.timestamp}"

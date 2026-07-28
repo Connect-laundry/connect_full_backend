@@ -4,7 +4,10 @@ A single staff-only page that surfaces the same numbers as the DRF dashboard
 endpoints (via analytics.metrics) as KPI cards + Chart.js charts, with a date
 window selector and CSV/Excel/PDF export buttons.
 """
-import defusedcsv.csv as defused_csv
+try:
+    import defusedcsv.csv as defused_csv
+except ImportError:
+    import csv as defused_csv
 import json
 from datetime import timedelta
 

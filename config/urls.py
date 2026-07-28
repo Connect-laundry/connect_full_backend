@@ -71,6 +71,8 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 
+handler500 = 'django.views.defaults.server_error'
+
 # Serve media files in development
 from django.conf.urls.static import static
 

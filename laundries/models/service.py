@@ -39,4 +39,7 @@ class LaundryService(models.Model):
         ordering = ['laundry', 'item__name']
 
     def __str__(self):
-        return f"{self.item.name} ({self.service_type.name}) - {self.price} at {self.laundry.name}"
+        item_name = self.item.name if getattr(self, 'item', None) else 'Item'
+        st_name = self.service_type.name if getattr(self, 'service_type', None) else 'Service'
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else 'Laundry'
+        return f"{item_name} ({st_name}) - {self.price} at {laundry_name}"
