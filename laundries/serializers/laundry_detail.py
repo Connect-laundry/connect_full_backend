@@ -96,8 +96,39 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
     @extend_schema_field(LaundryServiceSerializer(many=True))
     def get_services(self, obj):
         services = obj.laundry_services.filter(is_available=True).select_related('item', 'service_type')
-        # pyre-ignore[missing-module]
-        return LaundryServiceSerializer(services, many=True, context=self.context).data
+        data = LaundryServiceSerializer(services, many=True, context=self.context).data
+        
+        if hasattr(obj, 'pricing_items'):
+            request = self.context.get('request')
+            pricing_qs = obj.pricing_items.filter(is_active=True)
+            existing_names = {item.get('itemName') for item in data if isinstance(item, dict)}
+            for p_item in pricing_qs:
+                if p_item.item_name in existing_names:
+                    continue
+                cat_name = p_item.category or "General"
+                data.append({
+                    "id": str(p_item.id),
+                    "itemName": p_item.item_name,
+                    "itemId": str(p_item.id),
+                    "serviceType": cat_name,
+                    "serviceTypeId": cat_name,
+                    "itemCategory": cat_name,
+                    "itemCategoryId": cat_name,
+                    "itemImage": safe_media_url(p_item.image, request) if hasattr(p_item, 'image') and p_item.image else None,
+                    "price": str(p_item.unit_price),
+                    "estimated_duration": "Standard Turnaround",
+                    "is_available": p_item.is_active,
+                    "item": {
+                        "id": str(p_item.id),
+                        "name": p_item.item_name,
+                        "category": cat_name,
+                    },
+                    "service_type": {
+                        "id": cat_name,
+                        "name": cat_name,
+                    }
+                })
+        return data
 
     @extend_schema_field(ReviewSerializer(many=True))
     def get_reviews(self, obj):
