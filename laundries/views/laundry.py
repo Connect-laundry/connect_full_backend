@@ -18,7 +18,8 @@ import logging
 import os
 
 # Check if PostGIS is enabled
-USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+from django.conf import settings
+USE_POSTGIS = getattr(settings, 'USE_POSTGIS', False)
 
 # Conditionally import GIS modules
 if USE_POSTGIS:
