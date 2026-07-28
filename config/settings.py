@@ -59,8 +59,16 @@ AUTH_USER_MODEL = 'users.User'
 
 # Application definition
 
-# Check if PostGIS should be enabled (for production)
-USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+# Check if PostGIS should be enabled (and verify GDAL/GIS dependencies are actually present)
+_want_postgis = os.getenv('USE_POSTGIS', 'False') == 'True'
+USE_POSTGIS = False
+if _want_postgis:
+    try:
+        from django.contrib.gis.db.backends.postgis import base  # noqa: F401
+        USE_POSTGIS = True
+    except Exception:
+        import logging
+        logging.warning("USE_POSTGIS=True requested, but GDAL/PostGIS libraries are unavailable. Disabling PostGIS.")
 
 INSTALLED_APPS = [
     'unfold',
@@ -85,7 +93,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
 ]
 
-# Add GIS support only if USE_POSTGIS is enabled
+# Add GIS support only if USE_POSTGIS is verified and enabled
 if USE_POSTGIS:
     INSTALLED_APPS.append('django.contrib.gis')
 
@@ -210,17 +218,11 @@ DATABASES['default']['OPTIONS'].setdefault(
     'connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '10'))
 )
 
-# Set the appropriate database engine with fallback
+# Set the appropriate database engine based on verified USE_POSTGIS flag
 if USE_POSTGIS:
-    try:
-        from django.contrib.gis.db.backends.postgis import base  # noqa: F401
-        DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
-    except Exception:
-        import logging
-        logging.warning("PostGIS engine requested but GIS libraries unavailable. Falling back to postgresql engine.")
-        DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+    DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 else:
-        DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+    DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
 
 # Password validation

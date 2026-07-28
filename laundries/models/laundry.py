@@ -10,7 +10,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from ..utils.validators import validate_file_upload, validate_latitude, validate_longitude
 
 # Conditionally import GIS or regular Django models based on USE_POSTGIS
-USE_POSTGIS = os.getenv('USE_POSTGIS', 'False') == 'True'
+USE_POSTGIS = getattr(settings, 'USE_POSTGIS', False)
 
 if USE_POSTGIS:
     # pyre-ignore[missing-module]
