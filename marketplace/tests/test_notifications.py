@@ -159,6 +159,7 @@ class TokenCleanupTests(APITestCase):
 
     @patch('marketplace.tasks.requests.post')
     def test_device_not_registered_deactivates_token(self, mock_post):
+        mock_post.return_value.status_code = 200
         mock_post.return_value.raise_for_status = lambda: None
         mock_post.return_value.json = lambda: {
             "data": [{"status": "error", "details": {"error": "DeviceNotRegistered"}}]
@@ -167,6 +168,120 @@ class TokenCleanupTests(APITestCase):
         deliver_push("t", "b", {}, ["ExponentPushToken[GOODBAD]"])
         self.device.refresh_from_db()
         self.assertFalse(self.device.is_active)
+
+
+class ExpoTransportTests(APITestCase):
+    """The Expo wire format: auth header, batching, and error surfacing."""
+
+    @override_settings(EXPO_ACCESS_TOKEN='secret-token')
+    def test_access_token_is_sent_as_bearer(self):
+        from marketplace.tasks import expo_push_headers
+        headers = expo_push_headers()
+        self.assertEqual(headers['Authorization'], 'Bearer secret-token')
+
+    @override_settings(EXPO_ACCESS_TOKEN='')
+    def test_no_authorization_header_when_token_unset(self):
+        from marketplace.tasks import expo_push_headers
+        self.assertNotIn('Authorization', expo_push_headers())
+
+    @override_settings(EXPO_ACCESS_TOKEN='secret-token')
+    @patch('marketplace.tasks.requests.post')
+    def test_deliver_push_authenticates_the_send(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {"data": [{"status": "ok", "id": "t-1"}]}
+
+        from marketplace.tasks import deliver_push
+        sent = deliver_push("t", "b", {}, ["ExponentPushToken[AAAA]"])
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(
+            mock_post.call_args.kwargs['headers']['Authorization'], 'Bearer secret-token',
+        )
+
+    @patch('marketplace.tasks.requests.post')
+    def test_deliver_push_splits_batches_of_100(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            "data": [{"status": "ok", "id": "t"}] * 100
+        }
+
+        from marketplace.tasks import deliver_push
+        tokens = [f"ExponentPushToken[T{i:04d}]" for i in range(150)]
+        deliver_push("t", "b", {}, tokens)
+
+        self.assertEqual(mock_post.call_count, 2)
+        self.assertEqual(len(mock_post.call_args_list[0].kwargs['json']), 100)
+        self.assertEqual(len(mock_post.call_args_list[1].kwargs['json']), 50)
+
+    @patch('marketplace.tasks.requests.post')
+    def test_rejected_send_raises_so_celery_retries(self, mock_post):
+        import requests as requests_lib
+
+        def _raise():
+            raise requests_lib.HTTPError("401 Unauthorized")
+
+        mock_post.return_value.status_code = 401
+        mock_post.return_value.text = '{"errors":[{"code":"UNAUTHORIZED"}]}'
+        mock_post.return_value.raise_for_status = _raise
+
+        from marketplace.tasks import deliver_push
+        with self.assertRaises(requests_lib.HTTPError):
+            deliver_push("t", "b", {}, ["ExponentPushToken[AAAA]"])
+
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class BrokerOutageDeliveryTests(APITestCase):
+    """Push must still reach the device when Celery has no broker.
+
+    Deployments without Redis were creating the in-app notification row and
+    silently dropping the push, so the phone never buzzed.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="broker@example.com", phone="233700000055", password="pw", role='CUSTOMER')
+        PushDevice.objects.create(
+            user=self.user, token="ExponentPushToken[BROKER]", platform='android')
+
+    @patch('marketplace.tasks.send_real_push.apply')
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_push_runs_inline_when_broker_is_down(self, mock_delay, mock_apply):
+        from kombu.exceptions import OperationalError
+        mock_delay.side_effect = OperationalError("broker unreachable")
+
+        notification = NotificationService.notify_user(
+            self.user, title="t", body="b", category='ORDER',
+            type=Notification.Type.ORDER,
+        )
+
+        self.assertIsNotNone(notification)
+        mock_delay.assert_called_once()
+        # Falls back to running the task in-process rather than dropping it.
+        mock_apply.assert_called_once()
+
+    @patch('marketplace.tasks.requests.post')
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_inline_fallback_actually_hits_expo(self, mock_delay, mock_post):
+        from kombu.exceptions import OperationalError
+        mock_delay.side_effect = OperationalError("broker unreachable")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {"data": [{"status": "ok", "id": "t-1"}]}
+
+        notification = NotificationService.notify_user(
+            self.user, title="Order picked up", body="Your laundry is on its way",
+            category='ORDER', type=Notification.Type.ORDER,
+        )
+
+        mock_post.assert_called_once()
+        payload = mock_post.call_args.kwargs['json']
+        self.assertEqual(payload[0]['to'], "ExponentPushToken[BROKER]")
+        self.assertEqual(payload[0]['title'], "Order picked up")
+
+        notification.refresh_from_db()
+        self.assertEqual(notification.push_status, Notification.PushStatus.SENT)
 
 
 @override_settings(EXPO_PUSH_ENABLED=True)

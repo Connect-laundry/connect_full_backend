@@ -49,19 +49,23 @@ class CampaignViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=['post'], url_path='send')
     def send(self, request, pk=None):
         """Send a campaign now (async via Celery)."""
+        from marketplace.services.campaign_service import CampaignDispatchResult
+
         campaign = self.get_object()
-        if campaign.status == NotificationCampaign.Status.SENDING:
+        result = CampaignService.dispatch(campaign)
+
+        if result.outcome == CampaignDispatchResult.ALREADY_SENDING:
             return Response(
                 {"status": "error", "message": "Campaign is already sending."},
                 status=status.HTTP_409_CONFLICT,
             )
-        campaign.status = NotificationCampaign.Status.SCHEDULED
-        campaign.scheduled_for = timezone.now()
-        campaign.save(update_fields=['status', 'scheduled_for'])
-
-        from marketplace.tasks import run_campaign
-        from utils.tasks import safe_task_delay
-        if not safe_task_delay(run_campaign, str(campaign.id)):
+        if result.outcome == CampaignDispatchResult.EMPTY:
+            return Response(
+                {"status": "error",
+                 "message": "This segment currently matches no users; nothing was sent."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if result.outcome == CampaignDispatchResult.UNAVAILABLE:
             return Response(
                 {"status": "error",
                  "message": "Delivery queue is unavailable; the campaign remains scheduled and will "
@@ -72,9 +76,14 @@ class CampaignViewSet(viewsets.ModelViewSet):
         record_audit(
             action='campaign.send', request=request,
             target_type='NotificationCampaign', target_id=str(campaign.id),
-            target_repr=campaign.name, metadata={'segment': campaign.segment},
+            target_repr=campaign.name,
+            metadata={'segment': campaign.segment, 'audience': result.audience},
         )
-        return Response({"status": "success", "message": "Campaign queued for delivery."})
+        return Response({
+            "status": "success",
+            "message": "Campaign queued for delivery.",
+            "data": {"audience": result.audience},
+        })
 
     @decorators.action(detail=True, methods=['post'], url_path='schedule')
     def schedule(self, request, pk=None):

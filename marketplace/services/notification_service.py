@@ -162,12 +162,19 @@ class NotificationService:
 
     @staticmethod
     def _queue_push(notification_id):
-        try:
-            # Imported lazily to avoid circular imports at app load.
-            from marketplace.tasks import send_real_push
-            send_real_push.delay(str(notification_id))
-        except Exception as exc:  # pragma: no cover - broker/runtime safety
+        """Hand the push to Celery, delivering inline if the broker is down.
+
+        A single push is one short HTTPS call to Expo, so running it inline is
+        cheap and keeps notifications working on deployments with no Redis.
+        Without this fallback the push is silently dropped while the in-app
+        notification row still appears — the device never buzzes.
+        """
+        # Imported lazily to avoid circular imports at app load.
+        from marketplace.tasks import send_real_push
+        from utils.tasks import safe_task_delay
+
+        if not safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
             logger.error(
-                "Failed to queue push notification",
-                extra={"notification_id": str(notification_id), "error": str(exc)},
+                "Failed to deliver push notification",
+                extra={"notification_id": str(notification_id)},
             )

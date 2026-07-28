@@ -30,7 +30,7 @@ class FavoriteListView(generics.ListAPIView):
         laundries = Laundry.objects.filter(id__in=laundry_ids).annotate(
             rating=Avg('reviews__rating'),
             reviewsCount=Count('reviews')
-        )
+        ).order_by('-created_at')
         
         page = self.paginate_queryset(laundries)
         if page is not None:

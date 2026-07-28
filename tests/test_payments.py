@@ -560,3 +560,76 @@ class TestHardenPaymentAudit:
         data_owner = response_owner_stats.json()
         assert float(data_owner['total_revenue']) == 25.00
 
+
+
+@pytest.mark.django_db
+class TestPaystackWebhookRetrySafety:
+    """A failed delivery must stay retryable.
+
+    Regression: the replay-protection row used to be committed before the
+    processing transaction opened. Any transient failure burned the dedup key,
+    so Paystack's retry short-circuited to 200 and the payment was left
+    PENDING forever — money taken, order never confirmed.
+    """
+
+    @pytest.fixture(autouse=True)
+    def webhook_settings(self, settings):
+        settings.ROOT_URLCONF = 'config.urls'
+        settings.PAYSTACK_SECRET_KEY = 'test-paystack-secret'
+        settings.PAYMENT_CURRENCY = 'GHS'
+
+    def test_transient_failure_leaves_event_replayable(self):
+        _, order, payment = _build_pending_payment('ORD-WEBHOOK-RETRY')
+        client = APIClient()
+        payload = _webhook_payload(payment, event_id='evt_transient_failure')
+
+        # First delivery blows up midway through processing.
+        with patch(
+            'payments.webhooks.OrderStateMachine.transition',
+            side_effect=RuntimeError('transient database blip'),
+        ):
+            first = _post_signed_webhook(client, payload)
+
+        assert first.status_code == 500
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.PENDING
+        # The claim must have rolled back with the failed work.
+        assert not WebhookEvent.objects.filter(event_id='evt_transient_failure').exists()
+
+        # Paystack retries the same event — it must now be processed.
+        second = _post_signed_webhook(client, payload)
+
+        assert second.status_code == 200
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == Payment.Status.SUCCESS
+        assert order.payment_status == Order.PaymentStatus.PAID
+        assert WebhookEvent.objects.filter(event_id='evt_transient_failure').count() == 1
+
+    def test_successful_event_is_still_claimed_once(self):
+        _, order, payment = _build_pending_payment('ORD-WEBHOOK-CLAIM-ONCE')
+        client = APIClient()
+        payload = _webhook_payload(payment, event_id='evt_claim_once')
+
+        first = _post_signed_webhook(client, payload)
+        second = _post_signed_webhook(client, payload)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert WebhookEvent.objects.filter(event_id='evt_claim_once').count() == 1
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.SUCCESS
+
+    def test_signature_comparison_is_constant_time(self):
+        """compare_digest rejects a wrong digest of identical length."""
+        _, _, payment = _build_pending_payment('ORD-WEBHOOK-CT')
+        client = APIClient()
+        payload = _webhook_payload(payment, event_id='evt_ct')
+        # Same length as a real sha512 hexdigest, so only the bytes differ.
+        forged = '0' * 128
+
+        response = _post_signed_webhook(client, payload, signature=forged)
+
+        assert response.status_code == 401
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.PENDING

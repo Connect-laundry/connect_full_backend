@@ -224,6 +224,36 @@ if USE_POSTGIS:
 else:
     DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
+# Redis & Cache Configuration
+REDIS_URL = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL')
+USE_REDIS_CACHE = os.getenv('USE_REDIS_CACHE', 'True' if REDIS_URL else 'False') == 'True'
+
+if REDIS_URL and USE_REDIS_CACHE:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
+            }
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or REDIS_URL or 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND') or REDIS_URL or 'redis://localhost:6379/0'
+
+# Expo Push Notifications
+EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False').lower() in ('true', '1', 't')
+EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -578,6 +608,14 @@ PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
+# Required when "Enhanced Security for Push Notifications" is enabled on the
+# Expo project (expo.dev -> Project settings -> Notifications). With that
+# toggle on, Expo rejects any /push/send call that has no bearer token, so
+# every notification silently fails to reach the device.
+EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
+# When the Celery broker is down, a campaign is delivered inline only if the
+# audience is at or below this size; larger sends stay queued for the worker.
+PUSH_INLINE_MAX_RECIPIENTS = int(os.getenv('PUSH_INLINE_MAX_RECIPIENTS', 200))
 
 # Web Push (VAPID) Settings
 WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2')
@@ -702,6 +740,11 @@ UNFOLD = {
                         "icon": "approval",
                         "link": "/admin/laundries/laundry/?status__exact=PENDING",
                         "badge": "config.admin_dashboard.pending_laundries_badge",
+                    },
+                    {
+                        "title": _("Campaign Center"),
+                        "icon": "campaign",
+                        "link": reverse_lazy("campaign-center"),
                     },
                 ],
             },

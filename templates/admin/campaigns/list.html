@@ -1,0 +1,98 @@
+{% extends "admin/campaigns/base.html" %}
+{% load i18n %}
+
+{% block cc_content %}
+<div class="cc-head">
+  <div>
+    <h1 class="cc-head__title">Campaign Center</h1>
+    <p class="cc-head__sub">Compose, target and send push notifications to your customers.</p>
+  </div>
+  <a class="cc-btn cc-btn--primary" href="{{ new_url }}">New campaign</a>
+</div>
+
+<div class="cc-stats">
+  <div class="cc-stat">
+    <div class="cc-stat__label">Campaigns</div>
+    <div class="cc-stat__value">{{ stats.total }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Sent</div>
+    <div class="cc-stat__value">{{ stats.sent }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Scheduled</div>
+    <div class="cc-stat__value">{{ stats.scheduled }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Delivered</div>
+    <div class="cc-stat__value">{{ stats.delivered }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Open rate</div>
+    <div class="cc-stat__value">{{ stats.open_rate }}%</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Click rate</div>
+    <div class="cc-stat__value">{{ stats.click_rate }}%</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Conversions</div>
+    <div class="cc-stat__value">{{ stats.converted }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Revenue</div>
+    <div class="cc-stat__value">GHS {{ stats.revenue }}</div>
+  </div>
+</div>
+
+<div class="cc-card">
+  <form method="get" class="cc-actions" style="margin-bottom:16px;">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search by name"
+           style="padding:8px 10px;border:1px solid var(--cc-border-strong);border-radius:var(--cc-radius);font-size:13px;min-width:200px;">
+    <select name="status" style="padding:8px 10px;border:1px solid var(--cc-border-strong);border-radius:var(--cc-radius);font-size:13px;">
+      <option value="">All statuses</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="cc-btn">Filter</button>
+  </form>
+
+  {% if rows %}
+  <table class="cc-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Segment</th>
+        <th>Status</th>
+        <th>Audience</th>
+        <th>Delivered</th>
+        <th>Open</th>
+        <th>Click</th>
+        <th>Sent</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="{{ row.detail_url }}">{{ row.obj.name }}</a></td>
+        <td>{{ row.obj.get_segment_display }}</td>
+        <td><span class="cc-pill cc-pill--{{ row.obj.status|lower }}">{{ row.obj.get_status_display }}</span></td>
+        <td>{% if row.audience is None %}—{% else %}{{ row.audience }}{% endif %}</td>
+        <td>{{ row.obj.delivered_count }} / {{ row.obj.recipients_count }}</td>
+        <td>{{ row.obj.open_rate }}%</td>
+        <td>{{ row.obj.click_rate }}%</td>
+        <td>{% if row.obj.sent_at %}{{ row.obj.sent_at|date:"d M Y, H:i" }}{% else %}—{% endif %}</td>
+        <td><a href="{{ row.edit_url }}">Edit</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="cc-empty">
+    No campaigns yet. <a href="{{ new_url }}">Create your first one.</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

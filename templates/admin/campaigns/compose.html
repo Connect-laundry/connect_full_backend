@@ -1,0 +1,214 @@
+{% extends "admin/campaigns/base.html" %}
+{% load i18n %}
+
+{% block cc_content %}
+<div class="cc-head">
+  <div>
+    <h1 class="cc-head__title">{% if campaign %}Edit campaign{% else %}New campaign{% endif %}</h1>
+    <p class="cc-head__sub">Saving creates a draft. You send it from the next screen.</p>
+  </div>
+  <a class="cc-btn" href="{{ list_url }}">Back to campaigns</a>
+</div>
+
+<form method="post" class="cc-form" id="cc-form">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="cc-note cc-note--warn">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="cc-card">
+    <h2 class="cc-card__title">Message</h2>
+
+    <div class="cc-field" style="margin-bottom:18px;">
+      <label for="{{ form.name.id_for_label }}">Internal name</label>
+      {{ form.name }}
+      <div class="cc-field__help">{{ form.name.help_text }}</div>
+      {% if form.name.errors %}<div class="cc-field__error">{{ form.name.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div class="cc-field" style="margin-bottom:18px;">
+      <label for="{{ form.title.id_for_label }}">Title</label>
+      {{ form.title }}
+      <div class="cc-field__help">{{ form.title.help_text }}</div>
+      {% if form.title.errors %}<div class="cc-field__error">{{ form.title.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div class="cc-field" style="margin-bottom:18px;">
+      <label for="{{ form.body.id_for_label }}">Body</label>
+      {{ form.body }}
+      <div class="cc-field__help">{{ form.body.help_text }}</div>
+      {% if form.body.errors %}<div class="cc-field__error">{{ form.body.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div class="cc-field">
+      <label>Preview</label>
+      <div class="cc-preview">
+        <div class="cc-preview__app">CONNECT LAUNDRY · now</div>
+        <div class="cc-preview__title" id="cc-preview-title">Your title appears here</div>
+        <div class="cc-preview__body" id="cc-preview-body">Your body text appears here.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cc-card">
+    <h2 class="cc-card__title">Audience</h2>
+
+    <div class="cc-grid-2">
+      <div class="cc-field">
+        <label for="{{ form.segment.id_for_label }}">Segment</label>
+        {{ form.segment }}
+        <div class="cc-field__help" id="cc-segment-help"></div>
+        {% if form.segment.errors %}<div class="cc-field__error">{{ form.segment.errors|striptags }}</div>{% endif %}
+      </div>
+
+      <div class="cc-field" data-param="days">
+        <label for="{{ form.days.id_for_label }}">Days</label>
+        {{ form.days }}
+        <div class="cc-field__help">{{ form.days.help_text }}</div>
+      </div>
+
+      <div class="cc-field" data-param="hours">
+        <label for="{{ form.hours.id_for_label }}">Hours</label>
+        {{ form.hours }}
+        <div class="cc-field__help">{{ form.hours.help_text }}</div>
+      </div>
+
+      <div class="cc-field" data-param="city">
+        <label for="{{ form.city.id_for_label }}">City</label>
+        {{ form.city }}
+        <div class="cc-field__help">{{ form.city.help_text }}</div>
+        {% if form.city.errors %}<div class="cc-field__error">{{ form.city.errors|striptags }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="cc-field" data-param="user_emails" style="margin-top:18px;">
+      <label for="{{ form.user_emails.id_for_label }}">User emails</label>
+      {{ form.user_emails }}
+      <div class="cc-field__help">{{ form.user_emails.help_text }}</div>
+      {% if form.user_emails.errors %}<div class="cc-field__error">{{ form.user_emails.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div style="margin-top:18px;" class="cc-audience">
+      <span class="cc-audience__n" id="cc-audience-count">—</span>
+      <span class="cc-audience__l">users currently match this segment</span>
+    </div>
+  </div>
+
+  <div class="cc-card">
+    <h2 class="cc-card__title">Delivery &amp; routing</h2>
+    <div class="cc-grid-2">
+      <div class="cc-field">
+        <label for="{{ form.notification_type.id_for_label }}">Type</label>
+        {{ form.notification_type }}
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.category.id_for_label }}">Category</label>
+        {{ form.category }}
+        <div class="cc-field__help">{{ form.category.help_text }}</div>
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.priority.id_for_label }}">Priority</label>
+        {{ form.priority }}
+        <div class="cc-field__help">Only URGENT bypasses a user's quiet hours.</div>
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.action_url.id_for_label }}">Action URL</label>
+        {{ form.action_url }}
+        <div class="cc-field__help">{{ form.action_url.help_text }}</div>
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.promo_code.id_for_label }}">Promo code</label>
+        {{ form.promo_code }}
+        <div class="cc-field__help">{{ form.promo_code.help_text }}</div>
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.image_url.id_for_label }}">Image URL</label>
+        {{ form.image_url }}
+        <div class="cc-field__help">Shown as a rich attachment on iOS.</div>
+      </div>
+      <div class="cc-field">
+        <label for="{{ form.expires_at.id_for_label }}">Expires at</label>
+        {{ form.expires_at }}
+        <div class="cc-field__help">After this the campaign will not send. Optional.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cc-actions">
+    <button type="submit" class="cc-btn cc-btn--primary">Save draft</button>
+    <a class="cc-btn" href="{{ list_url }}">Cancel</a>
+  </div>
+</form>
+
+<script id="cc-segment-help-data" type="application/json">{{ segment_help_json|safe }}</script>
+<script>
+(function () {
+  var helpData = JSON.parse(document.getElementById('cc-segment-help-data').textContent);
+  var audienceUrl = "{{ audience_url }}";
+
+  var segment = document.getElementById('{{ form.segment.id_for_label }}');
+  var days = document.getElementById('{{ form.days.id_for_label }}');
+  var hours = document.getElementById('{{ form.hours.id_for_label }}');
+  var city = document.getElementById('{{ form.city.id_for_label }}');
+  var emails = document.getElementById('{{ form.user_emails.id_for_label }}');
+  var title = document.getElementById('{{ form.title.id_for_label }}');
+  var body = document.getElementById('{{ form.body.id_for_label }}');
+
+  var helpEl = document.getElementById('cc-segment-help');
+  var countEl = document.getElementById('cc-audience-count');
+  var previewTitle = document.getElementById('cc-preview-title');
+  var previewBody = document.getElementById('cc-preview-body');
+
+  // Which extra input each segment actually uses.
+  var PARAMS = {
+    ACTIVE: 'days', INACTIVE: 'days',
+    ABANDONED_BOOKING: 'hours',
+    CITY: 'city',
+    CUSTOM: 'user_emails'
+  };
+
+  function syncVisibleParams() {
+    var needed = PARAMS[segment.value] || null;
+    document.querySelectorAll('[data-param]').forEach(function (el) {
+      el.style.display = el.getAttribute('data-param') === needed ? '' : 'none';
+    });
+    helpEl.textContent = helpData[segment.value] || 'No extra targeting needed.';
+  }
+
+  function syncPreview() {
+    previewTitle.textContent = title.value || 'Your title appears here';
+    previewBody.textContent = body.value || 'Your body text appears here.';
+  }
+
+  var pending = null;
+  function refreshAudience() {
+    var params = new URLSearchParams({ segment: segment.value });
+    if (days && days.value) params.set('days', days.value);
+    if (hours && hours.value) params.set('hours', hours.value);
+    if (city && city.value) params.set('city', city.value);
+    if (emails && emails.value) params.set('user_emails', emails.value);
+
+    countEl.textContent = '…';
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(function () {
+      fetch(audienceUrl + '?' + params.toString(), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { countEl.textContent = (d && typeof d.count === 'number') ? d.count : '—'; })
+        .catch(function () { countEl.textContent = '—'; });
+    }, 250);
+  }
+
+  [segment, days, hours, city, emails].forEach(function (el) {
+    if (!el) return;
+    el.addEventListener('input', function () { syncVisibleParams(); refreshAudience(); });
+    el.addEventListener('change', function () { syncVisibleParams(); refreshAudience(); });
+  });
+  [title, body].forEach(function (el) { if (el) el.addEventListener('input', syncPreview); });
+
+  syncVisibleParams();
+  syncPreview();
+  refreshAudience();
+})();
+</script>
+{% endblock %}

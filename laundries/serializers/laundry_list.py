@@ -24,21 +24,34 @@ class LaundryListSerializer(SafeMediaModelSerializer):
     estimatedDelivery = serializers.SerializerMethodField()
     imageUrl = serializers.SerializerMethodField()
     avgPrice = serializers.SerializerMethodField()
+    minServicePrice = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
             'reviewsCount', 'isOpen', 'priceRange', 'pricingModel', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice', 'latitude', 'longitude'
+            'minOrder', 'deliveryFee', 'avgPrice', 'minServicePrice', 'latitude', 'longitude'
         )
+
+    @staticmethod
+    def _money(value):
+        """Annotated prices arrive as Decimal (or None when a laundry has no
+        available services). Normalise to a rounded float the client can format."""
+        if value is None:
+            return None
+        try:
+            return round(float(value), 2)
+        except (TypeError, ValueError):
+            return None
 
     @extend_schema_field(OpenApiTypes.FLOAT)
     def get_avgPrice(self, obj):
-        avg = getattr(obj, 'avg_price', None)
-        if avg is not None:
-            return round(float(avg), 2)
-        return None
+        return self._money(getattr(obj, 'avg_price', None))
+
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_minServicePrice(self, obj):
+        return self._money(getattr(obj, 'min_service_price', None))
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):

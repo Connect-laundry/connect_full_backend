@@ -1,0 +1,135 @@
+{% extends "admin/campaigns/base.html" %}
+{% load i18n %}
+
+{% block cc_content %}
+<div class="cc-head">
+  <div>
+    <h1 class="cc-head__title">{{ campaign.name }}</h1>
+    <p class="cc-head__sub">
+      <span class="cc-pill cc-pill--{{ campaign.status|lower }}">{{ campaign.get_status_display }}</span>
+      &nbsp;{{ campaign.get_segment_display }}
+      {% if campaign.sent_at %} · sent {{ campaign.sent_at|date:"d M Y, H:i" }}{% endif %}
+    </p>
+  </div>
+  <div class="cc-actions">
+    {% if can_send %}<a class="cc-btn" href="{{ edit_url }}">Edit</a>{% endif %}
+    <a class="cc-btn" href="{{ list_url }}">Back to campaigns</a>
+  </div>
+</div>
+
+<div class="cc-card">
+  <h2 class="cc-card__title">Message</h2>
+  <div class="cc-preview">
+    <div class="cc-preview__app">CONNECT LAUNDRY · now</div>
+    <div class="cc-preview__title">{{ campaign.title }}</div>
+    <div class="cc-preview__body">{{ campaign.body }}</div>
+  </div>
+  <div style="margin-top:14px;font-size:12.5px;color:var(--cc-text-2);line-height:1.8;">
+    Type {{ campaign.get_notification_type_display }} · Category {{ campaign.category }} ·
+    Priority {{ campaign.get_priority_display }}
+    {% if campaign.action_url %} · Opens <code>{{ campaign.action_url }}</code>{% endif %}
+    {% if campaign.promo_code %} · Promo <code>{{ campaign.promo_code }}</code>{% endif %}
+  </div>
+</div>
+
+<div class="cc-stats">
+  <div class="cc-stat">
+    <div class="cc-stat__label">Audience now</div>
+    <div class="cc-stat__value">{% if audience is None %}—{% else %}{{ audience }}{% endif %}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Recipients</div>
+    <div class="cc-stat__value">{{ campaign.recipients_count }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Delivered</div>
+    <div class="cc-stat__value">{{ campaign.delivered_count }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Skipped</div>
+    <div class="cc-stat__value">{{ campaign.skipped_count }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Failed</div>
+    <div class="cc-stat__value">{{ campaign.failed_count }}</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Open rate</div>
+    <div class="cc-stat__value">{{ campaign.open_rate }}%</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Click rate</div>
+    <div class="cc-stat__value">{{ campaign.click_rate }}%</div>
+  </div>
+  <div class="cc-stat">
+    <div class="cc-stat__label">Revenue</div>
+    <div class="cc-stat__value">GHS {{ campaign.revenue_generated }}</div>
+  </div>
+</div>
+
+<div class="cc-card">
+  <h2 class="cc-card__title">Send a test first</h2>
+  <p style="font-size:12.5px;color:var(--cc-text-2);margin:0 0 14px;">
+    Delivers this exact message to one account only. Campaign analytics are not affected,
+    and you can repeat it as often as you like.
+  </p>
+  <form method="post" action="{{ test_url }}" class="cc-actions">
+    {% csrf_token %}
+    <input type="email" name="email" value="{{ default_test_email }}" required
+           style="padding:8px 10px;border:1px solid var(--cc-border-strong);border-radius:var(--cc-radius);font-size:13px;min-width:260px;">
+    <button type="submit" class="cc-btn">Send test</button>
+  </form>
+</div>
+
+{% if can_send %}
+<div class="cc-card">
+  <h2 class="cc-card__title">Send</h2>
+  <div class="cc-note" style="margin-bottom:16px;">
+    Sending reaches every user in the segment who has not opted out of this category
+    and is not inside their quiet hours. This cannot be undone.
+  </div>
+  <div class="cc-actions">
+    <form method="post" action="{{ send_url }}"
+          onsubmit="return confirm('Send “{{ campaign.name|escapejs }}” to {% if audience %}{{ audience }}{% else %}0{% endif %} recipient(s) now?');">
+      {% csrf_token %}
+      <button type="submit" class="cc-btn cc-btn--primary" {% if not audience %}aria-disabled="true"{% endif %}>
+        Send now
+      </button>
+    </form>
+
+    <form method="post" action="{{ schedule_url }}" class="cc-actions">
+      {% csrf_token %}
+      <input type="datetime-local" name="scheduled_for" required
+             style="padding:8px 10px;border:1px solid var(--cc-border-strong);border-radius:var(--cc-radius);font-size:13px;">
+      <button type="submit" class="cc-btn">Schedule</button>
+    </form>
+  </div>
+  <p style="font-size:11.5px;color:var(--cc-text-muted);margin:12px 0 0;">
+    Scheduling requires the Celery beat worker to be running.
+  </p>
+</div>
+{% endif %}
+
+<div class="cc-card">
+  <h2 class="cc-card__title">Recent deliveries</h2>
+  {% if recent %}
+  <table class="cc-table">
+    <thead>
+      <tr><th>User</th><th>Push</th><th>Read</th><th>Created</th></tr>
+    </thead>
+    <tbody>
+      {% for n in recent %}
+      <tr>
+        <td>{{ n.user.email|default:"—" }}</td>
+        <td>{{ n.get_push_status_display }}</td>
+        <td>{% if n.is_read %}Yes{% else %}No{% endif %}</td>
+        <td>{{ n.created_at|date:"d M Y, H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="cc-empty">Nothing delivered yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -21,6 +21,28 @@ from marketplace.models import Notification
 logger = logging.getLogger(__name__)
 
 
+def _already_processed(dedup_key):
+    """Cheap pre-check so repeat deliveries skip the transaction entirely."""
+    return WebhookEvent.objects.filter(event_id=dedup_key).exists()
+
+
+def _claim_event(dedup_key):
+    """Reserve this webhook event, returning False if it is already claimed.
+
+    Must be called inside the transaction that performs the work: the unique
+    constraint makes concurrent deliveries safe, and a rollback releases the
+    claim so Paystack's retry can reprocess a failed attempt.
+    """
+    try:
+        # A nested atomic block keeps an IntegrityError from poisoning the
+        # outer transaction on PostgreSQL.
+        with transaction.atomic():
+            WebhookEvent.objects.create(event_id=dedup_key)
+        return True
+    except IntegrityError:
+        return False
+
+
 def _sanitize_webhook_payload(payload, reference):
     data = payload if isinstance(payload, dict) else {}
     return {
@@ -93,7 +115,8 @@ def paystack_webhook(request):
         hashlib.sha512
     ).hexdigest()
 
-    if hash_computed != signature:
+    # Constant-time compare — a plain != leaks the digest byte by byte.
+    if not hmac.compare_digest(hash_computed, signature):
         logger.warning("Invalid Paystack webhook signature detected.")
         return HttpResponse(status=401)
 
@@ -106,13 +129,14 @@ def paystack_webhook(request):
     event_id = event_data.get('data', {}).get('id')
     event_type = event_data.get('event')
 
-    # 3. Webhook Replay Protection.
+    # 3. Webhook replay protection key. The row is claimed *inside* the
+    # processing transaction below (not here), so that a transient failure
+    # rolls the claim back and Paystack's retry can reprocess the event.
+    # Claiming it up front would burn the key on a failed attempt and leave a
+    # real payment permanently unconfirmed.
     dedup_key = str(event_id) if event_id else 'sha512:' + hash_computed
-    try:
-        _, created = WebhookEvent.objects.get_or_create(event_id=dedup_key)
-    except IntegrityError:
-        created = False
-    if not created:
+
+    if _already_processed(dedup_key):
         logger.info("Duplicate webhook event ignored", extra={"event_id": dedup_key})
         return HttpResponse(status=200)
 
@@ -120,15 +144,25 @@ def paystack_webhook(request):
     if event_type == 'charge.success':
         data = event_data.get('data', {})
         reference = data.get('reference')
-        
+
         if not reference:
             return HttpResponse(status=400)
 
         # 5. Use transaction.atomic() and select_for_update()
         try:
             with transaction.atomic():
+                # Claim the event atomically with the work it authorises.
+                # A concurrent delivery of the same event loses the race here
+                # and exits as a duplicate; a failure rolls this back.
+                if not _claim_event(dedup_key):
+                    logger.info(
+                        "Duplicate webhook event ignored (concurrent delivery)",
+                        extra={"event_id": dedup_key},
+                    )
+                    return HttpResponse(status=200)
+
                 payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
-                
+
                 if not payment:
                     logger.error(
                         "Payment record not found for webhook reference",
