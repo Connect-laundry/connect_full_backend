@@ -150,6 +150,34 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         except Exception:  # pragma: no cover - defensive
             pass
 
+    def delete_model(self, request, obj):
+        try:
+            super().delete_model(request, obj)
+            messages.success(request, f"User '{getattr(obj, 'email', '')}' deleted successfully.")
+        except Exception as exc:
+            logger.error("Error deleting user %s: %s", getattr(obj, 'id', 'unknown'), exc)
+            messages.error(
+                request,
+                f"Could not delete user '{getattr(obj, 'email', '')}': {str(exc)}",
+            )
+
+    def delete_queryset(self, request, queryset):
+        done, failed = 0, 0
+        for obj in queryset:
+            try:
+                obj.delete()
+                done += 1
+            except Exception as exc:
+                failed += 1
+                logger.error("Error deleting user %s: %s", getattr(obj, 'id', 'unknown'), exc)
+        if done:
+            messages.success(request, f"Successfully deleted {done} user account(s).")
+        if failed:
+            messages.error(
+                request,
+                f"Could not delete {failed} user account(s) due to active database constraints or related record dependencies.",
+            )
+
     @display(description="Photo")
     def profile_picture(self, obj):
         image_url = obj.social_profile_image_url
@@ -191,11 +219,16 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 
     @display(description="Open in Clerk")
     def clerk_dashboard_link(self, obj):
-        if not obj.clerk_user_id:
+        if not obj or not obj.clerk_user_id:
             return "-"
-        template = getattr(settings, 'CLERK_DASHBOARD_USER_URL_TEMPLATE', '')
-        url = template.format(clerk_user_id=obj.clerk_user_id)
-        return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">Open in Clerk Dashboard</a>', url)
+        template = getattr(settings, 'CLERK_DASHBOARD_USER_URL_TEMPLATE', '') or ''
+        if not template or '{clerk_user_id}' not in template:
+            return "-"
+        try:
+            url = template.format(clerk_user_id=obj.clerk_user_id)
+            return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">Open in Clerk Dashboard</a>', url)
+        except Exception:
+            return "-"
 
     @admin.action(description="Force resync selected users from Clerk")
     def resync_clerk_users(self, request, queryset):

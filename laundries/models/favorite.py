@@ -27,4 +27,6 @@ class Favorite(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.email} favorited {self.laundry.name}"
+        user_email = self.user.email if getattr(self, 'user', None) else "User"
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else "Laundry"
+        return f"{user_email} favorited {laundry_name}"

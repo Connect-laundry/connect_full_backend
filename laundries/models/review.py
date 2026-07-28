@@ -42,4 +42,6 @@ class Review(models.Model):
         ]
 
     def __str__(self):
-        return f"Review by {self.user.email} for {self.laundry.name}"
+        user_email = self.user.email if getattr(self, 'user', None) else 'Unknown'
+        laundry_name = self.laundry.name if getattr(self, 'laundry', None) else 'Unknown'
+        return f"Review by {user_email} for {laundry_name}"

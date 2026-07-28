@@ -50,19 +50,22 @@ class OrderAdmin(ModelAdmin):
 
     @display(description="Order #", ordering="order_no")
     def display_order_no(self, obj):
-        return format_html('<span class="font-mono font-bold text-primary-600">{}</span>', obj.order_no)
+        order_no = getattr(obj, 'order_no', '—') if obj else '—'
+        return format_html('<span class="font-mono font-bold text-primary-600">{}</span>', order_no)
 
     @display(description="Customer phone", ordering="user__phone")
     def display_customer_phone(self, obj):
-        phone = getattr(obj.user, 'phone', None) if obj.user_id else None
+        user = getattr(obj, 'user', None) if obj else None
+        phone = getattr(user, 'phone', None) if user else None
         if not phone:
             return format_html('<span class="text-red-500">{}</span>', 'Not provided')
-        # Click-to-call for ops handling the pickup/delivery.
         return format_html('<a href="tel:{}" class="font-mono text-primary-600">{}</a>', phone, phone)
 
     @display(description="Pickup address")
     def display_pickup_address(self, obj):
-        return obj.pickup_address or obj.address or '—'
+        if not obj:
+            return '—'
+        return getattr(obj, 'pickup_address', None) or getattr(obj, 'address', None) or '—'
 
     @display(description="Status", label={
         "PENDING": "warning",
@@ -76,7 +79,7 @@ class OrderAdmin(ModelAdmin):
         "CANCELLED": "danger",
     })
     def display_status(self, obj):
-        return obj.status
+        return getattr(obj, 'status', 'PENDING') if obj else 'PENDING'
 
 
 @admin.register(Category)

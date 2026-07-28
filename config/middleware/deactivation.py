@@ -7,7 +7,7 @@ from django.http import JsonResponse
 # pyre-ignore[missing-module]
 from rest_framework import status
 
-from config.resilience import database_unavailable_response
+from config.resilience import database_unavailable_response, is_database_unavailable
 
 class DeactivationMiddleware(MiddlewareMixin):
     """
@@ -20,8 +20,10 @@ class DeactivationMiddleware(MiddlewareMixin):
         # gracefully to a structured 503 instead of a raw HTTP 500.
         try:
             user_is_authenticated = request.user.is_authenticated
-        except (OperationalError, InterfaceError):
-            return database_unavailable_response(request)
+        except (OperationalError, InterfaceError, Exception) as exc:
+            if is_database_unavailable(exc):
+                return database_unavailable_response(request)
+            user_is_authenticated = False
 
         if not user_is_authenticated:
             return None
