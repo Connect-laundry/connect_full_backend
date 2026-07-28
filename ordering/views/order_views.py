@@ -129,8 +129,13 @@ class BookingViewSet(viewsets.GenericViewSet):
             try:
                 l_svc = LaundryService.objects.get(laundry_id=laundry_id, item_id=item_id, service_type_id=service_type_id)
                 total_items_price += l_svc.price * Decimal(str(quantity))
-            except LaundryService.DoesNotExist:
-                errors.append(f"Price not found! Ensure 'item' is the 'itemId' (NOT 'id') and 'service_type' is the 'serviceTypeId'. Failed for item: {item_id}, service: {service_type_id}")
+            except Exception:
+                try:
+                    from laundries.models.pricing import LaundryPricingItem
+                    p_item = LaundryPricingItem.objects.get(laundry_id=laundry_id, id=item_id, is_active=True)
+                    total_items_price += p_item.unit_price * Decimal(str(quantity))
+                except Exception:
+                    errors.append(f"Price not found for item: {item_id}, service: {service_type_id}")
                 
         if errors:
             return Response(

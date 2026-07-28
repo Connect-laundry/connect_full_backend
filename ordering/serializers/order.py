@@ -32,10 +32,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderItemCreateSerializer(serializers.Serializer):
-    item = serializers.PrimaryKeyRelatedField(queryset=LaunderableItem.objects.filter(is_active=True))
-    service_type = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.filter(type=Category.CategoryType.SERVICE_TYPE)
-    )
+    item = serializers.CharField(max_length=255)
+    service_type = serializers.CharField(max_length=255)
     quantity = serializers.IntegerField(min_value=1, max_value=99)
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -154,35 +152,41 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         items = data.get('items') or []
         if laundry and items:
-            # pyre-ignore[missing-module]
             from laundries.models.service import LaundryService
-            offered_pairs = set(
-                LaundryService.objects.filter(
-                    laundry=laundry,
-                    is_available=True,
-                    item_id__in=[item_data['item'].id for item_data in items],
-                    service_type_id__in=[item_data['service_type'].id for item_data in items],
-                ).values_list('item_id', 'service_type_id')
-            )
+            from laundries.models.pricing import LaundryPricingItem
+
             item_errors = {}
             for index, item_data in enumerate(items):
-                item = item_data['item']
-                service_type = item_data['service_type']
-                if (item.id, service_type.id) not in offered_pairs:
-                    item_errors[str(index)] = (
-                        f"{laundry.name} does not offer {service_type.name} for {item.name}."
-                    )
+                item_val = item_data['item']
+                service_type_val = item_data['service_type']
+
+                item_id = str(getattr(item_val, 'id', item_val))
+                service_type_id = str(getattr(service_type_val, 'id', service_type_val))
+
+                in_service = LaundryService.objects.filter(
+                    laundry=laundry,
+                    is_available=True,
+                    item_id=item_id,
+                    service_type_id=service_type_id
+                ).exists()
+
+                in_pricing = LaundryPricingItem.objects.filter(
+                    laundry=laundry,
+                    id=item_id,
+                    is_active=True
+                ).exists()
+
+                if not in_service and not in_pricing:
+                    item_errors[str(index)] = f"{laundry.name} does not offer pricing for item {item_val}."
+
             if item_errors:
                 raise serializers.ValidationError({"items": item_errors})
 
         coupon_code = data.get('coupon_code')
         if coupon_code:
-            # pyre-ignore[missing-module]
             from ..models.coupons import Coupon
             try:
                 coupon = Coupon.objects.get(code=coupon_code)
-                # We can't fully validate usage limits here without the user, 
-                # but we'll do it in create() or a preliminary check if user is in context
                 user = self.context['request'].user
                 is_valid, error = coupon.is_valid(user=user, laundry_id=laundry.id if laundry else None)
                 if not is_valid:
@@ -197,7 +201,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             items_data = validated_data.pop('items')
             coupon_obj = validated_data.pop('coupon_obj', None)
-            # Discard frontend-only fields not stored on Order model
             validated_data.pop('payment_method', None)
             validated_data.pop('coupon_code', None)
             user = self.context['request'].user
@@ -209,32 +212,54 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 **validated_data
             )
 
-            # pyre-ignore[missing-module]
             from laundries.models.service import LaundryService
+            from laundries.models.pricing import LaundryPricingItem
+            from ordering.models import LaunderableItem, Category
 
             for item_data in items_data:
-                item_instance = item_data['item']
-                service_type_instance = item_data['service_type']
+                item_val = item_data['item']
+                service_type_val = item_data['service_type']
                 quantity = item_data.get('quantity', 1)
 
+                item_id = str(getattr(item_val, 'id', item_val))
+                service_type_id = str(getattr(service_type_val, 'id', service_type_val))
+
+                item_price = None
+                item_name = None
+                db_item = None
+                db_service_type = None
+
                 try:
-                    l_service = LaundryService.objects.get(
+                    l_svc = LaundryService.objects.select_related('item', 'service_type').get(
                         laundry=order.laundry,
-                        item=item_instance,
-                        service_type=service_type_instance,
+                        item_id=item_id,
+                        service_type_id=service_type_id,
                         is_available=True,
                     )
-                except LaundryService.DoesNotExist as exc:
-                    raise serializers.ValidationError({
-                        "items": f"{order.laundry.name} does not offer {service_type_instance.name} for {item_instance.name}."
-                    }) from exc
-                item_price = l_service.price
+                    item_price = l_svc.price
+                    item_name = l_svc.item.name
+                    db_item = l_svc.item
+                    db_service_type = l_svc.service_type
+                except Exception:
+                    try:
+                        p_item = LaundryPricingItem.objects.get(
+                            laundry=order.laundry,
+                            id=item_id,
+                            is_active=True
+                        )
+                        item_price = p_item.unit_price
+                        item_name = p_item.item_name
+                        db_service_type = Category.objects.filter(id=service_type_id).first()
+                    except LaundryPricingItem.DoesNotExist as exc:
+                        raise serializers.ValidationError({
+                            "items": f"{order.laundry.name} does not offer item {item_id}."
+                        }) from exc
 
                 OrderItem.objects.create(
                     order=order,
-                    item=item_instance,
-                    service_type=service_type_instance,
-                    name=item_instance.name,
+                    item=db_item,
+                    service_type=db_service_type,
+                    name=item_name or "Laundry Item",
                     quantity=quantity,
                     price=item_price
                 )

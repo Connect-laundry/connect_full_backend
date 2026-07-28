@@ -322,23 +322,58 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         laundry = self.get_object()
         
-        # pyre-ignore[missing-module]
+        from utils.media import safe_media_url
         from ..models.service import LaundryService
-        # pyre-ignore[missing-module]
         from ..serializers.laundry_detail import LaundryServiceSerializer
 
         if request.method == 'GET':
-            # Optionally filter by is_available for non-owners
+            results = []
+
+            # 1. Fetch LaundryService items (if any exist)
             qs = laundry.laundry_services.select_related('item', 'service_type').all()
-            
             if not request.user.is_staff and laundry.owner != request.user:
                 qs = qs.filter(is_available=True)
-                
-            serializer = LaundryServiceSerializer(qs, many=True, context={'request': request})
+            svc_serializer = LaundryServiceSerializer(qs, many=True, context={'request': request})
+            results.extend(svc_serializer.data)
+
+            # 2. Fetch LaundryPricingItem items (owner-managed catalog)
+            pricing_qs = laundry.pricing_items.all()
+            if not request.user.is_staff and laundry.owner != request.user:
+                pricing_qs = pricing_qs.filter(is_active=True)
+
+            existing_names = {item.get('itemName') for item in results if isinstance(item, dict)}
+
+            for p_item in pricing_qs:
+                if p_item.item_name in existing_names:
+                    continue
+                cat_name = p_item.category or "General"
+                results.append({
+                    "id": str(p_item.id),
+                    "itemName": p_item.item_name,
+                    "itemId": str(p_item.id),
+                    "serviceType": cat_name,
+                    "serviceTypeId": cat_name,
+                    "itemCategory": cat_name,
+                    "itemCategoryId": cat_name,
+                    "itemImage": safe_media_url(p_item.image, request) if hasattr(p_item, 'image') and p_item.image else None,
+                    "price": str(p_item.unit_price),
+                    "estimated_duration": "Standard Turnaround",
+                    "is_available": p_item.is_active,
+                    "item": {
+                        "id": str(p_item.id),
+                        "name": p_item.item_name,
+                        "category": cat_name,
+                    },
+                    "service_type": {
+                        "id": cat_name,
+                        "name": cat_name,
+                    }
+                })
+
             return Response({
                 "status": "success",
                 "message": "Laundry services retrieved successfully.",
-                "data": serializer.data
+                "data": results
             })
             
         elif request.method == 'POST':
