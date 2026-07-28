@@ -214,7 +214,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
             from laundries.models.service import LaundryService
             from laundries.models.pricing import LaundryPricingItem
-            from ordering.models import LaunderableItem, Category
+            from laundries.models.category import Category
+            from ordering.models import LaunderableItem
 
             for item_data in items_data:
                 item_val = item_data['item']
