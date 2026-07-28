@@ -87,14 +87,21 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         if isinstance(data, dict):
-            allowed_fields = set(self.fields)
-            unsupported_fields = sorted(set(data) - allowed_fields)
+            data = data.copy()
+            if 'address' in data and not data.get('pickup_address'):
+                data['pickup_address'] = data['address']
+            if 'address' in data and not data.get('delivery_address'):
+                data['delivery_address'] = data['address']
+            harmless_aliases = {'address', 'idempotency_key', 'pickup_time', 'delivery_time'}
+            unsupported_fields = sorted(set(data) - set(self.fields) - harmless_aliases)
             if unsupported_fields:
                 raise serializers.ValidationError({
                     "non_field_errors": [
                         f"Unsupported booking fields: {', '.join(unsupported_fields)}."
                     ]
                 })
+            # Clean copy without harmless aliases before validation
+            data = {k: v for k, v in data.items() if k in set(self.fields)}
         return super().to_internal_value(data)
 
     def validate(self, data):
