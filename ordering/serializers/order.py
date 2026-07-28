@@ -1,3 +1,4 @@
+import uuid as uuid_lib
 # pyre-ignore[missing-module]
 from rest_framework import serializers
 from decimal import Decimal
@@ -11,6 +12,25 @@ from laundries.models.laundry import Laundry
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from utils.media import SafeMediaModelSerializer
+
+def _as_uuid(value):
+    """Coerce a booking line-item reference to a UUID, or None when it isn't one.
+
+    ``LaundryService`` rows are keyed by UUIDs (``LaunderableItem`` /
+    ``Category``), but a laundry on the owner-defined ``LaundryPricingItem``
+    catalog has no ``Category`` row at all — its "service type" is the free-form
+    ``category`` label ("Wash Only", "Wash & Iron"). Feeding that label straight
+    into a UUID column raises ``ValidationError: "Wash Only" is not a valid
+    UUID`` and fails the whole booking, so callers must skip UUID-keyed lookups
+    when this returns None.
+    """
+    if value in (None, ''):
+        return None
+    try:
+        return uuid_lib.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
 
 class LaunderableItemSerializer(SafeMediaModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
@@ -167,21 +187,25 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 item_val = item_data['item']
                 service_type_val = item_data['service_type']
 
-                item_id = str(getattr(item_val, 'id', item_val))
-                service_type_id = str(getattr(service_type_val, 'id', service_type_val))
+                item_uuid = _as_uuid(getattr(item_val, 'id', item_val))
+                service_type_uuid = _as_uuid(getattr(service_type_val, 'id', service_type_val))
 
-                in_service = LaundryService.objects.filter(
-                    laundry=laundry,
-                    is_available=True,
-                    item_id=item_id,
-                    service_type_id=service_type_id
-                ).exists()
+                in_service = bool(item_uuid and service_type_uuid) and (
+                    LaundryService.objects.filter(
+                        laundry=laundry,
+                        is_available=True,
+                        item_id=item_uuid,
+                        service_type_id=service_type_uuid
+                    ).exists()
+                )
 
-                in_pricing = LaundryPricingItem.objects.filter(
-                    laundry=laundry,
-                    id=item_id,
-                    is_active=True
-                ).exists()
+                in_pricing = bool(item_uuid) and (
+                    LaundryPricingItem.objects.filter(
+                        laundry=laundry,
+                        id=item_uuid,
+                        is_active=True
+                    ).exists()
+                )
 
                 if not in_service and not in_pricing:
                     item_errors[str(index)] = f"{laundry.name} does not offer pricing for item {item_val}."
@@ -229,39 +253,51 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 service_type_val = item_data['service_type']
                 quantity = item_data.get('quantity', 1)
 
-                item_id = str(getattr(item_val, 'id', item_val))
-                service_type_id = str(getattr(service_type_val, 'id', service_type_val))
+                item_uuid = _as_uuid(getattr(item_val, 'id', item_val))
+                service_type_uuid = _as_uuid(getattr(service_type_val, 'id', service_type_val))
 
                 item_price = None
                 item_name = None
                 db_item = None
                 db_service_type = None
 
-                try:
-                    l_svc = LaundryService.objects.select_related('item', 'service_type').get(
+                l_svc = None
+                if item_uuid and service_type_uuid:
+                    l_svc = LaundryService.objects.select_related('item', 'service_type').filter(
                         laundry=order.laundry,
-                        item_id=item_id,
-                        service_type_id=service_type_id,
+                        item_id=item_uuid,
+                        service_type_id=service_type_uuid,
                         is_available=True,
-                    )
+                    ).first()
+
+                if l_svc is not None:
                     item_price = l_svc.price
                     item_name = l_svc.item.name
                     db_item = l_svc.item
                     db_service_type = l_svc.service_type
-                except Exception:
-                    try:
-                        p_item = LaundryPricingItem.objects.get(
+                else:
+                    p_item = (
+                        LaundryPricingItem.objects.filter(
                             laundry=order.laundry,
-                            id=item_id,
+                            id=item_uuid,
                             is_active=True
-                        )
-                        item_price = p_item.unit_price
-                        item_name = p_item.item_name
-                        db_service_type = Category.objects.filter(id=service_type_id).first()
-                    except LaundryPricingItem.DoesNotExist as exc:
+                        ).first()
+                        if item_uuid
+                        else None
+                    )
+                    if p_item is None:
                         raise serializers.ValidationError({
-                            "items": f"{order.laundry.name} does not offer item {item_id}."
-                        }) from exc
+                            "items": f"{order.laundry.name} does not offer item {item_val}."
+                        })
+                    item_price = p_item.unit_price
+                    item_name = p_item.item_name
+                    # Owner-defined catalogs have no Category row; the service
+                    # label is already captured in the item name snapshot.
+                    db_service_type = (
+                        Category.objects.filter(id=service_type_uuid).first()
+                        if service_type_uuid
+                        else None
+                    )
 
                 OrderItem.objects.create(
                     order=order,
