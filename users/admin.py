@@ -150,6 +150,34 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         except Exception:  # pragma: no cover - defensive
             pass
 
+    def delete_model(self, request, obj):
+        try:
+            super().delete_model(request, obj)
+            messages.success(request, f"User '{getattr(obj, 'email', '')}' deleted successfully.")
+        except Exception as exc:
+            logger.error("Error deleting user %s: %s", getattr(obj, 'id', 'unknown'), exc)
+            messages.error(
+                request,
+                f"Could not delete user '{getattr(obj, 'email', '')}': {str(exc)}",
+            )
+
+    def delete_queryset(self, request, queryset):
+        done, failed = 0, 0
+        for obj in queryset:
+            try:
+                obj.delete()
+                done += 1
+            except Exception as exc:
+                failed += 1
+                logger.error("Error deleting user %s: %s", getattr(obj, 'id', 'unknown'), exc)
+        if done:
+            messages.success(request, f"Successfully deleted {done} user account(s).")
+        if failed:
+            messages.error(
+                request,
+                f"Could not delete {failed} user account(s) due to active database constraints or related record dependencies.",
+            )
+
     @display(description="Photo")
     def profile_picture(self, obj):
         image_url = obj.social_profile_image_url

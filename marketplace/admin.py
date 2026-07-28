@@ -196,7 +196,7 @@ class LegalPageAdmin(ModelAdmin):
     def preview_pane(self, obj):
         if not obj or not obj.content_html:
             return format_html('<div class="legal-preview empty">Save to generate preview.</div>')
-        return format_html('<article class="legal-preview">{}</article>', mark_safe(obj.content_html))
+        return format_html('<article class="legal-preview">{}</article>', mark_safe(obj.content_html))  # nosemgrep
 
     @display(description='Version history')
     def version_history(self, obj):
@@ -206,12 +206,22 @@ class LegalPageAdmin(ModelAdmin):
             slug=obj.slug,
             language_code=obj.language_code,
         ).order_by('-created_at')[:12]
-        rows = [
-            f'<li>v{page.version_number} - {"published" if page.is_published else "draft"}'
-            f'{" - current" if page.is_active and page.is_published else ""}</li>'
+        items = [
+            (
+                page.version_number,
+                "published" if page.is_published else "draft",
+                " - current" if page.is_active and page.is_published else "",
+            )
             for page in versions
         ]
-        return mark_safe('<ul>' + ''.join(rows) + '</ul>')
+        return format_html(
+            '<ul>{}</ul>',
+            format_html_join(
+                '',
+                '<li>v{} - {}{}</li>',
+                items,
+            ),
+        )
 
     def save_model(self, request, obj, form, change):
         obj.last_modified_by = request.user

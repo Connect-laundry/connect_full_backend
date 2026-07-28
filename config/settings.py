@@ -187,31 +187,40 @@ default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', default_db_url),
-        # Neon's pooler drops idle SSL connections well before 600s, causing
-        # "SSL connection has been closed unexpectedly".  Use 0 (fresh
-        # connection per request) in production; keep a short-lived pool in dev.
+        # Supabase / Neon connection poolers drop idle SSL connections well before 600s.
+        # Use 0 (fresh connection per request) in production; keep a short-lived pool in dev.
         conn_max_age=int(os.getenv('CONN_MAX_AGE', '0' if not DEBUG else '60')),
         conn_health_checks=True,
         ssl_require=not DEBUG
     )
 }
 
+# Supabase / PgBouncer / Transaction pooler compatibility:
+# Transaction poolers (e.g., Supabase port 6543) do not support server-side prepared statements or cursors.
+DISABLE_SERVER_SIDE_CURSORS = os.getenv('DISABLE_SERVER_SIDE_CURSORS', 'True' if not DEBUG else 'False') == 'True'
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = DISABLE_SERVER_SIDE_CURSORS
+
 # Django 4.1+ — verify each connection is alive before handing it to a view.
 CONN_HEALTH_CHECKS = True
 
-# Fail fast when the database is unreachable (Supabase pooler down, Neon quota
-# suspension) so requests return a graceful 503 quickly instead of hanging until
-# the gunicorn worker times out. libpq connect_timeout is in seconds.
+# Fail fast when the database is unreachable (Supabase pooler down, connection timeout)
+# so requests return a graceful 503 quickly instead of hanging until gunicorn times out.
 DATABASES['default'].setdefault('OPTIONS', {})
 DATABASES['default']['OPTIONS'].setdefault(
     'connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '10'))
 )
 
-# Set the appropriate database engine
+# Set the appropriate database engine with fallback
 if USE_POSTGIS:
-    DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+    try:
+        from django.contrib.gis.db.backends.postgis import base  # noqa: F401
+        DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+    except Exception:
+        import logging
+        logging.warning("PostGIS engine requested but GIS libraries unavailable. Falling back to postgresql engine.")
+        DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 else:
-    DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+        DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
 
 # Password validation
