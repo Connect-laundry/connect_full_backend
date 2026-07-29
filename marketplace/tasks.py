@@ -86,6 +86,12 @@ def expo_push_headers():
     return headers
 
 
+# Must match ANDROID_CHANNELS in the app's pushNotification.service.ts. The
+# ids are versioned because Android freezes a channel's importance at creation.
+ANDROID_CHANNEL_DEFAULT = 'default_v2'
+ANDROID_CHANNEL_ORDERS = 'orders_v2'
+
+
 def channel_for(category, notification_type):
     """Android channel to deliver on.
 
@@ -96,11 +102,11 @@ def channel_for(category, notification_type):
     """
     signal = f"{category or ''} {notification_type or ''}".upper()
     if any(word in signal for word in ('ORDER', 'PAYMENT', 'DELIVERY', 'PICKUP')):
-        return 'orders'
-    return 'default'
+        return ANDROID_CHANNEL_ORDERS
+    return ANDROID_CHANNEL_DEFAULT
 
 
-def deliver_push(title, body, data, tokens, *, channel_id='default', badge=None):
+def deliver_push(title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAULT, badge=None):
     """Send Expo push batches and clean up invalid tokens from the tickets.
 
     Returns the number of messages Expo accepted. Tokens Expo reports as

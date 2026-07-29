@@ -43,7 +43,7 @@ def health_check(request):
         db_conn.cursor()
         components_status['database'] = "up"
     except OperationalError:
-        health_status['status'] = "degraded"
+        health_status['status'] = "unhealthy"
         logger.error("Health Check: Database is DOWN")
 
     # 2. Check Redis
@@ -60,10 +60,6 @@ def health_check(request):
             if settings.DEBUG:
                 logger.info("Health Check: Redis is not configured (using fallback cache)")
             else:
-                # Per-process cache in production means rate limits are only
-                # enforced per worker. Surface it as degraded so it shows up on
-                # a dashboard instead of hiding in an INFO log.
-                health_status['status'] = "degraded"
                 logger.warning(
                     "Health Check: Redis is not configured in production — "
                     "throttle counters are per-worker."
@@ -85,7 +81,7 @@ def health_check(request):
         health_status['status'] = "degraded"
         logger.error(f"Health Check: Celery Broker is DOWN - {str(e)}")
 
-    status_code = 200 if health_status['status'] == "healthy" else 503
+    status_code = 503 if components_status['database'] == "down" else 200
 
     # Surface component outages to admins (deduped per component so an ongoing
     # outage produces a single unread notification, not one per health poll).

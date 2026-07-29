@@ -11,7 +11,7 @@ from ordering.models import Order
 from payments.models import Payment
 from users.models import User
 
-from test_payments import (
+from tests.test_payments import (
     _auth_client,
     _build_pending_payment,
     _post_signed_webhook,
