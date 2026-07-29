@@ -86,7 +86,7 @@ class PaymentAdmin(ModelAdmin):
                 amount = Decimal(raw_amount)
             except (InvalidOperation, ValueError):
                 messages.error(request, "Enter a valid refund amount.")
-                return redirect(request.path)
+                return redirect(reverse('admin:payments_payment_refund', args=[payment.pk]))
 
         try:
             refund_payment(
