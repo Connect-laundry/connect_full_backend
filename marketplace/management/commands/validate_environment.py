@@ -122,8 +122,16 @@ class Command(BaseCommand):
     def check_redis_cache(self):
         backend = settings.CACHES['default']['BACKEND']
         if 'redis' not in backend.lower():
-            level = WARN if not settings.DEBUG else PASS
-            return level, f'using {backend} (no Redis) — fine for dev, not for multi-worker prod.'
+            if settings.DEBUG:
+                return PASS, f'using {backend} (no Redis) — fine for dev.'
+            # LocMemCache is per-process. Idempotency is database-backed and so
+            # unaffected, but DRF throttling is cache-backed: with N gunicorn
+            # workers every rate limit is effectively N times looser and resets
+            # on each deploy. That is a production defect, not a warning.
+            return FAIL, (
+                f'using {backend} in production — throttle counters are per-worker, '
+                'so every rate limit is multiplied by the worker count. Set REDIS_URL.'
+            )
         if not self.network:
             return PASS, 'Redis cache configured.'
         from django.core.cache import cache

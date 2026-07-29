@@ -86,7 +86,21 @@ def expo_push_headers():
     return headers
 
 
-def deliver_push(title, body, data, tokens):
+def channel_for(category, notification_type):
+    """Android channel to deliver on.
+
+    Android decides whether a notification interrupts the user from the
+    *channel*, not the message — so a transactional update must land on the
+    HIGH-importance `orders` channel or it will sit silently in the tray with
+    no heads-up banner.
+    """
+    signal = f"{category or ''} {notification_type or ''}".upper()
+    if any(word in signal for word in ('ORDER', 'PAYMENT', 'DELIVERY', 'PICKUP')):
+        return 'orders'
+    return 'default'
+
+
+def deliver_push(title, body, data, tokens, *, channel_id='default', badge=None):
     """Send Expo push batches and clean up invalid tokens from the tickets.
 
     Returns the number of messages Expo accepted. Tokens Expo reports as
@@ -111,6 +125,19 @@ def deliver_push(title, body, data, tokens):
                 "title": title,
                 "body": body,
                 "data": data or {},
+                # Without high priority Expo sends APNs priority 5, which iOS
+                # is free to delay or batch — the notification may never
+                # visibly arrive.
+                "priority": "high",
+                # Android: picks the channel's importance. 'orders' is HIGH,
+                # so transactional pushes get a heads-up banner.
+                "channelId": channel_id,
+                # iOS 15+: without this, Focus modes and the scheduled
+                # Notification Summary can hold the alert back silently.
+                "interruptionLevel": "active",
+                # Keep it deliverable for a day if the device is offline.
+                "ttl": 86400,
+                **({"badge": badge} if isinstance(badge, int) else {}),
                 # image_url is included when provided (iOS shows as attachment preview).
                 **({"image": data.get("imageUrl")} if isinstance(data, dict) and data.get("imageUrl") else {}),
             }
@@ -214,7 +241,22 @@ def send_real_push(self, notification_id):
                 else None
             ),
         }
-        sent = deliver_push(notification.title, notification.body, data, tokens)
+        # Unread count drives the OS app-icon badge, so it stays correct even
+        # when the app is killed and never opens to refresh it.
+        badge = Notification.objects.filter(
+            user=notification.user,
+            audience=Notification.Audience.USER,
+            is_read=False,
+        ).count()
+
+        sent = deliver_push(
+            notification.title,
+            notification.body,
+            data,
+            tokens,
+            channel_id=channel_for(notification.category, notification.type),
+            badge=badge,
+        )
         if sent:
             notification.push_status = Notification.PushStatus.SENT
             notification.delivered_at = timezone.now()

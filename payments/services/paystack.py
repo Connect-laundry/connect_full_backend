@@ -94,3 +94,46 @@ class PaystackService:
                 extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
             )
             return {'status': False, 'message': str(e)}
+
+    def refund_transaction(self, reference, amount=None, reason=None):
+        """Ask Paystack to refund a settled transaction.
+
+        `amount` is in major units (GHS) and defaults to a full refund when
+        omitted. Paystack settles refunds asynchronously, so a successful
+        response means *accepted*, not *completed* — the terminal state
+        arrives later via the `refund.processed` webhook.
+        """
+        endpoint = f"{self.base_url}/refund"
+        payload = {'transaction': reference}
+        if amount is not None:
+            payload['amount'] = int(float(amount) * 100)
+        if reason:
+            payload['merchant_note'] = str(reason)[:200]
+
+        try:
+            response = requests.post(
+                endpoint,
+                json=payload,
+                headers=self.headers,
+                timeout=15,
+            )
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(
+                    "Paystack refund returned non-JSON response",
+                    extra={"status_code": response.status_code, "reference": mask_reference(reference)},
+                )
+                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
+            if not response.ok:
+                logger.error(
+                    "Paystack refund failed",
+                    extra={"status_code": response.status_code, "reference": mask_reference(reference)},
+                )
+            return data
+        except requests.exceptions.RequestException as e:
+            logger.error(
+                "Paystack refund error",
+                extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
+            )
+            return {'status': False, 'message': str(e)}

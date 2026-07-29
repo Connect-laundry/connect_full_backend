@@ -261,9 +261,10 @@ class CampaignSendTests(TestCase):
     @patch('marketplace.tasks.send_real_push.delay')
     def test_test_send_targets_one_user_without_touching_analytics(self, mock_push):
         campaign = _campaign()
-        response = self.client.post(
-            reverse('campaign-center-test', args=[campaign.id]),
-            {'email': 'sendto@example.com'})
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('campaign-center-test', args=[campaign.id]),
+                {'email': 'sendto@example.com'})
         self.assertRedirects(
             response, reverse('campaign-center-detail', args=[campaign.id]))
 

@@ -596,3 +596,56 @@ class PaymentOwnerStatsView(APIView):
             "count_pending": payments.filter(status=Payment.Status.PENDING).count(),
             "method_breakdown": method_breakdown
         }, status=status.HTTP_200_OK)
+
+
+class PaymentRefundSerializer(serializers.Serializer):
+    """Body for POST /payments/refund/{reference}/."""
+    amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True,
+        help_text='Partial refund amount in GHS. Omit for a full refund.',
+    )
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=200)
+
+
+class PaymentRefundView(APIView):
+    """
+    POST /api/v1/payments/refund/{reference}/
+
+    Staff-only. Starts a refund with Paystack; the payment moves to
+    REFUND_PENDING and reaches REFUNDED when the `refund.processed` webhook
+    lands. Refunds are money-moving and irreversible, so this is never
+    exposed to customers or laundry owners.
+    """
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    @extend_schema(request=PaymentRefundSerializer, responses=None)
+    def post(self, request, reference):
+        from .services.refund import RefundError, refund_payment
+
+        serializer = PaymentRefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payment = get_object_or_404(Payment, transaction_reference=reference)
+
+        try:
+            refunded = refund_payment(
+                payment,
+                amount=serializer.validated_data.get('amount'),
+                reason=serializer.validated_data.get('reason', ''),
+                actor=request.user,
+                request=request,
+            )
+        except RefundError as exc:
+            return Response(
+                {"status": "error", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({
+            "status": "success",
+            "message": "Refund requested. It will settle shortly.",
+            "data": {
+                "payment_status": refunded.status,
+                "order_id": str(refunded.order_id),
+            },
+        })

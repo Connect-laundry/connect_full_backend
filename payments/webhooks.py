@@ -87,6 +87,59 @@ def _validate_webhook_payment(payment, payload):
     return True, None
 
 
+def _refund_reference(data):
+    """Original charge reference carried on a Paystack refund event."""
+    txn = data.get('transaction') if isinstance(data.get('transaction'), dict) else {}
+    return txn.get('reference') or data.get('transaction_reference') or data.get('reference')
+
+
+def _handle_refund_event(request, event_type, event_data, dedup_key):
+    """Apply a refund lifecycle event, claiming it inside the transaction."""
+    from .services.refund import mark_refund_failed, mark_refund_settled
+
+    data = event_data.get('data', {}) if isinstance(event_data.get('data'), dict) else {}
+    reference = _refund_reference(data)
+    if not reference:
+        logger.warning("Refund webhook carried no transaction reference")
+        return HttpResponse(status=400)
+
+    try:
+        with transaction.atomic():
+            if not _claim_event(dedup_key):
+                logger.info("Duplicate refund event ignored", extra={"event_id": dedup_key})
+                return HttpResponse(status=200)
+
+            payment = Payment.objects.select_for_update().filter(
+                transaction_reference=reference
+            ).first()
+            if not payment:
+                logger.error(
+                    "Payment not found for refund webhook",
+                    extra={"reference": mask_reference(reference)},
+                )
+                return HttpResponse(status=200)  # Safe exit; nothing to retry.
+
+            if event_type == 'refund.processed':
+                mark_refund_settled(payment, request=request)
+            elif event_type == 'refund.failed':
+                mark_refund_failed(payment, request=request)
+            # refund.pending needs no state change: refund_payment already
+            # moved the payment to REFUND_PENDING when it was requested.
+
+            logger.info(
+                "Refund webhook applied",
+                extra={"reference": mask_reference(reference), "event": event_type},
+            )
+    except Exception as e:
+        logger.error(
+            "Error processing refund webhook",
+            extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
+        )
+        return HttpResponse(status=500)
+
+    return HttpResponse(status=200)
+
+
 @csrf_exempt
 @require_POST
 def paystack_webhook(request):
@@ -139,6 +192,12 @@ def paystack_webhook(request):
     if _already_processed(dedup_key):
         logger.info("Duplicate webhook event ignored", extra={"event_id": dedup_key})
         return HttpResponse(status=200)
+
+    # 4a. Refund lifecycle. Paystack settles refunds asynchronously, so these
+    # events carry a refund object whose `transaction.reference` points back
+    # at the original charge.
+    if event_type in ('refund.processed', 'refund.failed', 'refund.pending'):
+        return _handle_refund_event(request, event_type, event_data, dedup_key)
 
     # 4. Only handle charge.success
     if event_type == 'charge.success':

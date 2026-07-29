@@ -76,9 +76,12 @@ class PreferenceEnforcementTests(APITestCase):
 
     @patch('marketplace.tasks.send_real_push.delay')
     def test_push_sent_when_category_enabled(self, mock_push):
-        NotificationService.notify_user(
-            self.user, title="t", body="b", category='ORDER',
-            type=Notification.Type.ORDER)
+        # Pushes are dispatched on transaction commit so they never fire from
+        # inside a transaction that might roll back.
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.notify_user(
+                self.user, title="t", body="b", category='ORDER',
+                type=Notification.Type.ORDER)
         mock_push.assert_called_once()
 
     @patch('marketplace.tasks.send_real_push.delay')
@@ -111,13 +114,15 @@ class PreferenceEnforcementTests(APITestCase):
         pref.quiet_hours_end = (current_hour + 3) % 24
         pref.save()
 
-        NotificationService.notify_user(self.user, title="n", body="b", category='ORDER',
-                                        type=Notification.Type.ORDER)
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.notify_user(self.user, title="n", body="b", category='ORDER',
+                                            type=Notification.Type.ORDER)
         mock_push.assert_not_called()
 
-        NotificationService.notify_user(
-            self.user, title="u", body="b", category='ORDER',
-            type=Notification.Type.ORDER, priority=Notification.Priority.URGENT)
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.notify_user(
+                self.user, title="u", body="b", category='ORDER',
+                type=Notification.Type.ORDER, priority=Notification.Priority.URGENT)
         mock_push.assert_called_once()
 
 
@@ -251,10 +256,11 @@ class BrokerOutageDeliveryTests(APITestCase):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError("broker unreachable")
 
-        notification = NotificationService.notify_user(
-            self.user, title="t", body="b", category='ORDER',
-            type=Notification.Type.ORDER,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notification = NotificationService.notify_user(
+                self.user, title="t", body="b", category='ORDER',
+                type=Notification.Type.ORDER,
+            )
 
         self.assertIsNotNone(notification)
         mock_delay.assert_called_once()
@@ -270,10 +276,11 @@ class BrokerOutageDeliveryTests(APITestCase):
         mock_post.return_value.raise_for_status = lambda: None
         mock_post.return_value.json = lambda: {"data": [{"status": "ok", "id": "t-1"}]}
 
-        notification = NotificationService.notify_user(
-            self.user, title="Order picked up", body="Your laundry is on its way",
-            category='ORDER', type=Notification.Type.ORDER,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notification = NotificationService.notify_user(
+                self.user, title="Order picked up", body="Your laundry is on its way",
+                category='ORDER', type=Notification.Type.ORDER,
+            )
 
         mock_post.assert_called_once()
         payload = mock_post.call_args.kwargs['json']
@@ -702,3 +709,52 @@ class RetentionSystemTests(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertIn('referrals', r.data['data'])
         self.assertIn('weekly_tips', r.data['data'])
+
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class PushDeferredUntilCommitTests(APITestCase):
+    """Pushes must not escape a transaction that later rolls back.
+
+    A push is not undoable: sending it mid-transaction can notify a customer
+    about an event that never happened, and — via the inline fallback — holds
+    row locks for the length of an HTTPS call to Expo.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="oncommit@example.com", phone="233700000077", password="pw", role='CUSTOMER')
+        PushDevice.objects.create(
+            user=self.user, token="ExponentPushToken[COMMIT]", platform='android')
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_no_push_when_the_transaction_rolls_back(self, mock_push):
+        from django.db import transaction
+
+        class Boom(Exception):
+            pass
+
+        with self.assertRaises(Boom):
+            with self.captureOnCommitCallbacks(execute=True):
+                with transaction.atomic():
+                    NotificationService.notify_user(
+                        self.user, title="t", body="b", category='ORDER',
+                        type=Notification.Type.ORDER)
+                    raise Boom()
+
+        mock_push.assert_not_called()
+        # The in-app row is rolled back with it, so nothing is left dangling.
+        self.assertFalse(Notification.objects.filter(title="t").exists())
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_push_is_not_sent_before_commit(self, mock_push):
+        from django.db import transaction
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with transaction.atomic():
+                NotificationService.notify_user(
+                    self.user, title="inside", body="b", category='ORDER',
+                    type=Notification.Type.ORDER)
+                # Still inside the transaction — nothing may have gone out yet.
+                mock_push.assert_not_called()
+
+        mock_push.assert_called_once()

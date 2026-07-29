@@ -1,4 +1,8 @@
-from django.contrib import admin
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import admin, messages
+from django.shortcuts import redirect, render
+from django.urls import path, reverse
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
 from .models import Payment, WebhookEvent
@@ -14,14 +18,94 @@ class PaymentAdmin(ModelAdmin):
         'display_status',
         'payment_method',
         'paid_at',
+        'refund_link',
     )
     list_filter = ('status', 'payment_method', 'created_at')
     search_fields = ('transaction_reference', 'paystack_reference', 'order__order_no', 'user__email')
     readonly_fields = ('transaction_reference', 'paystack_reference', 'raw_response', 'created_at', 'updated_at')
+    # Refunds are deliberately NOT a bulk action: they move money irreversibly,
+    # so each one goes through a per-payment confirmation screen.
     actions = ['force_reconcile']
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('order', 'user')
+
+    # ------------------------------------------------------------- refunds
+
+    def get_urls(self):
+        return [
+            path(
+                '<path:object_id>/refund/',
+                self.admin_site.admin_view(self.refund_view),
+                name='payments_payment_refund',
+            ),
+        ] + super().get_urls()
+
+    @display(description="Refund")
+    def refund_link(self, obj):
+        if obj.status == Payment.Status.REFUNDED:
+            return format_html('<span class="text-gray-400">Refunded</span>')
+        if obj.status == Payment.Status.REFUND_PENDING:
+            return format_html('<span class="text-amber-600">In progress</span>')
+        if obj.status != Payment.Status.SUCCESS:
+            return "—"
+        url = reverse('admin:payments_payment_refund', args=[obj.pk])
+        return format_html('<a href="{}" class="text-red-600 underline">Refund</a>', url)
+
+    def refund_view(self, request, object_id):
+        """Confirm (GET) then start (POST) a refund for one payment."""
+        from .services.refund import RefundError, refund_payment
+
+        payment = self.get_object(request, object_id)
+        if payment is None:
+            messages.error(request, "Payment not found.")
+            return redirect(reverse('admin:payments_payment_changelist'))
+
+        changelist = reverse('admin:payments_payment_changelist')
+
+        if payment.status != Payment.Status.SUCCESS:
+            messages.error(
+                request,
+                f"Only a successful payment can be refunded (this one is '{payment.status}').",
+            )
+            return redirect(changelist)
+
+        if request.method != 'POST':
+            context = {
+                **self.admin_site.each_context(request),
+                'title': f"Refund — {payment.transaction_reference}",
+                'payment': payment,
+                'opts': self.model._meta,
+            }
+            return render(request, 'admin/payments/refund_confirm.html', context)
+
+        raw_amount = (request.POST.get('amount') or '').strip()
+        amount = None
+        if raw_amount:
+            try:
+                amount = Decimal(raw_amount)
+            except (InvalidOperation, ValueError):
+                messages.error(request, "Enter a valid refund amount.")
+                return redirect(reverse('admin:payments_payment_refund', args=[payment.pk]))
+
+        try:
+            refund_payment(
+                payment,
+                amount=amount,
+                reason=(request.POST.get('reason') or '').strip(),
+                actor=request.user,
+                request=request,
+            )
+        except RefundError as exc:
+            messages.error(request, str(exc))
+            return redirect(changelist)
+
+        messages.success(
+            request,
+            f"Refund requested for {payment.transaction_reference}. "
+            "It will show as Refunded once Paystack settles it.",
+        )
+        return redirect(changelist)
 
     @display(description="Order")
     def order_link(self, obj):
@@ -43,6 +127,8 @@ class PaymentAdmin(ModelAdmin):
         "PENDING": "warning",
         "FAILED": "danger",
         "EXPIRED": "warning",
+        "REFUND_PENDING": "warning",
+        "REFUNDED": "info",
     })
     def display_status(self, obj):
         return obj.status

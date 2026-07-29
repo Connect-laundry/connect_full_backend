@@ -49,22 +49,21 @@ class TestNetworkSecurity:
         request_factory = RequestFactory()
         middleware = IdempotencyMiddleware(lambda request: JsonResponse({'ok': True}, status=200))
 
-        cache.clear()
+        from marketplace.models import IdempotencyRecord
 
+        # Idempotency is database-backed so that the guarantee holds across
+        # gunicorn workers, where a per-process cache would not.
         original_body = json.dumps({'email': 'first@example.com', 'password': 'StrongPass123!'}).encode('utf-8')
         original_hash = hashlib.sha256(original_body).hexdigest()
         original_fingerprint = hashlib.sha256(
             f"POST:/api/v1/auth/login/:{original_hash}".encode('utf-8')
         ).hexdigest()
-        cache.set(
-            'idempotency_anon:127.0.0.1_login-key-1',
-            {
-                'content': json.dumps({'ok': True}),
-                'status_code': 200,
-                'content_type': 'application/json',
-                'fingerprint': original_fingerprint,
-            },
-            86400,
+        IdempotencyRecord.objects.create(
+            key='anon:127.0.0.1:login-key-1',
+            fingerprint=original_fingerprint,
+            status_code=200,
+            content_type='application/json',
+            content=json.dumps({'ok': True}),
         )
 
         request = request_factory.post(

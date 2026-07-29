@@ -12,6 +12,8 @@ from .legal import LegalDocument, LegalPage, UserLegalAcceptance
 from .special_offer import SpecialOffer
 # pyre-ignore[missing-module]
 from .audit import AuditLog
+# pyre-ignore[missing-module]
+from .idempotency import IdempotencyRecord
 
 __all__ = [
     'FAQ',
@@ -26,4 +28,5 @@ __all__ = [
     'UserLegalAcceptance',
     'SpecialOffer',
     'AuditLog',
+    'IdempotencyRecord',
 ]

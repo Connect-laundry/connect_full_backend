@@ -2,6 +2,7 @@ from django.contrib import admin, messages
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
+from django.utils.http import url_has_allowed_host_and_scheme
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
@@ -242,8 +243,10 @@ class LaundryAdmin(ModelAdmin):
                 request,
                 f"'{laundry.name}' was {verb_past}. The owner has been notified.",
             )
-        return redirect(request.GET.get('next')
-                        or reverse('admin:laundries_laundry_changelist'))
+        next_url = request.GET.get('next')
+        if next_url and url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={request.get_host()}):
+            return redirect(next_url)
+        return redirect(reverse('admin:laundries_laundry_changelist'))
 
     @action(description="✔ Approve", url_path="approve", permissions=["change"],
             attrs={"class": "laundry-action laundry-action--approve"})

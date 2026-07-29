@@ -79,8 +79,12 @@ urlpatterns = [
     path('api/v1/legal/', include('marketplace.legal_urls')),
     path('api/v1/support/', include('marketplace.urls')),
     path('api/v1/laundries/', include('laundries.urls')),
-    path('api/v1/booking/', include('ordering.urls')),
+    # `/orders/` is the canonical mount. `/booking/` is a deprecated alias of
+    # the same routes, retained only for app versions already installed on
+    # customers' phones — removing it would break them mid-order. Do not add
+    # new clients to it; drop the alias once those builds are retired.
     path('api/v1/orders/', include('ordering.urls')),
+    path('api/v1/booking/', include('ordering.urls')),
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
     path('api/v1/analytics/', include('analytics.urls')),
