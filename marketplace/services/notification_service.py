@@ -190,3 +190,4 @@ class NotificationService:
                 )
 
         transaction.on_commit(_dispatch)
+
