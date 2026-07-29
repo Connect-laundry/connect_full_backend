@@ -10,6 +10,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 
 from marketplace.models import Notification, NotificationPreference
@@ -162,19 +163,30 @@ class NotificationService:
 
     @staticmethod
     def _queue_push(notification_id):
-        """Hand the push to Celery, delivering inline if the broker is down.
+        """Hand the push to Celery after the surrounding transaction commits.
 
-        A single push is one short HTTPS call to Expo, so running it inline is
-        cheap and keeps notifications working on deployments with no Redis.
-        Without this fallback the push is silently dropped while the in-app
-        notification row still appears — the device never buzzes.
+        Deferred via ``on_commit`` for two reasons:
+
+        * The inline fallback (used when the Celery broker is down) makes a
+          blocking HTTPS call to Expo. Running that inside a transaction can
+          hold row locks — e.g. the ``select_for_update`` in the Paystack
+          webhook — for the length of a network round trip.
+        * A push is not undoable. If the transaction later rolls back, a
+          notification for an event that never happened has already landed on
+          the customer's phone.
+
+        Outside an atomic block ``on_commit`` runs the callback immediately,
+        so non-transactional callers are unaffected.
         """
         # Imported lazily to avoid circular imports at app load.
         from marketplace.tasks import send_real_push
         from utils.tasks import safe_task_delay
 
-        if not safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
-            logger.error(
-                "Failed to deliver push notification",
-                extra={"notification_id": str(notification_id)},
-            )
+        def _dispatch():
+            if not safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
+                logger.error(
+                    "Failed to deliver push notification",
+                    extra={"notification_id": str(notification_id)},
+                )
+
+        transaction.on_commit(_dispatch)

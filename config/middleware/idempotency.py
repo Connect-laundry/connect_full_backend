@@ -1,25 +1,36 @@
 import hashlib
 import logging
+from datetime import timedelta
+
 # pyre-ignore[missing-module]
-from django.core.cache import cache
+from django.db import IntegrityError, transaction
 # pyre-ignore[missing-module]
 from django.http import JsonResponse, HttpResponse
 # pyre-ignore[missing-module]
-from django.utils.decorators import decorator_from_middleware
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+# How long a key is honoured. Matches the previous cache TTL.
+RETENTION = timedelta(hours=24)
+
+
 class IdempotencyMiddleware:
+    """Prevent duplicate POSTs carrying an ``X-Idempotency-Key``.
+
+    The key is *claimed* in the database before the view runs, so two identical
+    requests can never both execute — even when they land on different gunicorn
+    workers or different instances. The second one gets the first one's
+    response (or a 409 while it is still in flight).
+
+    A claim is released if the request fails, so a client can safely retry
+    after a 5xx; keeping it would strand the caller with an empty replay.
     """
-    Middleware to prevent duplicate POST requests using X-Idempotency-Key headers.
-    Stores the response in cache for a short duration and rejects key reuse
-    across different routes or request bodies.
-    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Only apply to POST requests that have the header
         if request.method != "POST":
             return self.get_response(request)
 
@@ -27,18 +38,31 @@ class IdempotencyMiddleware:
         if not idempotency_key:
             return self.get_response(request)
 
+        # Imported lazily: middleware is constructed before the app registry
+        # is ready.
+        from marketplace.models import IdempotencyRecord
+
         client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown'))
         user_id = request.user.id if request.user.is_authenticated else f"anon:{client_ip}"
-        request_body = request.body or b""
-        request_hash = hashlib.sha256(request_body).hexdigest()
-        request_fingerprint = hashlib.sha256(
+        request_hash = hashlib.sha256(request.body or b"").hexdigest()
+        fingerprint = hashlib.sha256(
             f"{request.method}:{request.path}:{request_hash}".encode("utf-8")
         ).hexdigest()
-        cache_key = f"idempotency_{user_id}_{idempotency_key}"
+        key = f"{user_id}:{idempotency_key}"
 
-        cached_response = cache.get(cache_key)
-        if cached_response:
-            if cached_response.get("fingerprint") != request_fingerprint:
+        try:
+            record, claimed = self._claim(IdempotencyRecord, key, fingerprint)
+        except Exception as exc:
+            # A storage failure must not take the endpoint down; fall through
+            # to normal (non-idempotent) handling and stay visible in logs.
+            logger.warning(
+                "Idempotency claim failed; processing without protection",
+                extra={"error": str(exc)},
+            )
+            return self.get_response(request)
+
+        if not claimed:
+            if record.fingerprint != fingerprint:
                 return JsonResponse(
                     {
                         "status": "error",
@@ -47,40 +71,86 @@ class IdempotencyMiddleware:
                     },
                     status=409,
                 )
-            return self.process_cached_response(cached_response)
+            if not record.is_complete:
+                # The original is still running. Retrying is safe once it
+                # finishes, so tell the client to come back.
+                return JsonResponse(
+                    {
+                        "status": "error",
+                        "message": "An identical request is already being processed.",
+                        "data": {},
+                    },
+                    status=409,
+                )
+            return self._replay(record)
 
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        except Exception:
+            self._release(IdempotencyRecord, key)
+            raise
 
-        if response.status_code in [200, 201, 202, 204]:
-            self.cache_response(cache_key, response, request_fingerprint)
+        if response.status_code in (200, 201, 202, 204):
+            self._store(IdempotencyRecord, key, response)
+        else:
+            # Let the client retry a failed request with the same key.
+            self._release(IdempotencyRecord, key)
 
         return response
 
-    def cache_response(self, cache_key, response, request_fingerprint):
-        """Stores the response content and headers in cache."""
+    # ------------------------------------------------------------------ io
+
+    @staticmethod
+    def _claim(model, key, fingerprint):
+        """Reserve ``key``. Returns (record, claimed_by_us)."""
+        cutoff = timezone.now() - RETENTION
+
+        existing = model.objects.filter(key=key).first()
+        if existing is not None:
+            if existing.created_at < cutoff:
+                # Expired: take it over rather than rejecting a valid retry.
+                existing.delete()
+            else:
+                return existing, False
+
+        try:
+            with transaction.atomic():
+                record = model.objects.create(key=key, fingerprint=fingerprint)
+            return record, True
+        except IntegrityError:
+            # Lost the race to a concurrent identical request.
+            return model.objects.filter(key=key).first(), False
+
+    @staticmethod
+    def _release(model, key):
+        try:
+            model.objects.filter(key=key, status_code__isnull=True).delete()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Could not release idempotency claim", extra={"error": str(exc)})
+
+    @staticmethod
+    def _store(model, key, response):
         try:
             if hasattr(response, 'render') and callable(response.render):
                 response.render()
-            data = {
-                "content": response.content.decode("utf-8") if isinstance(response.content, bytes) else response.content,
-                "status_code": response.status_code,
-                "content_type": response.get("Content-Type", "application/json"),
-                "fingerprint": request_fingerprint,
-            }
-            cache.set(cache_key, data, 86400)
+            content = response.content
+            model.objects.filter(key=key).update(
+                status_code=response.status_code,
+                content_type=response.get("Content-Type", "application/json"),
+                content=content.decode("utf-8") if isinstance(content, bytes) else content,
+            )
         except Exception as exc:
-            # Failing to cache must not fail the request, but stay visible.
             logger.warning(
-                "Could not cache idempotent response",
-                extra={"cache_key": cache_key, "error": str(exc)},
+                "Could not persist idempotent response",
+                extra={"key": key, "error": str(exc)},
             )
 
-    def process_cached_response(self, cached_data):
-        """Constructs a response from cached data."""
+    @staticmethod
+    def _replay(record):
         response = HttpResponse(
-            content=cached_data["content"],
-            status=cached_data["status_code"],
-            content_type=cached_data["content_type"]
+            content=record.content,
+            status=record.status_code,
+            content_type=record.content_type or "application/json",
         )
         response["X-Idempotency-Cache"] = "HIT"
         return response

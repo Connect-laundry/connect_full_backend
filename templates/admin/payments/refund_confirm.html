@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <div class="border rounded-md shadow-sm bg-white dark:bg-gray-900 dark:border-gray-800 p-6">
+    <h2 class="font-semibold text-lg mb-1">
+      Refund {{ payment.transaction_reference }}
+    </h2>
+    <p class="text-sm text-gray-500 mb-4">
+      This sends money back to the customer through Paystack and cannot be undone.
+      The payment moves to <strong>Refund pending</strong> and becomes
+      <strong>Refunded</strong> once Paystack settles it.
+    </p>
+
+    <dl class="text-sm mb-6 grid grid-cols-2 gap-y-2">
+      <dt class="text-gray-500">Order</dt>
+      <dd>{{ payment.order.order_no }}</dd>
+      <dt class="text-gray-500">Customer</dt>
+      <dd>{{ payment.user.email }}</dd>
+      <dt class="text-gray-500">Amount paid</dt>
+      <dd>{{ payment.amount }} {{ payment.currency }}</dd>
+      <dt class="text-gray-500">Paid at</dt>
+      <dd>{% if payment.paid_at %}{{ payment.paid_at|date:"d M Y, H:i" }}{% else %}—{% endif %}</dd>
+    </dl>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <label class="block text-sm font-medium mb-1" for="amount">Amount to refund</label>
+      <input type="text" name="amount" id="amount" inputmode="decimal"
+             placeholder="Leave blank for a full refund of {{ payment.amount }}"
+             class="w-full border rounded-md p-2 text-sm mb-1 dark:bg-gray-800 dark:border-gray-700">
+      <p class="text-xs text-gray-500 mb-4">
+        Must be greater than zero and no more than {{ payment.amount }} {{ payment.currency }}.
+      </p>
+
+      <label class="block text-sm font-medium mb-1" for="reason">Reason</label>
+      <textarea name="reason" id="reason" rows="3"
+                placeholder="Shown in the audit log, not to the customer."
+                class="w-full border rounded-md p-2 text-sm mb-4 dark:bg-gray-800 dark:border-gray-700"></textarea>
+
+      <div class="flex gap-3 items-center">
+        <button type="submit"
+                class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-md">
+          Refund this payment
+        </button>
+        <a href="{% url 'admin:payments_payment_changelist' %}"
+           class="text-sm text-gray-500 underline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

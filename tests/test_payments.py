@@ -458,8 +458,8 @@ class TestHardenPaymentAudit:
             status=Payment.Status.SUCCESS,
         )
 
-        # Transitioning from terminal SUCCESS to FAILED must raise ValueError
-        with pytest.raises(ValueError, match="Cannot transition payment from terminal state"):
+        # A settled payment can only move on to a refund, never back to FAILED.
+        with pytest.raises(ValueError, match="Cannot transition payment from 'SUCCESS' to 'FAILED'"):
             payment.transition_to(Payment.Status.FAILED)
 
     @patch('payments.services.paystack.PaystackService.verify_transaction')

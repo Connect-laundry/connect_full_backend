@@ -272,7 +272,15 @@ class OrderViewSet(viewsets.ModelViewSet):
     throttle_scope = 'burst_user'
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).prefetch_related('items')
+        # OrderDetailSerializer reads laundry.name, payment.transaction_reference
+        # and (via get_price_breakdown) order.coupon. Without these joins the
+        # list endpoint issues three extra queries per order.
+        return (
+            Order.objects
+            .filter(user=self.request.user)
+            .select_related('laundry', 'payment', 'coupon')
+            .prefetch_related('items')
+        )
 
     def get_serializer_class(self):
         if self.action in ['list', 'retrieve', 'active']:

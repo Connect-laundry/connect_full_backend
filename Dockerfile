@@ -47,4 +47,12 @@ USER django
 
 EXPOSE 8000
 
-CMD bash -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 config.wsgi:application"
+# `migrate_safely` holds a PostgreSQL advisory lock, so a rolling deploy or a
+# scale-up cannot race the same migration across instances. Set
+# RUN_MIGRATIONS_ON_START=false when migrations run as a separate release step.
+CMD bash -c "\
+  if [ \"${RUN_MIGRATIONS_ON_START:-true}\" = \"true\" ]; then \
+    python manage.py migrate_safely || exit 1; \
+  fi && \
+  python manage.py collectstatic --noinput && \
+  gunicorn --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-2} --timeout 120 config.wsgi:application"

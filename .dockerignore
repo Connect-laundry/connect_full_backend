@@ -21,3 +21,36 @@ credentials/
 secrets/
 .env*
 
+# Tests — not needed to serve traffic, and they pull in fixtures/factories.
+tests/
+conftest.py
+pytest.ini
+.pytest_cache/
+**/tests/
+
+# One-off developer and debugging scripts. `COPY . .` would otherwise ship
+# these into the production image, including ones that mutate data.
+check_db.py
+debug_setup.py
+reproduce_laundry_error.py
+reproduce_laundry_error_v2.py
+revert_phone.py
+revert_phone_233.py
+script_cloudinary_check.py
+test_booking_creation.py
+test_http.py
+test_req.py
+update_phone.py
+update_phone_safe.py
+verify_apis.py
+verify_recommended.py
+
+# Local artefacts
+test_db.sqlite3
+pytest_errors.txt
+pytest_output.txt
+tmp/
+uploads/
+media/
+avatars/
+

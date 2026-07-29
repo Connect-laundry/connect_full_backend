@@ -17,6 +17,8 @@ from .models import (
     AuditLog,
     LegalPage,
     UserLegalAcceptance,
+    SpecialOffer,
+    IdempotencyRecord,
 )
 from .services.audit import record_audit
 from .services.legal import archive_legal_page, publish_legal_page, rollback_legal_page
@@ -414,3 +416,36 @@ class PushDeviceAdmin(ModelAdmin):
     list_filter = ('platform', 'is_active')
     search_fields = ('user__email', 'device_id', 'token')
     readonly_fields = ('token', 'device_id', 'platform', 'app_version', 'last_registered_at', 'created_at')
+
+
+@admin.register(SpecialOffer)
+class SpecialOfferAdmin(ModelAdmin):
+    """Promo cards on the customer home carousel."""
+    list_display = ('title', 'is_active', 'valid_until', 'order', 'created_at')
+    list_filter = ('is_active', 'valid_until')
+    search_fields = ('title', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('order', '-created_at')
+    fieldsets = (
+        ('Content', {'fields': ('title', 'description', 'image')}),
+        ('Display', {
+            'fields': ('is_active', 'order', 'valid_until'),
+            'description': 'Lower "order" values appear first in the carousel.',
+        }),
+        ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+
+@admin.register(IdempotencyRecord)
+class IdempotencyRecordAdmin(ModelAdmin):
+    """Read-only view of claimed idempotency keys, for debugging duplicates."""
+    list_display = ('key', 'status_code', 'created_at')
+    list_filter = ('status_code', 'created_at')
+    search_fields = ('key',)
+    readonly_fields = ('key', 'fingerprint', 'status_code', 'content_type', 'content', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

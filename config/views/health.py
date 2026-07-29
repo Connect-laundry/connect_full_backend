@@ -1,6 +1,8 @@
 import logging
 import os
 # pyre-ignore[missing-module]
+from django.conf import settings
+
 from django.db import connections
 # pyre-ignore[missing-module]
 from django.db.utils import OperationalError
@@ -55,7 +57,17 @@ def health_check(request):
             components_status['redis'] = "up"
         else:
             components_status['redis'] = "not_configured"
-            logger.info("Health Check: Redis is not configured (using fallback cache)")
+            if settings.DEBUG:
+                logger.info("Health Check: Redis is not configured (using fallback cache)")
+            else:
+                # Per-process cache in production means rate limits are only
+                # enforced per worker. Surface it as degraded so it shows up on
+                # a dashboard instead of hiding in an INFO log.
+                health_status['status'] = "degraded"
+                logger.warning(
+                    "Health Check: Redis is not configured in production — "
+                    "throttle counters are per-worker."
+                )
     except Exception as e:
         health_status['status'] = "degraded"
         logger.error(f"Health Check: Redis is DOWN - {str(e)}")

@@ -17,6 +17,9 @@ class Payment(models.Model):
         SUCCESS = 'SUCCESS', _('Successful')
         FAILED = 'FAILED', _('Failed')
         EXPIRED = 'EXPIRED', _('Expired')
+        # A refund was accepted by Paystack but not yet settled.
+        REFUND_PENDING = 'REFUND_PENDING', _('Refund pending')
+        REFUNDED = 'REFUNDED', _('Refunded')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='payments')
@@ -43,15 +46,28 @@ class Payment(models.Model):
     def __str__(self):
         return f"Payment for {self.order.order_no} ({self.status})"
 
+    # A settled payment can still be refunded, so SUCCESS is only terminal for
+    # forward progress. Everything else is a dead end.
+    ALLOWED_TRANSITIONS = {
+        Status.PENDING: {Status.SUCCESS, Status.FAILED, Status.EXPIRED},
+        Status.SUCCESS: {Status.REFUND_PENDING, Status.REFUNDED},
+        Status.REFUND_PENDING: {Status.REFUNDED, Status.SUCCESS},
+        Status.FAILED: set(),
+        Status.EXPIRED: set(),
+        Status.REFUNDED: set(),
+    }
+
     def transition_to(self, new_status, save=True):
         """Strict transition function for Payment state machine."""
         if self.status == new_status:
             return False
-            
-        terminal_states = [self.Status.SUCCESS, self.Status.FAILED, self.Status.EXPIRED]
-        if self.status in terminal_states:
-            raise ValueError(f"Cannot transition payment from terminal state '{self.status}' to '{new_status}'")
-            
+
+        allowed = self.ALLOWED_TRANSITIONS.get(self.status, set())
+        if new_status not in allowed:
+            raise ValueError(
+                f"Cannot transition payment from '{self.status}' to '{new_status}'"
+            )
+
         self.status = new_status
         if save:
             self.save(update_fields=['status', 'updated_at'])
