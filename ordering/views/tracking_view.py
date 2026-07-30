@@ -245,6 +245,7 @@ def _build_charges_and_payment(order: Order) -> dict:
             "discount": breakdown["discount"],
             "total": breakdown["total"],
             "currency": breakdown["currency"],
+            "delivery_fees_in_app": breakdown["delivery_fees_in_app"],
         },
         "payment": {
             "status": payment_status,

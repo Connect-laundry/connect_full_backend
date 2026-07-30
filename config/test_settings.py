@@ -148,8 +148,10 @@ REST_FRAMEWORK = {
 }
 
 TAX_RATE = 0.07
-DELIVERY_FEE_BASE = 10.00
 PLATFORM_FEE_RATE = 0.05
+# Mirrors production: logistics settle directly with the laundry. Tests that
+# exercise in-app logistics billing override this explicitly.
+DELIVERY_FEES_IN_APP = False
 FRONTEND_URL = 'http://localhost:3000'
 PAYSTACK_SECRET_KEY = 'test-paystack-secret'
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = 24

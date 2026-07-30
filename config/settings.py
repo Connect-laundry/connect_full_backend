@@ -627,8 +627,20 @@ PWA_VERSION = os.getenv('PWA_VERSION', '1.0.0')
 
 # Financial Settings
 TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
-DELIVERY_FEE_BASE = float(os.getenv('DELIVERY_FEE_BASE', '10.00')) # Default 10 GHS
 PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
+
+# Logistics settlement
+# -------------------------------------------------------------------------
+# The platform operates no courier fleet: laundries collect and return orders
+# themselves. Until in-app logistics billing is switched on, pickup and
+# delivery are arranged and paid directly between the customer and the
+# laundry, and the app must not charge or quote a fee it cannot honour.
+#
+# Flipping this to True activates the per-laundry DeliveryZonePricing bands
+# that already exist. Do not flip it before vendors have configured zones and
+# there is a payout path back to them, or customers will be charged money the
+# platform has no way to forward.
+DELIVERY_FEES_IN_APP = os.getenv('DELIVERY_FEES_IN_APP', 'false').lower() in ('1', 'true', 'yes')
 
 # Geocoding (business-location resolution for owner onboarding)
 # Provider: 'google' | 'mapbox' | '' (disabled). When disabled, the geocode

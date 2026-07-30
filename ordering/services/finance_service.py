@@ -11,6 +11,17 @@ class FinanceService:
     """
 
     @staticmethod
+    def delivery_fees_in_app():
+        """
+        Whether pickup and delivery are billed through the app.
+
+        False while the platform has no courier fleet: laundries handle
+        logistics themselves and settle the fee with the customer directly.
+        See ``settings.DELIVERY_FEES_IN_APP``.
+        """
+        return bool(getattr(settings, 'DELIVERY_FEES_IN_APP', False))
+
+    @staticmethod
     def calculate_tax_amount(amount, tax_rate=None):
         """Returns the tax amount for a given base amount."""
         if tax_rate is None:
@@ -78,7 +89,16 @@ class FinanceService:
 
     @staticmethod
     def calculate_delivery_fee(order):
-        """Calculates the delivery fee for an order."""
+        """
+        Delivery fee charged through the app.
+
+        Zero while logistics settle directly with the laundry. The per-laundry
+        distance bands below stay wired so the switch is a config change, not a
+        rewrite.
+        """
+        if not FinanceService.delivery_fees_in_app():
+            return Decimal('0.00')
+
         pickup_lat = getattr(order, 'pickup_lat', None)
         pickup_lng = getattr(order, 'pickup_lng', None)
         laundry = getattr(order, 'laundry', None)
@@ -106,16 +126,21 @@ class FinanceService:
                         if zone.min_distance_km <= distance <= zone.max_distance_km:
                             return Decimal(str(zone.delivery_fee))
         
-        # Use laundry's specific delivery fee, fallback to global base
+        # The laundry's own flat fee. There is deliberately no platform-level
+        # fallback: the platform performs no deliveries, so it must never be
+        # the origin of a delivery charge.
         laundry_fee = getattr(laundry, 'delivery_fee', None) if laundry is not None else None
         if laundry_fee is not None and not hasattr(laundry_fee, '_mock_return_value'):
             return Decimal(str(laundry_fee))
-            
-        return Decimal(str(settings.DELIVERY_FEE_BASE))
+
+        return Decimal('0.00')
 
     @staticmethod
     def calculate_pickup_fee(order):
-        """Calculates the pickup fee for an order."""
+        """Pickup fee charged through the app. See ``calculate_delivery_fee``."""
+        if not FinanceService.delivery_fees_in_app():
+            return Decimal('0.00')
+
         pickup_lat = getattr(order, 'pickup_lat', None)
         pickup_lng = getattr(order, 'pickup_lng', None)
         laundry = getattr(order, 'laundry', None)
@@ -201,5 +226,8 @@ class FinanceService:
             "tax": str(tax.quantize(Decimal('0.01'))),
             "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
             "total": str(total.quantize(Decimal('0.01'))),
-            "currency": "GHS" # Standardized
+            "currency": "GHS", # Standardized
+            # Lets the client tell "delivery is free" apart from "delivery is
+            # not billed here". Without it a 0.00 fee reads as free delivery.
+            "delivery_fees_in_app": FinanceService.delivery_fees_in_app(),
         }

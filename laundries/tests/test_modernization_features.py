@@ -3,6 +3,7 @@ import csv
 import io
 from decimal import Decimal
 from datetime import datetime
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -198,7 +199,15 @@ class TestModernizationFeatures:
         change_obj.refresh_from_db()
         assert change_obj.is_applied is True
 
+    @override_settings(DELIVERY_FEES_IN_APP=True)
     def test_delivery_zone_pricing(self):
+        """
+        The distance bands stay correct behind the flag.
+
+        Logistics currently settle between customer and laundry, so the app
+        charges nothing; this proves the banding is ready for the day that
+        switches on, rather than rotting until then.
+        """
         owner = _owner()
         laundry = _laundry(owner)
         client = _client(owner)

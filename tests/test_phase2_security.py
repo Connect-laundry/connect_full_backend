@@ -196,7 +196,9 @@ class TestPhase2Security:
             price='100.00',
         )
 
-        with override_settings(ROOT_URLCONF='config.urls'):
+        # Logistics billing on: every fee the server charges is in the payload,
+        # so the client never has to compute money for itself.
+        with override_settings(ROOT_URLCONF='config.urls', DELIVERY_FEES_IN_APP=True):
             client, _ = _auth_client(customer, device_id='device-price')
             response = client.get(f'/api/v1/orders/{order.id}/')
 
@@ -208,6 +210,24 @@ class TestPhase2Security:
             assert breakdown['pickup_fee'] == '5.00'
             assert breakdown['currency'] == 'GHS'
             assert breakdown['total'] == '127.00'
+            assert breakdown['delivery_fees_in_app'] is True
+
+        # Logistics settled with the laundry (the live configuration): the
+        # laundry's configured fees are ignored and excluded from the total,
+        # and the payload says so rather than leaving a bare 0.00 to be read
+        # as free delivery.
+        with override_settings(ROOT_URLCONF='config.urls', DELIVERY_FEES_IN_APP=False):
+            client, _ = _auth_client(customer, device_id='device-price-direct')
+            response = client.get(f'/api/v1/orders/{order.id}/')
+
+            assert response.status_code == status.HTTP_200_OK
+            breakdown = response.data.get('data', response.data)['price_breakdown']
+            assert breakdown['items_total'] == '100.00'
+            assert breakdown['delivery_fee'] == '0.00'
+            assert breakdown['pickup_fee'] == '0.00'
+            assert breakdown['delivery_fees_in_app'] is False
+            # 100 items + 7.00 tax + 5.00 platform fee, no logistics
+            assert breakdown['total'] == '112.00'
 
     def test_account_deletion_revokes_sessions_and_anonymizes_user(self):
         user = User.objects.create_user(email='delete@example.com',
