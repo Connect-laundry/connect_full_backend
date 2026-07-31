@@ -14,7 +14,7 @@ from ordering.models import Order
 from payments.models import Payment
 from users.models import User
 
-from tests.test_payments import _build_pending_payment
+from test_payments import _build_pending_payment
 
 
 @pytest.mark.django_db

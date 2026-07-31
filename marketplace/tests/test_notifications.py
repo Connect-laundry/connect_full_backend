@@ -846,3 +846,4 @@ class PushBadgeCountTests(APITestCase):
         # 2 existing + the one just created.
         self.assertEqual(message['badge'], 3)
         self.assertEqual(message['channelId'], 'orders_v2')
+
