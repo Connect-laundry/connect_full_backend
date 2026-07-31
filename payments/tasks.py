@@ -114,3 +114,19 @@ def reconcile_pending_payments(self):
             )
             
     return f"Reconciled {reconciled_count} payments."
+
+
+@shared_task(name='payments.tasks.run_scheduled_payouts')
+def run_scheduled_payouts():
+    """
+    Release due settlements and build the payouts they belong to.
+
+    The Celery twin of `manage.py run_payouts`, so the job runs whether the
+    scheduler is a worker or a cron job. Both are safe to run together: each
+    only sweeps what the other has not.
+    """
+    from .services.settlement_service import SettlementService
+
+    released = SettlementService.run_auto_release()
+    payouts = SettlementService.run_scheduled_payouts()
+    return f"Released {released} settlement(s); built {len(payouts)} payout(s)."

@@ -19,10 +19,148 @@ class PaystackService:
             'Content-Type': 'application/json',
         }
 
-    def initialize_transaction(self, email, amount, reference, metadata=None):
+    def create_subaccount(self, business_name, settlement_bank, account_number, percentage_charge=0):
+        """
+        Register a laundry's payout account with Paystack.
+
+        Returns the raw Paystack response; the caller stores
+        ``data.subaccount_code``. Bank details are deliberately not persisted
+        locally — Paystack is the system of record for them, and holding a
+        copy would make this database a target for nothing gained.
+
+        ``percentage_charge`` is Paystack's field for the split ratio. Its
+        direction is documented inconsistently by Paystack itself, so this
+        integration does not rely on it: the platform's cut is sent per
+        transaction as ``transaction_charge``, which overrides it and is
+        documented unambiguously as a flat fee taken for the main account.
+        """
+        endpoint = f"{self.base_url}/subaccount"
+        payload = {
+            'business_name': business_name,
+            'settlement_bank': settlement_bank,
+            'account_number': account_number,
+            'percentage_charge': percentage_charge,
+        }
+
+        try:
+            response = requests.post(endpoint, json=payload, headers=self.headers, timeout=15)
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(
+                    "Paystack subaccount creation returned non-JSON response",
+                    extra={"status_code": response.status_code},
+                )
+                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
+            if not response.ok:
+                logger.error(
+                    "Paystack subaccount creation failed",
+                    extra={"status_code": response.status_code, "message": data.get('message')},
+                )
+            return data
+        except requests.exceptions.RequestException as e:
+            logger.error("Paystack subaccount request error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def create_transfer_recipient(self, name, account_number, bank_code, recipient_type='ghipss', currency='GHS'):
+        """
+        Register where a laundry's payouts should be sent.
+
+        ``recipient_type`` is Paystack's transfer rail: 'ghipss' for Ghanaian
+        bank accounts, 'mobile_money' for MoMo. The caller stores
+        ``data.recipient_code``.
+        """
+        payload = {
+            'type': recipient_type,
+            'name': name,
+            'account_number': account_number,
+            'bank_code': bank_code,
+            'currency': currency,
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/transferrecipient",
+                json=payload, headers=self.headers, timeout=15,
+            )
+            return response.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error("Paystack recipient creation error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def initiate_transfer(self, amount, recipient_code, reference, reason=''):
+        """
+        Send money to a recipient.
+
+        ``amount`` is in cedis and converted to pesewas here. ``reference``
+        must be stable for a given payout: Paystack rejects a duplicate
+        reference, which is what stops a retry from paying a laundry twice.
+        """
+        payload = {
+            'source': 'balance',
+            'amount': int(round(float(amount) * 100)),
+            'recipient': recipient_code,
+            'reference': reference,
+            'currency': 'GHS',
+        }
+        if reason:
+            payload['reason'] = str(reason)[:100]
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/transfer",
+                json=payload, headers=self.headers, timeout=20,
+            )
+            try:
+                data = response.json()
+            except ValueError:
+                logger.error(
+                    "Paystack transfer returned non-JSON response",
+                    extra={"status_code": response.status_code, "reference": mask_reference(reference)},
+                )
+                # Deliberately not treated as a failure by the caller: a
+                # transfer whose outcome is unknown must not be retried blindly.
+                return {'status': False, 'indeterminate': True, 'message': 'Invalid response from provider.'}
+            if not response.ok:
+                logger.error(
+                    "Paystack transfer failed",
+                    extra={"status_code": response.status_code, "message": data.get('message')},
+                )
+            return data
+        except requests.exceptions.Timeout as e:
+            # The request may well have been accepted. Report it as unknown so
+            # the payout is left for a human rather than sent again.
+            logger.error("Paystack transfer timed out", extra={"error": summarize_exception(e)})
+            return {'status': False, 'indeterminate': True, 'message': 'Transfer request timed out.'}
+        except requests.exceptions.RequestException as e:
+            logger.error("Paystack transfer error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def list_banks(self, country='ghana'):
+        """Supported banks and their codes, needed to create a subaccount."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/bank",
+                params={'country': country},
+                headers=self.headers,
+                timeout=15,
+            )
+            return response.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error("Paystack bank list error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def initialize_transaction(
+        self, email, amount, reference, metadata=None, subaccount=None,
+        transaction_charge=None, bearer=None,
+    ):
         """
         Initialize a payment transaction.
         Amount should be in minor currency units (e.g. pesewas for GHS).
+
+        When ``subaccount`` is given, Paystack settles the transaction to that
+        subaccount rather than the platform account. ``transaction_charge`` is
+        the platform's flat cut in pesewas, and ``bearer`` decides who absorbs
+        Paystack's own processing fee.
         """
         endpoint = f"{self.base_url}/transaction/initialize"
         payload = {
@@ -33,10 +171,19 @@ class PaystackService:
             'metadata': metadata or {}
         }
 
+        if subaccount:
+            payload['subaccount'] = subaccount
+            # Always sent, including zero: it overrides whatever percentage the
+            # subaccount was created with, so the platform's cut is stated
+            # explicitly on every transaction rather than inherited.
+            payload['transaction_charge'] = int(transaction_charge or 0)
+            if bearer:
+                payload['bearer'] = bearer
+
         callback_url = getattr(settings, 'PAYSTACK_CALLBACK_URL', None)
         if callback_url:
             payload['callback_url'] = callback_url
-        
+
         try:
             response = requests.post(
                 endpoint, 

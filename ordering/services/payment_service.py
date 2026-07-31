@@ -65,8 +65,25 @@ class PaymentService:
             'order_no': order.order_no,
         }
 
-        response = paystack.initialize_transaction(email, amount, reference, metadata=metadata)
-        
+        # Route the money. Direct settlement sends it to the laundry's own
+        # Paystack subaccount; otherwise it lands with the platform and the
+        # settlement ledger records what is owed.
+        from payments.services.split_routing import resolve_route
+        route = resolve_route(order)
+        if route.is_direct:
+            metadata['settlement'] = 'DIRECT'
+            metadata['subaccount'] = route.subaccount_code
+
+        response = paystack.initialize_transaction(
+            email,
+            amount,
+            reference,
+            metadata=metadata,
+            subaccount=route.subaccount_code or None,
+            transaction_charge=route.platform_charge_pesewas,
+            bearer=route.bearer if route.is_direct else None,
+        )
+
         if response and response.get('status'):
             data = response.get('data', {})
             
@@ -79,7 +96,11 @@ class PaymentService:
                     'currency': settings.PAYMENT_CURRENCY,
                     'payment_method': normalized_method,
                     'transaction_reference': reference,
-                    'status': 'PENDING'
+                    'status': 'PENDING',
+                    # Recorded now, not at webhook time: the laundry's routing
+                    # could change between charge and confirmation, and this
+                    # transaction's fate was decided here.
+                    'settled_directly': route.is_direct,
                 }
             )
             

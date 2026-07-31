@@ -178,6 +178,72 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
             "data": earnings
         })
 
+class DashboardPayoutsView(views.APIView, DashboardBaseView):
+    """
+    What the platform is holding, what it owes, and what it has paid.
+
+    This is the money view for the owner web platform, and it is deliberately
+    separate from `DashboardEarningsView`, which reports revenue booked from
+    completed orders. Revenue and cash are not the same thing: an order can be
+    delivered and its money still be a day away, and an owner who cannot see
+    the difference will assume the platform is holding out on them.
+
+    Three numbers, in the order an owner cares about:
+
+    * ``held``      — customers have paid, the orders are not yet delivered.
+    * ``available`` — delivered and earned, waiting for the next payout.
+    * ``paid``      — already sent.
+    """
+    permission_classes = [IsLaundryOwner]
+
+    def get(self, request):
+        laundry = self.get_laundry(request)
+        if not laundry:
+            return Response({"error": "Laundry not found"}, status=404)
+
+        from payments.models import OrderSettlement, Payout
+        from payments.services.settlement_service import SettlementService
+
+        settlements = (
+            OrderSettlement.objects.filter(laundry=laundry)
+            .select_related('order')
+            .order_by('-created_at')[:50]
+        )
+        payouts = Payout.objects.filter(laundry=laundry).order_by('-created_at')[:20]
+
+        return Response({
+            "status": "success",
+            "data": {
+                "summary": SettlementService.earnings_summary(laundry),
+                "settles_directly": bool(laundry.split_payments_enabled),
+                "settlements": [
+                    {
+                        "order_no": s.order.order_no if s.order_id else None,
+                        "gross": str(s.gross_amount),
+                        "commission": str(s.platform_commission),
+                        "net": str(s.net_payable),
+                        "status": s.status,
+                        "route": s.route,
+                        "created_at": s.created_at.isoformat(),
+                    }
+                    for s in settlements
+                ],
+                "payouts": [
+                    {
+                        "id": str(p.id),
+                        "amount": str(p.amount),
+                        "status": p.status,
+                        "method": p.method,
+                        "reference": p.reference,
+                        "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                        "created_at": p.created_at.isoformat(),
+                    }
+                    for p in payouts
+                ],
+            },
+        })
+
+
 class ServiceStatusUpdateView(generics.UpdateAPIView, DashboardBaseView):
     """
     Quickly toggle service availability from the dashboard.

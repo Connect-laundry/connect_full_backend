@@ -81,7 +81,31 @@ class Laundry(models.Model):
     delivery_fee = models.DecimalField(_('delivery fee'), max_digits=10, decimal_places=2, default=0.00)
     pickup_fee = models.DecimalField(_('pickup fee'), max_digits=10, decimal_places=2, default=0.00)
     min_order = models.DecimalField(_('minimum order value'), max_digits=10, decimal_places=2, default=0.00)
-    
+
+    # --- Direct settlement (Paystack subaccount) -------------------------
+    # When set and enabled, a customer's payment is routed to this laundry's
+    # own Paystack subaccount instead of landing in the platform account and
+    # waiting for a manual payout.
+    #
+    # Enabling is deliberately per-laundry and off by default. Splitting money
+    # out at charge time means the platform can no longer hold it back if the
+    # order goes wrong, so a laundry has to have earned it. Bank details live
+    # with Paystack, not here — only the resulting code is stored.
+    paystack_subaccount_code = models.CharField(
+        _('paystack subaccount code'), max_length=100, blank=True, default=''
+    )
+    split_payments_enabled = models.BooleanField(
+        _('settle payments directly'), default=False, db_index=True
+    )
+    # Paystack transfer recipient, used to send payouts automatically. Distinct
+    # from the subaccount above: a subaccount receives a split at charge time,
+    # a recipient receives a transfer afterwards. A laundry on the escrow route
+    # needs this one.
+    paystack_recipient_code = models.CharField(
+        _('paystack recipient code'), max_length=100, blank=True, default=''
+    )
+
+
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
     is_active = models.BooleanField(_('is active'), default=False, db_index=True)
     vacation_mode = models.BooleanField(_('vacation mode'), default=False, db_index=True)

@@ -86,12 +86,19 @@ TERMINAL_STATUSES = {Order.Status.DELIVERED, Order.Status.COMPLETED, Order.Statu
 
 
 def derive_otp(order: Order) -> str:
-    """Deterministic 4-digit code derived from the order id.
+    """The 4-digit code the customer reads out when their clothes come back.
 
-    Decorative until a driver app exists to verify it at the door; renders
-    consistently across refreshes so it can be shown to the customer as their
-    "show this to your courier" code.
+    This used to be decorative: derived from the order number, shown to the
+    customer, and checked by nobody. It is now the order's real
+    ``handover_code``, which the laundry must enter to prove a delivery and
+    release the customer's payment.
+
+    Orders confirmed before handover codes existed have none, so the old
+    derivation stays as a fallback rather than showing them a blank space.
     """
+    if order.handover_code:
+        return order.handover_code
+
     digits = "".join(ch for ch in order.order_no if ch.isdigit())
     if len(digits) >= 4:
         return digits[-4:]

@@ -310,9 +310,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
             # pyre-ignore[missing-module]
             from ..services.finance_service import FinanceService
-            price_breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon_obj)
-            order.total_amount = Decimal(price_breakdown['total'])
-            order.save(update_fields=['total_amount', 'updated_at'])
+            # Freeze the pricing onto the order. Every later read, and the
+            # settlement owed to the laundry, uses these stored numbers.
+            price_breakdown = FinanceService.freeze_price_breakdown(order, coupon=coupon_obj)
 
             if coupon_obj:
                 # pyre-ignore[missing-module]
