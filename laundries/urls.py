@@ -13,6 +13,7 @@ from .views.review import ReviewCreateView
 from .views.dashboard import (
     DashboardStatsView,
     DashboardEarningsView,
+    DashboardPayoutsView,
     DashboardOrderViewSet,
     ServiceStatusUpdateView
 # pyre-ignore[missing-module]
@@ -47,6 +48,7 @@ urlpatterns = [
     path('featured/', LaundryViewSet.as_view({'get': 'featured'}), name='laundry-featured-top'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
+    path('dashboard/payouts/', DashboardPayoutsView.as_view(), name='dashboard-payouts'),
     path('dashboard/my-laundry/', MyLaundryView.as_view(), name='dashboard-my-laundry'),
     path('dashboard/my-laundry/<uuid:id>/', MyLaundryDetailView.as_view(), name='dashboard-my-laundry-detail'),
     path('dashboard/my-laundry/hours/template/', HoursTemplateView.as_view(), name='dashboard-hours-template'),

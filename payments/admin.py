@@ -5,7 +5,7 @@ from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
-from .models import Payment, WebhookEvent
+from .models import OrderSettlement, Payment, Payout, WebhookEvent
 from django.utils.html import format_html
 
 
@@ -210,3 +210,108 @@ class WebhookEventAdmin(ModelAdmin):
     list_display = ('event_id', 'processed_at')
     search_fields = ('event_id',)
     readonly_fields = ('event_id', 'processed_at')
+
+
+@admin.register(OrderSettlement)
+class OrderSettlementAdmin(ModelAdmin):
+    """
+    What the platform owes each laundry, one order at a time.
+
+    Everything is read-only. These amounts are copied from an order's frozen
+    price snapshot, and hand-editing them would break the tie between what a
+    customer paid and what a laundry is owed. Status changes happen through
+    payouts and refunds, never by typing.
+    """
+
+    list_display = (
+        'created_at',
+        'laundry',
+        'order_no',
+        'display_net',
+        'platform_commission',
+        'processor_fee',
+        'route',
+        'display_status',
+        'payout',
+    )
+    list_filter = ('status', 'route', 'created_at', 'laundry')
+    search_fields = ('order__order_no', 'laundry__name')
+    readonly_fields = (
+        'order', 'laundry', 'payout', 'gross_amount', 'platform_commission',
+        'processor_fee', 'net_payable', 'currency', 'status', 'route',
+        'reversed_at', 'reversal_reason', 'created_at', 'updated_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('order', 'laundry', 'payout')
+
+    @display(description='Order')
+    def order_no(self, obj):
+        return obj.order.order_no if obj.order_id else '—'
+
+    @display(description='Net payable')
+    def display_net(self, obj):
+        return f"{obj.currency} {obj.net_payable}"
+
+    @display(
+        description='Status',
+        label={
+            OrderSettlement.Status.PENDING: 'warning',
+            OrderSettlement.Status.SCHEDULED: 'info',
+            OrderSettlement.Status.PAID: 'success',
+            OrderSettlement.Status.REVERSED: 'danger',
+        },
+    )
+    def display_status(self, obj):
+        return obj.status
+
+
+@admin.register(Payout)
+class PayoutAdmin(ModelAdmin):
+    """Batched payments out to laundries."""
+
+    list_display = ('created_at', 'laundry', 'display_amount', 'method', 'display_status', 'paid_at')
+    list_filter = ('status', 'method', 'created_at')
+    search_fields = ('laundry__name', 'reference')
+    readonly_fields = ('amount', 'currency', 'period_start', 'period_end', 'paid_at', 'created_at', 'updated_at')
+    actions = ['mark_paid']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('laundry')
+
+    @display(description='Amount')
+    def display_amount(self, obj):
+        return f"{obj.currency} {obj.amount}"
+
+    @display(
+        description='Status',
+        label={
+            Payout.Status.DRAFT: 'warning',
+            Payout.Status.PROCESSING: 'info',
+            Payout.Status.PAID: 'success',
+            Payout.Status.FAILED: 'danger',
+        },
+    )
+    def display_status(self, obj):
+        return obj.status
+
+    @admin.action(description='Mark selected payouts as paid')
+    def mark_paid(self, request, queryset):
+        from .services.settlement_service import SettlementService
+
+        settled = 0
+        for payout in queryset.exclude(status=Payout.Status.PAID):
+            SettlementService.mark_payout_paid(payout)
+            settled += 1
+
+        self.message_user(
+            request,
+            f"Marked {settled} payout(s) as paid.",
+            level=messages.SUCCESS if settled else messages.WARNING,
+        )

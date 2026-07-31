@@ -1,6 +1,9 @@
+from datetime import datetime
 from decimal import Decimal
 # pyre-ignore[missing-module]
 from django.conf import settings
+# pyre-ignore[missing-module]
+from django.utils import timezone
 # pyre-ignore[missing-module]
 from django.db.models import Sum, F
 
@@ -30,6 +33,23 @@ class FinanceService:
             tax_rate = Decimal(str(tax_rate))
             
         return (Decimal(str(amount)) * tax_rate).quantize(Decimal('0.01'))
+
+    @staticmethod
+    def calculate_platform_fee(amount, fee_rate=None):
+        """
+        The platform's commission on a taxable amount.
+
+        Zero by default: the platform takes no cut, so the customer pays the
+        laundry's prices and nothing more. Defined once here because the
+        estimate endpoint and the order breakdown both need it, and two copies
+        of the same formula drift the moment a rate is introduced.
+        """
+        if fee_rate is None:
+            fee_rate = Decimal(str(getattr(settings, 'PLATFORM_FEE_RATE', 0)))
+        else:
+            fee_rate = Decimal(str(fee_rate))
+
+        return (Decimal(str(amount)) * fee_rate).quantize(Decimal('0.01'))
 
     @staticmethod
     def calculate_haversine_distance(lat1, lon1, lat2, lon2):
@@ -175,11 +195,78 @@ class FinanceService:
 
 
     @staticmethod
-    def calculate_price_breakdown(order, coupon=None):
+    def _stored_breakdown(order):
         """
-        Calculates full financial snapshot for an order.
-        Returns dict with: items_total, delivery_fee, pickup_fee, discount, tax, platform_fee, total
+        The frozen snapshot for an order, or None if it has none.
+
+        `priced_at` is the marker. Orders created before snapshots existed
+        return None and fall through to a live recomputation, which is the old
+        behaviour and the best that can be done for them.
         """
+        priced_at = getattr(order, 'priced_at', None)
+        if not isinstance(priced_at, datetime):
+            return None
+
+        def money(field, default='0.00'):
+            value = getattr(order, field, None)
+            if value is None:
+                return default
+            return str(Decimal(str(value)).quantize(Decimal('0.01')))
+
+        return {
+            "items_total": money('items_total'),
+            "delivery_fee": money('delivery_fee'),
+            "pickup_fee": money('pickup_fee'),
+            "discount": money('discount_amount'),
+            "tax": money('tax_amount'),
+            "platform_fee": money('platform_fee'),
+            "total": money('total_amount'),
+            "currency": getattr(order, 'currency', None) or 'GHS',
+            "delivery_fees_in_app": bool(getattr(order, 'delivery_fees_in_app', False)),
+        }
+
+    @staticmethod
+    def freeze_price_breakdown(order, coupon=None):
+        """
+        Compute the breakdown once and store it on the order.
+
+        Called when the order is created. Everything afterwards reads the
+        stored values, so a laundry changing its prices tomorrow cannot alter
+        what this customer was charged today or what the laundry is owed.
+        """
+        breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon, use_snapshot=False)
+
+        order.items_total = Decimal(breakdown['items_total'])
+        order.delivery_fee = Decimal(breakdown['delivery_fee'])
+        order.pickup_fee = Decimal(breakdown['pickup_fee'])
+        order.discount_amount = Decimal(breakdown['discount'])
+        order.tax_amount = Decimal(breakdown['tax'])
+        order.platform_fee = Decimal(breakdown['platform_fee'])
+        order.total_amount = Decimal(breakdown['total'])
+        order.currency = breakdown['currency']
+        order.delivery_fees_in_app = breakdown['delivery_fees_in_app']
+        order.priced_at = timezone.now()
+        order.save(update_fields=[
+            'items_total', 'delivery_fee', 'pickup_fee', 'discount_amount',
+            'tax_amount', 'platform_fee', 'total_amount', 'currency',
+            'delivery_fees_in_app', 'priced_at', 'updated_at',
+        ])
+        return breakdown
+
+    @staticmethod
+    def calculate_price_breakdown(order, coupon=None, use_snapshot=True):
+        """
+        Full financial breakdown for an order.
+
+        Returns the frozen snapshot when the order has one. Pass
+        ``use_snapshot=False`` to force a live recomputation, which only
+        ``freeze_price_breakdown`` should need.
+        """
+        if use_snapshot:
+            stored = FinanceService._stored_breakdown(order)
+            if stored is not None:
+                return stored
+
         # 1. Sum items
         items_total = order.items.aggregate(
             total=Sum(F('quantity') * F('price'))
@@ -212,8 +299,7 @@ class FinanceService:
         tax = FinanceService.calculate_tax_amount(taxable_amount)
         
         # 5. Platform Fee
-        platform_fee_rate = Decimal(str(settings.PLATFORM_FEE_RATE))
-        platform_fee = (taxable_amount * platform_fee_rate).quantize(Decimal('0.01'))
+        platform_fee = FinanceService.calculate_platform_fee(taxable_amount)
         
         # 6. Final Total
         total = taxable_amount + delivery_fee + pickup_fee + tax + platform_fee

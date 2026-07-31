@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.db import transaction, IntegrityError
@@ -91,6 +92,80 @@ def _refund_reference(data):
     """Original charge reference carried on a Paystack refund event."""
     txn = data.get('transaction') if isinstance(data.get('transaction'), dict) else {}
     return txn.get('reference') or data.get('transaction_reference') or data.get('reference')
+
+
+def _paystack_fee(data):
+    """
+    Paystack's cut of a transaction, in cedis.
+
+    Paystack reports `fees` in the smallest currency unit (pesewas). Absent or
+    unparseable means zero rather than an error: the settlement is still
+    correct without it, since the fee is recorded for visibility and not
+    deducted automatically.
+    """
+    if not isinstance(data, dict):
+        return Decimal('0.00')
+    raw = data.get('fees')
+    if raw is None:
+        return Decimal('0.00')
+    try:
+        return (Decimal(str(raw)) / Decimal('100')).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal('0.00')
+
+
+def _handle_transfer_event(request, event_type, event_data, dedup_key):
+    """
+    Apply the outcome of a payout transfer.
+
+    A failed or reversed transfer returns the settlements to the payable pool:
+    the laundry is still owed the money, and losing that from the ledger
+    because a bank rejected an account number would be worse than the failure
+    itself.
+    """
+    from .models import Payout
+    from .services.payout_service import PayoutService
+
+    data = event_data.get('data', {}) if isinstance(event_data.get('data'), dict) else {}
+    reference = data.get('reference')
+    if not reference:
+        logger.warning("Transfer webhook carried no reference")
+        return HttpResponse(status=400)
+
+    try:
+        with transaction.atomic():
+            if not _claim_event(dedup_key):
+                logger.info("Duplicate transfer event ignored", extra={"event_id": dedup_key})
+                return HttpResponse(status=200)
+
+            payout = Payout.objects.select_for_update().filter(reference=reference).first()
+            if not payout:
+                logger.error(
+                    "Payout not found for transfer webhook",
+                    extra={"reference": mask_reference(reference)},
+                )
+                return HttpResponse(status=200)  # Nothing to retry.
+
+            if event_type == 'transfer.success':
+                PayoutService.mark_transfer_settled(payout, reference=reference)
+            else:
+                PayoutService.mark_transfer_failed(
+                    payout,
+                    reason=data.get('reason') or event_type,
+                )
+
+            logger.info(
+                "Transfer webhook applied",
+                extra={"reference": mask_reference(reference), "event": event_type},
+            )
+    except Exception as e:
+        logger.error(
+            "Error processing transfer webhook",
+            extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
+        )
+        return HttpResponse(status=500)
+
+    return HttpResponse(status=200)
 
 
 def _handle_refund_event(request, event_type, event_data, dedup_key):
@@ -199,6 +274,12 @@ def paystack_webhook(request):
     if event_type in ('refund.processed', 'refund.failed', 'refund.pending'):
         return _handle_refund_event(request, event_type, event_data, dedup_key)
 
+    # 4b. Outbound transfers to laundries. Paystack accepts a transfer request
+    # and confirms the outcome later, so a payout is not settled until one of
+    # these arrives.
+    if event_type in ('transfer.success', 'transfer.failed', 'transfer.reversed'):
+        return _handle_transfer_event(request, event_type, event_data, dedup_key)
+
     # 4. Only handle charge.success
     if event_type == 'charge.success':
         data = event_data.get('data', {})
@@ -290,6 +371,16 @@ def paystack_webhook(request):
                 order.payment_status = Order.PaymentStatus.PAID
                 order.save(update_fields=['payment_status', 'updated_at'])
                 
+                # Record what this laundry is now owed. Inside the same
+                # transaction as the payment: money confirmed without a
+                # matching debt is money nobody knows to pay onward.
+                from .services.settlement_service import SettlementService
+                SettlementService.record_for_order(
+                    order,
+                    processor_fee=_paystack_fee(event_data.get('data', {})),
+                    settled_directly=payment.settled_directly,
+                )
+
                 # Transition order using OrderStateMachine to trigger audit/history logs & signals
                 OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=None)
                 
@@ -312,6 +403,25 @@ def paystack_webhook(request):
                     related_order=order,
                     dedup_key=f"pay_success_webhook_{payment.id}"
                 )
+
+                # Tell the laundry the same thing at the same moment. Customer
+                # and owner then hold the identical order number and amount, so
+                # "I've paid" can be checked on the spot instead of taken on
+                # trust or waited out until settlement.
+                owner = getattr(order.laundry, 'owner', None)
+                if owner is not None:
+                    NotificationService.notify_user(
+                        user=owner,
+                        title="Payment Received",
+                        body=(
+                            f"GHS {payment.amount} received for order {order.order_no}. "
+                            f"You can start this order."
+                        ),
+                        type=Notification.Type.ORDER,
+                        category="PAYMENT_RECEIVED",
+                        related_order=order,
+                        dedup_key=f"pay_received_owner_{payment.id}",
+                    )
                 
                 logger.info("Webhook success confirmed", extra={"reference": mask_reference(reference)})
         except Exception as e:

@@ -626,8 +626,63 @@ WEBPUSH_VAPID_CLAIMS = {
 PWA_VERSION = os.getenv('PWA_VERSION', '1.0.0')
 
 # Financial Settings
-TAX_RATE = float(os.getenv('TAX_RATE', '0.07')) # Default 7%
-PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.05')) # Default 5% commission
+# -------------------------------------------------------------------------
+# Both default to zero: the customer pays the laundry's prices and nothing
+# else, and every cedi collected belongs to the laundry.
+#
+# TAX_RATE is zero because charging VAT is a registration question, not an
+# engineering default. The previous 0.07 matched no Ghanaian rate; under the
+# VAT Act 2025 (Act 1151) the effective standard rate is 20%, and businesses
+# under the registration threshold do not charge it at all. Set this only on
+# an accountant's instruction.
+#
+# PLATFORM_FEE_RATE is zero while the platform takes no commission. Note that
+# it is applied on top of the customer's total rather than deducted from the
+# laundry's payout, so reintroducing it raises the customer's price. Decide
+# which side should bear it before setting a non-zero value.
+#
+# Both are env-driven, so reintroducing either is a config change and a
+# deploy, not a code change.
+TAX_RATE = float(os.getenv('TAX_RATE', '0.00'))
+PLATFORM_FEE_RATE = float(os.getenv('PLATFORM_FEE_RATE', '0.00'))
+
+# Escrow and payouts
+# -------------------------------------------------------------------------
+# A delivery closed without the customer's handover code is the laundry's
+# unverified word, so its money waits this long before becoming payable. The
+# window exists for the customer to object; it is not a penalty, and a laundry
+# that collects the code is paid straight away.
+SETTLEMENT_AUTO_RELEASE_HOURS = int(os.getenv('SETTLEMENT_AUTO_RELEASE_HOURS', '48'))
+
+# Laundries owed less than this are carried to the next run rather than
+# generating a payout whose transfer fee would eat most of it.
+PAYOUT_MINIMUM_AMOUNT = os.getenv('PAYOUT_MINIMUM_AMOUNT', '1.00')
+
+# Automatic outbound transfers via Paystack.
+# -------------------------------------------------------------------------
+# Off by default. This is the only code path that sends money out of the
+# platform account, so it stays inert until transfers are enabled on the
+# Paystack account and one payout has been watched end to end.
+PAYSTACK_TRANSFERS_ENABLED = os.getenv('PAYSTACK_TRANSFERS_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+# A single transfer above this is refused and left for a human. It is a
+# backstop against a pricing bug reaching someone's bank account, not a
+# business rule.
+PAYOUT_MAX_TRANSFER_AMOUNT = os.getenv('PAYOUT_MAX_TRANSFER_AMOUNT', '5000.00')
+
+# Direct settlement to laundries via Paystack subaccounts.
+# -------------------------------------------------------------------------
+# Off until a real transaction has been run end to end and the settlement
+# direction confirmed on the Paystack dashboard. Paystack's own documentation
+# contradicts itself on which side `percentage_charge` favours, so this must
+# be verified empirically before it is trusted with anyone's money.
+#
+# Even when on, each laundry must be enabled individually
+# (Laundry.split_payments_enabled) and hold a subaccount code. Anything
+# missing falls back to platform collection, which is recoverable.
+PAYSTACK_SPLIT_ENABLED = os.getenv('PAYSTACK_SPLIT_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+# Who absorbs Paystack's processing fee on a split transaction:
+# 'account' (the platform) or 'subaccount' (the laundry).
+PAYSTACK_SPLIT_BEARER = os.getenv('PAYSTACK_SPLIT_BEARER', 'account')
 
 # Logistics settlement
 # -------------------------------------------------------------------------
@@ -785,6 +840,16 @@ UNFOLD = {
                         "icon": "payments",
                         "link": reverse_lazy("admin:payments_payment_changelist"),
                     },
+                    {
+                        "title": _("Owed to laundries"),
+                        "icon": "account_balance_wallet",
+                        "link": reverse_lazy("admin:payments_ordersettlement_changelist"),
+                    },
+                    {
+                        "title": _("Payouts"),
+                        "icon": "send_money",
+                        "link": reverse_lazy("admin:payments_payout_changelist"),
+                    },
                 ],
             },
         ],
@@ -815,6 +880,19 @@ CELERY_BEAT_SCHEDULE = {
     'reconcile-pending-payments-every-10m': {
         'task': 'payments.tasks.reconcile_pending_payments',
         'schedule': 600.0,  # 10 minutes (600 seconds)
+    },
+    # Release settlements whose dispute window has passed and gather what each
+    # laundry is owed into a payout. Daily, so a laundry always knows roughly
+    # when its money is coming, the way Uber Eats and DoorDash settle on a
+    # fixed cycle rather than on request.
+    #
+    # This needs a Celery worker and beat. There is none in production today,
+    # so the same job is exposed as `manage.py run_payouts` for a Render Cron
+    # Job, which needs no Redis. Whichever runs, running both is harmless:
+    # each sweeps only what the other left behind.
+    'run-payouts-daily': {
+        'task': 'payments.tasks.run_scheduled_payouts',
+        'schedule': crontab(hour=6, minute=0),
     },
     # Re-engagement campaigns (Duolingo-style). Times are server-local; the
     # per-user quiet-hours check in NotificationService still defers pushes

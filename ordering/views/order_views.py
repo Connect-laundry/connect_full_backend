@@ -168,11 +168,11 @@ class BookingViewSet(viewsets.GenericViewSet):
         # Let's do a semi-manual calculation for the preview to avoid DB order creation
         delivery_fee = FinanceService.calculate_delivery_fee(temp_order)
         pickup_fee = FinanceService.calculate_pickup_fee(temp_order)
-        # Platform fee & Tax logic
+        # Platform fee & Tax logic. Both are zero-rated by default, so the
+        # quote is the laundry's own prices and nothing else.
         tax = FinanceService.calculate_tax_amount(total_items_price)
-        from django.conf import settings
-        platform_fee = (total_items_price * Decimal(str(settings.PLATFORM_FEE_RATE))).quantize(Decimal('0.01'))
-        
+        platform_fee = FinanceService.calculate_platform_fee(total_items_price)
+
         total = total_items_price + delivery_fee + pickup_fee + tax + platform_fee
 
         return Response({

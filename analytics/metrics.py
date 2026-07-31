@@ -158,7 +158,9 @@ def revenue_metrics(days=30, city=None, laundry_id=None):
         attempts = attempts.filter(order__laundry__city__iexact=city)
 
     gross = paid.aggregate(t=Coalesce(Sum('amount'), Decimal('0')))['t'].quantize(Decimal('0.01'))
-    fee_rate = Decimal(str(getattr(settings, 'PLATFORM_FEE_RATE', 0.05)))
+    # Falls back to zero, matching the settings default. A hard-coded 0.05 here
+    # reported commission revenue the platform never charged.
+    fee_rate = Decimal(str(getattr(settings, 'PLATFORM_FEE_RATE', 0)))
     platform_revenue = (gross * fee_rate).quantize(Decimal('0.01'))
 
     success = paid.count()

@@ -70,6 +70,25 @@ class Order(models.Model):
         related_name='orders'
     )
     
+    # --- Price snapshot -------------------------------------------------
+    # What this order was actually charged, frozen at creation.
+    #
+    # These used to be recomputed from live laundry prices on every read, so
+    # editing a price rewrote the history of every past order and the platform
+    # could not prove what it had charged. Money owed to a laundry is settled
+    # against these numbers, so they must never move after the fact.
+    items_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    pickup_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    currency = models.CharField(max_length=3, default='GHS')
+    # Whether logistics were billed in the app when this order was placed.
+    delivery_fees_in_app = models.BooleanField(default=False)
+    # Null on orders created before snapshots existed; those still recompute.
+    priced_at = models.DateTimeField(null=True, blank=True)
+
     pickup_date = models.DateTimeField()
     delivery_date = models.DateTimeField(null=True, blank=True)
     
@@ -95,6 +114,19 @@ class Order(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     rejected_at = models.DateTimeField(null=True, blank=True)
+
+    # --- Delivery handover -----------------------------------------------
+    # A short code the customer reads out when the laundry hands their clothes
+    # back. The laundry enters it to close the order, which is the only
+    # evidence the platform has that a delivery really happened: laundries mark
+    # their own orders delivered, and the money is released on that word.
+    #
+    # Deliberately not a hard requirement. DoorDash's equivalent has a
+    # "cannot collect PIN" path because customers are unreachable often enough
+    # that blocking on it would strand orders. An uncoded delivery still
+    # closes; its money just waits out a dispute window first.
+    handover_code = models.CharField(max_length=6, blank=True, default='')
+    delivery_confirmed_by_code = models.BooleanField(default=False)
 
     # Reasons
     cancellation_reason = models.TextField(null=True, blank=True)

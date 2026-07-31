@@ -105,6 +105,12 @@ def mark_refund_settled(payment, *, request=None):
         order.payment_status = Order.PaymentStatus.REFUNDED
         order.save(update_fields=['payment_status', 'updated_at'])
 
+        # The customer's money went back, so the laundry is no longer owed it.
+        # Leaving the debt standing would pay a laundry for an order that was
+        # refunded.
+        from .settlement_service import SettlementService
+        SettlementService.reverse_for_order(order, reason='Payment refunded')
+
         record_audit(
             action='PAYMENT_REFUND_SETTLED',
             actor=None,

@@ -28,6 +28,64 @@ def logistics_settled_directly(settings):
     return settings
 
 
+@pytest.fixture
+def free_to_use(settings):
+    """
+    Production default: no commission, no tax.
+
+    The customer pays the laundry's prices and nothing else, and every cedi
+    collected belongs to the laundry.
+    """
+    settings.PLATFORM_FEE_RATE = 0.00
+    settings.TAX_RATE = 0.00
+    settings.DELIVERY_FEES_IN_APP = False
+    return settings
+
+
+class TestFreeToUse:
+    def test_no_platform_fee_is_charged(self, free_to_use):
+        assert FinanceService.calculate_platform_fee(Decimal('100.00')) == Decimal('0.00')
+
+    def test_no_tax_is_charged(self, free_to_use):
+        assert FinanceService.calculate_tax_amount(Decimal('100.00')) == Decimal('0.00')
+
+    def test_the_customer_pays_the_laundry_price_and_nothing_else(
+        self, mock_order, free_to_use
+    ):
+        breakdown = FinanceService.calculate_price_breakdown(mock_order)
+
+        assert breakdown['items_total'] == '100.00'
+        assert breakdown['platform_fee'] == '0.00'
+        assert breakdown['tax'] == '0.00'
+        assert breakdown['delivery_fee'] == '0.00'
+        assert breakdown['pickup_fee'] == '0.00'
+        # Nothing added on top of what the laundry asked for.
+        assert breakdown['total'] == breakdown['items_total']
+
+    def test_a_discount_still_comes_off_the_total(self, mock_order, free_to_use):
+        coupon = MagicMock()
+        coupon.discount_type = 'FIXED'
+        coupon.discount_value = Decimal('20.00')
+        coupon.is_valid.return_value = (True, None)
+
+        breakdown = FinanceService.calculate_price_breakdown(mock_order, coupon=coupon)
+
+        assert breakdown['discount'] == '20.00'
+        assert breakdown['total'] == '80.00'
+
+
+class TestPlatformFeeReintroduction:
+    """The commission path stays correct so switching it on is config, not code."""
+
+    def test_platform_fee_uses_the_configured_rate(self, settings):
+        settings.PLATFORM_FEE_RATE = 0.05
+        assert FinanceService.calculate_platform_fee(Decimal('100.00')) == Decimal('5.00')
+
+    def test_an_explicit_rate_overrides_the_setting(self, settings):
+        settings.PLATFORM_FEE_RATE = 0.00
+        assert FinanceService.calculate_platform_fee(Decimal('100.00'), fee_rate='0.10') == Decimal('10.00')
+
+
 def test_calculate_tax_amount():
     # Test with default tax rate (0.07)
     amount = Decimal('100.00')

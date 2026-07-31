@@ -93,6 +93,23 @@ class OrderStateMachine:
         order.status = to_status
         order.save()
 
+        # Give the order its handover code as soon as it is confirmed, so the
+        # customer has it for the whole time their clothes are away rather
+        # than being asked for something that appears at the last moment.
+        if to_status == Order.Status.CONFIRMED:
+            from .handover import ensure_handover_code
+            ensure_handover_code(order)
+
+        # Release the escrow once the clothes are back with the customer.
+        # Both DELIVERED and COMPLETED release, because COMPLETED is an extra
+        # step a laundry may never take, and money stuck in escrow forever is
+        # worse than money released a step early.
+        if to_status in (Order.Status.DELIVERED, Order.Status.COMPLETED):
+            from payments.services.settlement_service import SettlementService
+            SettlementService.release_for_order(
+                order, confirmed=order.delivery_confirmed_by_code
+            )
+
         # Create history record
         OrderStatusHistory.objects.create(
             order=order,

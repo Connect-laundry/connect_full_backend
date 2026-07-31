@@ -95,7 +95,33 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
 
     @decorators.action(detail=True, methods=['patch'], url_path='mark-delivered')
     def mark_delivered(self, request, pk=None):
-        """OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)"""
+        """
+        OUT_FOR_DELIVERY -> DELIVERED (Laundry)
+
+        Accepts an optional ``handover_code``: the four digits the customer
+        reads out when they take their clothes back. A correct code proves the
+        delivery and releases the customer's payment immediately.
+
+        A wrong code is rejected outright, because a laundry typing digits at
+        random must not be able to stumble into an instant payout. Sending no
+        code at all is allowed and still closes the order, since customers are
+        not always reachable, but the money then waits out a dispute window
+        before it can be paid.
+        """
+        from ..services.handover import mark_confirmed_by_code, verify_handover_code
+
+        submitted = request.data.get('handover_code')
+        order = self.get_order()
+
+        if submitted:
+            if not verify_handover_code(order, submitted):
+                return Response({
+                    "status": "error",
+                    "message": "That handover code does not match this order.",
+                    "data": {"field": "handover_code"},
+                }, status=status.HTTP_400_BAD_REQUEST)
+            mark_confirmed_by_code(order)
+
         return self._handle_transition(request, Order.Status.DELIVERED)
 
     @decorators.action(detail=True, methods=['patch'])
