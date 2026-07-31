@@ -758,3 +758,92 @@ class PushDeferredUntilCommitTests(APITestCase):
                 mock_push.assert_not_called()
 
         mock_push.assert_called_once()
+
+
+class PushPayloadTests(APITestCase):
+    """The fields that decide whether a device actually alerts the customer.
+
+    Regression: messages went out with no priority and no channelId, so
+    Android filed them silently on a DEFAULT-importance channel and iOS was
+    free to delay them. The in-app feed still filled up, which is why it
+    looked like "notifications only work inside the app".
+    """
+
+    def _send(self, **kwargs):
+        from marketplace.tasks import deliver_push
+        with patch('marketplace.tasks.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.raise_for_status = lambda: None
+            mock_post.return_value.json = lambda: {'data': [{'status': 'ok', 'id': 't-1'}]}
+            deliver_push('t', 'b', {}, ['ExponentPushToken[PAYLOAD]'], **kwargs)
+            return mock_post.call_args.kwargs['json'][0]
+
+    def test_message_requests_high_priority(self):
+        # Without this iOS sends at APNs priority 5 and may batch or drop it.
+        self.assertEqual(self._send()['priority'], 'high')
+
+    def test_message_targets_a_versioned_android_channel(self):
+        message = self._send()
+        # Versioned because Android freezes channel importance at creation.
+        self.assertEqual(message['channelId'], 'default_v2')
+
+    def test_orders_channel_is_used_for_transactional_pushes(self):
+        from marketplace.tasks import ANDROID_CHANNEL_ORDERS, channel_for
+
+        for category in ('ORDER', 'PAYMENT_SUCCESS', 'DELIVERY', 'PICKUP'):
+            self.assertEqual(
+                channel_for(category, Notification.Type.ORDER), ANDROID_CHANNEL_ORDERS)
+
+    def test_marketing_stays_on_the_default_channel(self):
+        from marketplace.tasks import ANDROID_CHANNEL_DEFAULT, channel_for
+
+        self.assertEqual(
+            channel_for('CAMPAIGN', Notification.Type.PROMO), ANDROID_CHANNEL_DEFAULT)
+
+    def test_message_sets_an_ios_interruption_level(self):
+        # Otherwise Focus modes / Notification Summary can hold it back.
+        self.assertEqual(self._send()['interruptionLevel'], 'active')
+
+    def test_message_carries_sound_and_ttl(self):
+        message = self._send()
+        self.assertEqual(message['sound'], 'default')
+        self.assertEqual(message['ttl'], 86400)
+
+    def test_badge_is_included_when_supplied(self):
+        self.assertEqual(self._send(badge=7)['badge'], 7)
+
+    def test_badge_is_omitted_when_unknown(self):
+        self.assertNotIn('badge', self._send())
+
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class PushBadgeCountTests(APITestCase):
+    """The badge must reflect unread count, so a killed app still shows it."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="badge@example.com", phone="233700000088", password="pw", role='CUSTOMER')
+        PushDevice.objects.create(
+            user=self.user, token="ExponentPushToken[BADGE]", platform='ios')
+
+    @patch('marketplace.tasks.requests.post')
+    def test_push_reports_the_users_unread_count(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {'data': [{'status': 'ok', 'id': 't-1'}]}
+
+        # Two unread notifications already waiting.
+        for index in range(2):
+            Notification.objects.create(
+                user=self.user, title=f'old {index}', body='b', is_read=False)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.notify_user(
+                self.user, title='new', body='b', category='ORDER',
+                type=Notification.Type.ORDER)
+
+        message = mock_post.call_args.kwargs['json'][0]
+        # 2 existing + the one just created.
+        self.assertEqual(message['badge'], 3)
+        self.assertEqual(message['channelId'], 'orders_v2')
+

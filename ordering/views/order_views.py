@@ -186,6 +186,7 @@ class BookingViewSet(viewsets.GenericViewSet):
                 "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
                 "total": str(total.quantize(Decimal('0.01'))),
                 "currency": "GHS",
+                "delivery_fees_in_app": FinanceService.delivery_fees_in_app(),
                 "outside_service_area": outside_service_area,
                 "warning": warning_msg
             }
