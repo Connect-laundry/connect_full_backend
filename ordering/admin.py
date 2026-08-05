@@ -10,7 +10,25 @@ from django.utils.html import format_html
 class OrderItemInline(TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ('item', 'quantity', 'price')
+    fields = ('name', 'quantity', 'price')
+
+    def has_add_permission(self, request, obj=None):
+        # New priced lines are only ever added to a pay-after quote that has not
+        # been invoiced yet. Every other order is priced at creation, and adding
+        # rows to it would desync the items from the frozen total.
+        if obj is None:
+            return True
+        return (
+            obj.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+            and obj.priced_at is None
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        # Editable only while quoting an unpriced pay-after order; locked
+        # everywhere else so a settled order's line items cannot be rewritten.
+        if obj and obj.pricing_mode == Order.PricingMode.CUSTOM_QUOTE and obj.priced_at is None:
+            return ()
+        return ('name', 'quantity', 'price')
 
 
 @admin.register(Order)
@@ -30,8 +48,10 @@ class OrderAdmin(ModelAdmin):
     readonly_fields = (
         'order_no', 'created_at', 'updated_at',
         'display_customer_phone', 'display_pickup_address',
+        'pricing_mode', 'estimated_weight_kg',
     )
     list_filter_sheet = True
+    actions = ['send_quote']
 
     fieldsets = (
         ('Order info', {
@@ -48,6 +68,52 @@ class OrderAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'laundry')
+
+    @admin.action(description="Send quote for selected pay-after orders")
+    def send_quote(self, request, queryset):
+        """
+        Turn a priced pay-after order into a payable invoice.
+
+        The operator adds the priced line items on the order's edit page (weight
+        and inspection done), then runs this to freeze the total and tell the
+        customer their invoice is ready. This is the platform-side bridge until
+        the owner web app grows its own "Send quote" screen; the same effect is
+        available to owners over POST /booking/lifecycle/{id}/quote/.
+        """
+        from django.contrib import messages
+        from django.db import transaction
+        from .services.finance_service import FinanceService
+        from marketplace.services.notification_service import NotificationService
+        from marketplace.models import Notification
+
+        sent = skipped = 0
+        for order in queryset:
+            if order.pricing_mode != Order.PricingMode.CUSTOM_QUOTE or order.priced_at is not None:
+                skipped += 1
+                continue
+            if not order.items.exists():
+                skipped += 1
+                continue
+
+            with transaction.atomic():
+                FinanceService.freeze_price_breakdown(order, coupon=order.coupon)
+
+            NotificationService.notify_user(
+                user=order.user,
+                title="Your invoice is ready",
+                body=f"Your laundry has been quoted GHS {order.total_amount} for order {order.order_no}. Tap to review and pay.",
+                type=Notification.Type.ORDER,
+                category="QUOTE_READY",
+                related_order=order,
+                dedup_key=f"quote_ready_{order.id}",
+            )
+            sent += 1
+
+        self.message_user(
+            request,
+            f"Sent {sent} quote(s). Skipped {skipped} (not an unpriced pay-after order, or no items added).",
+            level=messages.SUCCESS if sent else messages.WARNING,
+        )
 
     @display(description="Order #", ordering="order_no")
     def display_order_no(self, obj):

@@ -51,6 +51,17 @@ class Order(models.Model):
         UNPAID = 'UNPAID', _('Unpaid')
         REFUNDED = 'REFUNDED', _('Refunded')
 
+    class PricingMode(models.TextChoices):
+        # Customer picks itemised services; price is known upfront.
+        BY_ITEM = 'BY_ITEM', _('By item')
+        # Customer gives an estimated weight; price comes from the laundry's
+        # per-kg tariff and is confirmed against the weigh-in at the shop.
+        BY_WEIGHT = 'BY_WEIGHT', _('By weight')
+        # Customer requests a pickup with no upfront price. The laundry weighs
+        # and inspects, then sends an invoice the customer pays in-app. There
+        # are no items and no price until that quote arrives.
+        CUSTOM_QUOTE = 'CUSTOM_QUOTE', _('Pay after quote')
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_no = models.CharField(max_length=20, unique=True, editable=False)
     
@@ -60,6 +71,17 @@ class Order(models.Model):
     
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+
+    # How this order was priced. BY_ITEM is the default so every existing order
+    # and every request from older clients keeps its current behaviour.
+    pricing_mode = models.CharField(
+        max_length=20, choices=PricingMode.choices, default=PricingMode.BY_ITEM
+    )
+    # Set only for BY_WEIGHT: the weight the customer estimated at booking. The
+    # shop may adjust after weighing, which is why it is labelled "estimated".
+    estimated_weight_kg = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
     
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, db_column='final_price')
     coupon = models.ForeignKey(

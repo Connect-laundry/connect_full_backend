@@ -231,6 +231,29 @@ class BookingViewSet(viewsets.GenericViewSet):
             except ValidationError as exc:
                 return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
+            # A pay-after-quote order has no price yet, so there is nothing to
+            # charge. It waits for the laundry's invoice, which the customer
+            # then pays from the order screen through the normal payment path.
+            if order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
+                response_data = OrderDetailSerializer(order).data
+                response_data['payment_intent'] = {
+                    "transaction_id": None,
+                    "amount": "0.00",
+                    "currency": "GHS",
+                    "status": "QUOTE_PENDING",
+                    "payment_method": None,
+                    "authorization_url": None,
+                    "access_code": None,
+                    "message": "Pickup requested. You'll get an invoice to pay once the laundry weighs your items.",
+                }
+                if cache_key:
+                    cache.set(
+                        cache_key,
+                        {"fingerprint": fingerprint, "status_code": status.HTTP_201_CREATED, "data": response_data},
+                        86400,
+                    )
+                return Response(response_data, status=status.HTTP_201_CREATED)
+
             try:
                 payment_info = PaymentService.create_payment_intent(order, payment_method=payment_method)
             except Exception:

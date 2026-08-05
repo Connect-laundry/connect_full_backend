@@ -10,6 +10,7 @@ from ..models.base import Order, OrderStatusHistory
 from ..services.order_state_machine import OrderStateMachine
 # pyre-ignore[missing-module]
 from ..serializers.lifecycle import OrderStatusHistorySerializer, OrderTransitionSerializer
+from ..serializers.order import OrderDetailSerializer
 # pyre-ignore[missing-module]
 from ..permissions import IsOrderParticipant, CanManageLifecycle
 import logging
@@ -133,6 +134,100 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
     def cancel(self, request, pk=None):
         """PENDING/CONFIRMED -> CANCELLED (Customer/Laundry)"""
         return self._handle_transition(request, Order.Status.CANCELLED)
+
+    @decorators.action(detail=True, methods=['post'])
+    def quote(self, request, pk=None):
+        """
+        Price a pay-after-quote order (Laundry only).
+
+        This is the other half of the Pay After flow: the customer requested a
+        pickup with no price, the laundry weighed and inspected the items, and
+        now sends the invoice. Adding the priced lines here freezes the total
+        and makes the order payable, so the customer's payment screen can charge
+        it through the normal path.
+
+        Body: ``{"items": [{"name": str, "quantity": int, "price": "0.00"}]}``.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.db import transaction
+        from ..models.base import OrderItem
+        from ..services.finance_service import FinanceService
+        from marketplace.services.notification_service import NotificationService
+        from marketplace.models import Notification
+
+        order = self.get_order()
+
+        # Owner-only, and only for a quote request that has not been priced yet.
+        if not (request.user.is_staff or order.laundry.owner_id == request.user.id):
+            return Response(
+                {"status": "error", "message": "Only the laundry can quote this order."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if order.pricing_mode != Order.PricingMode.CUSTOM_QUOTE:
+            return Response(
+                {"status": "error", "message": "This order is not a quote request."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if order.items.exists() or order.payment_status == Order.PaymentStatus.PAID:
+            return Response(
+                {"status": "error", "message": "This order has already been quoted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_items = request.data.get('items')
+        if not isinstance(raw_items, list) or not raw_items:
+            return Response(
+                {"status": "error", "message": "Provide at least one priced item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parsed = []
+        for index, line in enumerate(raw_items):
+            if not isinstance(line, dict):
+                return Response(
+                    {"status": "error", "message": f"Item {index} is malformed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            name = str(line.get('name') or '').strip() or 'Item'
+            try:
+                quantity = int(line.get('quantity', 1))
+                price = Decimal(str(line.get('price')))
+            except (TypeError, ValueError, InvalidOperation):
+                return Response(
+                    {"status": "error", "message": f"Item {index} has an invalid quantity or price."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if quantity < 1 or price < 0:
+                return Response(
+                    {"status": "error", "message": f"Item {index} has an invalid quantity or price."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            parsed.append((name, quantity, price))
+
+        with transaction.atomic():
+            for name, quantity, price in parsed:
+                OrderItem.objects.create(
+                    order=order, item=None, service_type=None,
+                    name=name, quantity=quantity, price=price,
+                )
+            # Freeze the invoice so later reads and settlement use these figures.
+            FinanceService.freeze_price_breakdown(order, coupon=order.coupon)
+
+        NotificationService.notify_user(
+            user=order.user,
+            title="Your invoice is ready",
+            body=f"Your laundry has been quoted GHS {order.total_amount} for order {order.order_no}. Tap to review and pay.",
+            type=Notification.Type.ORDER,
+            category="QUOTE_READY",
+            related_order=order,
+            dedup_key=f"quote_ready_{order.id}",
+        )
+
+        return Response({
+            "status": "success",
+            "message": "Quote sent to the customer.",
+            "data": OrderDetailSerializer(order).data,
+        })
 
     @decorators.action(detail=True, methods=['get'])
     def timeline(self, request, pk=None):

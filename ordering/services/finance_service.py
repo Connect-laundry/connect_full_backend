@@ -1,5 +1,5 @@
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
@@ -23,6 +23,46 @@ class FinanceService:
         See ``settings.DELIVERY_FEES_IN_APP``.
         """
         return bool(getattr(settings, 'DELIVERY_FEES_IN_APP', False))
+
+    @staticmethod
+    def compute_weight_price(weight_pricing, weight_kg):
+        """
+        Price a by-weight order from a laundry's tariff.
+
+        Applies the tariff's rounding, charges for at least the minimum order
+        weight, and never returns less than the minimum charge. The result is
+        the authoritative price: the client's estimate is only for display and
+        is never trusted here.
+
+        Raises ValueError when the inputs cannot yield a price, so the caller
+        rejects the order rather than creating a free one.
+        """
+        if weight_pricing is None:
+            raise ValueError('This laundry has no weight pricing configured.')
+
+        try:
+            weight = Decimal(str(weight_kg))
+        except (TypeError, ValueError, ArithmeticError):
+            raise ValueError('Estimated weight is not a valid number.')
+        if weight <= 0:
+            raise ValueError('Estimated weight must be greater than zero.')
+
+        min_weight = weight_pricing.minimum_order_weight_kg
+        if min_weight is not None and weight < Decimal(str(min_weight)):
+            # The order is charged as if it were the minimum weight.
+            weight = Decimal(str(min_weight))
+
+        strategy = getattr(weight_pricing, 'rounding_strategy', 'NONE')
+        if strategy == 'UP_0_5_KG':
+            weight = (weight / Decimal('0.5')).to_integral_value(rounding=ROUND_CEILING) * Decimal('0.5')
+        elif strategy == 'UP_1_KG':
+            weight = weight.to_integral_value(rounding=ROUND_CEILING)
+
+        rate = Decimal(str(weight_pricing.base_price_per_kg))
+        minimum_charge = Decimal(str(weight_pricing.minimum_charge or '0'))
+
+        total = (weight * rate).quantize(Decimal('0.01'))
+        return max(total, minimum_charge.quantize(Decimal('0.01')))
 
     @staticmethod
     def calculate_tax_amount(amount, tax_rate=None):
