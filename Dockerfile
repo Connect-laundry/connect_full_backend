@@ -55,4 +55,4 @@ CMD bash -c "\
     python manage.py migrate_safely || exit 1; \
   fi && \
   python manage.py collectstatic --noinput && \
-  gunicorn --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-2} --timeout 120 config.wsgi:application"
+  gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-2} --timeout 120 config.wsgi:application"

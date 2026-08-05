@@ -71,9 +71,12 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'pickup_date', 'delivery_date', 
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
-            'address', 
+            'address',
             'special_instructions', 'items', 'created_at',
-            'payment_reference'
+            'payment_reference',
+            # Lets the app and owner tell a quote request or a weight order
+            # apart from an itemised one on the tracking and receipt screens.
+            'pricing_mode', 'estimated_weight_kg',
         ]
 
     @extend_schema_field(OpenApiTypes.OBJECT)
@@ -83,9 +86,18 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         return FinanceService.calculate_price_breakdown(obj, coupon=obj.coupon)
 
 class OrderCreateSerializer(serializers.ModelSerializer):
-    items = OrderItemCreateSerializer(many=True, allow_empty=False)
+    # Empty is allowed at the field level because by-weight and quote orders
+    # carry no items. Whether items are required is decided per pricing mode in
+    # validate(), so an itemised order with no items is still rejected.
+    items = OrderItemCreateSerializer(many=True, required=False, allow_empty=True, default=list)
     laundry = serializers.PrimaryKeyRelatedField(queryset=Laundry.objects.all())
     coupon_code = serializers.CharField(required=False, write_only=True)
+    pricing_mode = serializers.ChoiceField(
+        choices=Order.PricingMode.choices, required=False, default=Order.PricingMode.BY_ITEM
+    )
+    estimated_weight_kg = serializers.DecimalField(
+        max_digits=6, decimal_places=2, required=False, allow_null=True
+    )
 
     # Accept GPS coords and payment_method from frontend
     pickup_lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
@@ -102,7 +114,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'pickup_address', 'pickup_lat', 'pickup_lng',
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'special_instructions', 'items', 'coupon_code',
-            'payment_method',
+            'payment_method', 'pricing_mode', 'estimated_weight_kg',
         ]
 
     def to_internal_value(self, data):
@@ -164,20 +176,49 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         data['pickup_address'] = pickup_address
         data['delivery_address'] = delivery_address
 
-        payment_method = str(data.get('payment_method') or 'CARD').strip().upper()
-        if payment_method in {'PAYSTACK', 'CARD'}:
-            payment_method = 'CARD'
-        elif payment_method in {'CASH', 'CASH_ON_DELIVERY'}:
-            payment_method = 'CASH'
-        elif payment_method in {'BANK_TRANSFER', 'TRANSFER'}:
-            payment_method = 'BANK_TRANSFER'
-        else:
-            raise serializers.ValidationError({
-                "payment_method": "Unsupported payment method. Use CARD, CASH, or BANK_TRANSFER."
-            })
-        data['payment_method'] = payment_method
-
+        pricing_mode = data.get('pricing_mode') or Order.PricingMode.BY_ITEM
         items = data.get('items') or []
+        weight = data.get('estimated_weight_kg')
+
+        # A pay-after-quote order has no upfront price, so it collects no
+        # payment method here; the customer pays the invoice later.
+        if pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
+            data['payment_method'] = None
+        else:
+            payment_method = str(data.get('payment_method') or 'CARD').strip().upper()
+            if payment_method in {'PAYSTACK', 'CARD'}:
+                payment_method = 'CARD'
+            elif payment_method in {'CASH', 'CASH_ON_DELIVERY'}:
+                payment_method = 'CASH'
+            elif payment_method in {'BANK_TRANSFER', 'TRANSFER'}:
+                payment_method = 'BANK_TRANSFER'
+            else:
+                raise serializers.ValidationError({
+                    "payment_method": "Unsupported payment method. Use CARD, CASH, or BANK_TRANSFER."
+                })
+            data['payment_method'] = payment_method
+
+        # Per-mode requirements. Each mode carries exactly what it needs and
+        # nothing it does not, so a stray weight on an itemised order or missing
+        # items on one is caught here rather than producing a malformed order.
+        if pricing_mode == Order.PricingMode.BY_ITEM:
+            if not items:
+                raise serializers.ValidationError({"items": "At least one item is required."})
+        elif pricing_mode == Order.PricingMode.BY_WEIGHT:
+            if weight is None or Decimal(str(weight)) <= 0:
+                raise serializers.ValidationError(
+                    {"estimated_weight_kg": "An estimated weight is required for a by-weight order."}
+                )
+            weight_pricing = getattr(laundry, 'weight_pricing', None) if laundry else None
+            if weight_pricing is None or not getattr(weight_pricing, 'is_active', False):
+                raise serializers.ValidationError(
+                    {"pricing_mode": "This laundry does not offer weight-based pricing."}
+                )
+        elif pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
+            # A quote request is just that: no items and no price yet.
+            data['items'] = []
+            items = []
+
         if laundry and items:
             from laundries.models.service import LaundryService
             from laundries.models.pricing import LaundryPricingItem
@@ -230,10 +271,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         with transaction.atomic():
-            items_data = validated_data.pop('items')
+            items_data = validated_data.pop('items', []) or []
             coupon_obj = validated_data.pop('coupon_obj', None)
             validated_data.pop('payment_method', None)
             validated_data.pop('coupon_code', None)
+            pricing_mode = validated_data.get('pricing_mode') or Order.PricingMode.BY_ITEM
             user = self.context['request'].user
 
             order = Order.objects.create(
@@ -242,6 +284,39 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 coupon=coupon_obj,
                 **validated_data
             )
+
+            # By weight: the price comes from the laundry's tariff, computed
+            # server-side so the client's estimate is never trusted. A single
+            # line item stands in for the weigh-in, so receipts and settlement
+            # have a row to work from just like an itemised order.
+            if pricing_mode == Order.PricingMode.BY_WEIGHT:
+                from ..services.finance_service import FinanceService
+                weight_pricing = getattr(order.laundry, 'weight_pricing', None)
+                try:
+                    price = FinanceService.compute_weight_price(
+                        weight_pricing, order.estimated_weight_kg
+                    )
+                except ValueError as exc:
+                    raise serializers.ValidationError({"estimated_weight_kg": str(exc)})
+
+                OrderItem.objects.create(
+                    order=order,
+                    item=None,
+                    service_type=None,
+                    name=f"Laundry by weight ({order.estimated_weight_kg} kg est.)",
+                    quantity=1,
+                    price=price,
+                )
+                price_breakdown = FinanceService.freeze_price_breakdown(order, coupon=coupon_obj)
+                return order
+
+            # Pay after quote: nothing is priced yet. The order is left as a
+            # pending request with no items and no frozen price; the laundry
+            # quotes it later and the customer pays that invoice in-app. It is
+            # deliberately not frozen, so the later quote is what the customer
+            # sees rather than a zero.
+            if pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
+                return order
 
             from laundries.models.service import LaundryService
             from laundries.models.pricing import LaundryPricingItem

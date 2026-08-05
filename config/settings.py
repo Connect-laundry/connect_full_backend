@@ -485,7 +485,9 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # Password Reset Settings
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Connect Laundry <odamephilip966@gmail.com>')
+# Customer-facing: this is the sender name on password resets and receipts, so
+# it carries the product brand rather than the internal project name.
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Simame <odamephilip966@gmail.com>')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000' if DEBUG else 'https://app.connectlaundry.com')
 
 # Laundry approval workflow notifications.
