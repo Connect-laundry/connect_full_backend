@@ -64,6 +64,14 @@ def reconcile_pending_payments(self):
                             order = locked_payment.order
                             order.payment_status = order.PaymentStatus.PAID
                             order.save(update_fields=['payment_status', 'updated_at'])
+
+                            from payments.webhooks import _paystack_fee
+                            from payments.services.settlement_service import SettlementService
+                            SettlementService.record_for_order(
+                                order,
+                                processor_fee=_paystack_fee(gateway_data),
+                                settled_directly=locked_payment.settled_directly,
+                            )
                             
                             # Transition status using OrderStateMachine to trigger signals/notifications
                             OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=None)

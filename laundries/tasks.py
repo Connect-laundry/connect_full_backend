@@ -275,7 +275,7 @@ def send_owner_status_email(self, laundry_id, new_status, reason=''):
         'APPROVED': (
             f"Your laundry is live! 🎉",
             f"Great news — '{laundry.name}' has been approved and is now visible to "
-            f"customers on Connect Laundry.",
+            f"customers on Simame.",
         ),
         'REJECTED': (
             f"Your laundry submission was not approved",
@@ -301,7 +301,7 @@ def send_owner_status_email(self, laundry_id, new_status, reason=''):
     get_email_provider().send(
         to=[owner_email],
         subject=subject,
-        text=f"Hello,\n\n{body}\n\n— The Connect Laundry Team",
+        text=f"Hello,\n\n{body}\n\n— The Simame Team",
     )
     logger.info(
         "Owner status email sent",

@@ -396,8 +396,8 @@ CLERK_DASHBOARD_USER_URL_TEMPLATE = os.getenv(
 )
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Connect Laundry API',
-    'DESCRIPTION': 'API documentation for Connect Laundry marketplace.',
+    'TITLE': 'Simame API',
+    'DESCRIPTION': 'API documentation for the Simame laundry marketplace.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_PATCH': True,
@@ -608,6 +608,9 @@ CELERY_RETRY_DELAY = int(os.getenv('CELERY_RETRY_DELAY', 10))
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_CALLBACK_URL = os.getenv('PAYSTACK_CALLBACK_URL')
+PAYSTACK_APP_CALLBACK_URL = os.getenv(
+    'PAYSTACK_APP_CALLBACK_URL', 'connect-laundry://orders/payment-callback'
+)
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
 # Required when "Enhanced Security for Push Notifications" is enabled on the
@@ -738,8 +741,8 @@ from django.utils.translation import gettext_lazy as _
 from django.templatetags.static import static as _static
 
 UNFOLD = {
-    "SITE_TITLE": "Connect Laundry Admin",
-    "SITE_HEADER": "Connect Laundry",
+    "SITE_TITLE": "Simame Admin",
+    "SITE_HEADER": "Simame",
     "SITE_URL": "/",
     "SITE_SYMBOL": "local_laundry_service",
     "DASHBOARD_CALLBACK": "config.admin_dashboard.dashboard_callback",

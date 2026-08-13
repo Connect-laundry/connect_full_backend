@@ -15,6 +15,17 @@ from config.celery import app as celery_app
 
 logger = logging.getLogger(__name__)
 
+def liveness_check(request):
+    """Process-only probe. Dependency failures must not cause restart loops."""
+    response = JsonResponse({'status': 'alive'})
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+def readiness_check(request):
+    """Traffic-serving probe; database availability is the hard dependency."""
+    return health_check(request)
+
 def health_check(request):
     """
     Production health check endpoint.

@@ -74,12 +74,12 @@ def email_period_report(period='daily'):
     lines = "".join(f"<tr><td style='padding:4px 12px;'>{k}</td>"
                     f"<td style='padding:4px 12px;font-weight:600;'>{v}</td></tr>"
                     for k, v in kpis)
-    html = (f"<h2>Connect Laundry — {label} Report ({today})</h2>"
+    html = (f"<h2>Simame — {label} Report ({today})</h2>"
             f"<p>Covering the last {days} day(s).</p>"
             f"<table style='border-collapse:collapse;'>{lines}</table>"
             f"<p style='color:#888;font-size:12px;'>Attached: PDF summary + orders CSV.</p>")
 
-    subject = f"Connect Laundry — {label} Analytics Report ({today})"
+    subject = f"Simame — {label} Analytics Report ({today})"
     email = EmailMessage(
         subject=subject, body=html,
         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None), to=recipients,
@@ -87,7 +87,7 @@ def email_period_report(period='daily'):
     email.content_subtype = 'html'
     try:
         email.attach(f'connect_{period}_{today}.pdf',
-                     build_summary_pdf(f"Connect Laundry — {label} Report ({today})", kpis),
+                     build_summary_pdf(f"Simame — {label} Report ({today})", kpis),
                      'application/pdf')
         email.attach(f'orders_{period}_{today}.csv', _orders_csv_bytes(days), 'text/csv')
     except Exception as exc:  # pragma: no cover - attachment best-effort

@@ -1,10 +1,17 @@
 import requests
-import os
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from config.redaction import mask_reference, summarize_exception
 
 logger = logging.getLogger(__name__)
+
+
+def to_minor_units(amount):
+    """Convert a major-unit money value to an integer without float rounding."""
+    value = Decimal(str(amount)) * Decimal('100')
+    return int(value.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
 
 class PaystackService:
     """
@@ -97,7 +104,7 @@ class PaystackService:
         """
         payload = {
             'source': 'balance',
-            'amount': int(round(float(amount) * 100)),
+            'amount': to_minor_units(amount),
             'recipient': recipient_code,
             'reference': reference,
             'currency': 'GHS',
@@ -165,8 +172,8 @@ class PaystackService:
         endpoint = f"{self.base_url}/transaction/initialize"
         payload = {
             'email': email,
-            'amount': int(float(amount) * 100),
-            'currency': 'GHS',
+            'amount': to_minor_units(amount),
+            'currency': settings.PAYMENT_CURRENCY,
             'reference': reference,
             'metadata': metadata or {}
         }
@@ -253,7 +260,7 @@ class PaystackService:
         endpoint = f"{self.base_url}/refund"
         payload = {'transaction': reference}
         if amount is not None:
-            payload['amount'] = int(float(amount) * 100)
+            payload['amount'] = to_minor_units(amount)
         if reason:
             payload['merchant_note'] = str(reason)[:200]
 

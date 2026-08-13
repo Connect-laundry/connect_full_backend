@@ -73,6 +73,9 @@ def _validate_webhook_payment(payment, payload):
     expected_minor = _to_minor_units(payment.amount)
     expected_currency = str(payment.currency or settings.PAYMENT_CURRENCY).upper()
 
+    if str(data.get('reference') or '') != payment.transaction_reference:
+        return False, 'reference_mismatch'
+
     if expected_minor is None or amount_minor != expected_minor:
         return False, 'amount_mismatch'
     if currency != expected_currency:
@@ -80,10 +83,17 @@ def _validate_webhook_payment(payment, payload):
 
     metadata_order_id = str(metadata.get('order_id') or '')
     metadata_user_id = str(metadata.get('user_id') or '')
-    if metadata_order_id and metadata_order_id != str(payment.order_id):
+    if metadata_order_id != str(payment.order_id):
         return False, 'order_mismatch'
-    if metadata_user_id and metadata_user_id != str(payment.user_id):
+    if metadata_user_id != str(payment.user_id):
         return False, 'user_mismatch'
+
+    provider_domain = str(data.get('domain') or '').lower()
+    secret_key = str(settings.PAYSTACK_SECRET_KEY or '')
+    if secret_key.startswith('sk_live_') and provider_domain != 'live':
+        return False, 'environment_mismatch'
+    if secret_key.startswith('sk_test_') and provider_domain != 'test':
+        return False, 'environment_mismatch'
 
     return True, None
 

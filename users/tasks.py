@@ -14,7 +14,7 @@ def send_password_reset_email(self, email, reset_link, reset_code):
     Sends a password reset email to the user.
     """
     try:
-        subject = "Reset Your Connect Laundry Password"
+        subject = "Reset Your Simame Password"
         from_email = settings.DEFAULT_FROM_EMAIL
         
         context = {
@@ -30,7 +30,7 @@ def send_password_reset_email(self, email, reset_link, reset_code):
         # Plain text content fallback
         text_content = (
             f"Hello,\n\n"
-            f"We received a request to reset your Connect Laundry password. "
+            f"We received a request to reset your Simame password. "
             f"Please open the secure reset page below:\n\n"
             f"{reset_link}\n\n"
             f"When prompted, enter this one-time reset code:\n\n"

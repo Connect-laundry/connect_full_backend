@@ -4,6 +4,7 @@ from rest_framework import viewsets, status, decorators, permissions
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 # pyre-ignore[missing-module]
 from ..models.base import Order, OrderStatusHistory
 # pyre-ignore[missing-module]
@@ -39,14 +40,46 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         reason = serializer.validated_data.get('reason')
         metadata = serializer.validated_data.get('metadata', {})
         
-        # Perform atomic transition via State Machine
-        updated_order, success = OrderStateMachine.transition(
-            order_id=order.id,
-            to_status=to_status,
-            user=request.user,
-            metadata=metadata,
-            reason=reason
-        )
+        from payments.models import Payment
+
+        with transaction.atomic():
+            payment = (
+                Payment.objects.select_for_update()
+                .filter(order_id=order.id)
+                .first()
+            )
+            order = Order.objects.select_for_update().get(id=order.id)
+
+            if payment and payment.payment_method != Payment.Method.CASH:
+                if to_status == Order.Status.CONFIRMED and payment.status != Payment.Status.SUCCESS:
+                    return Response({
+                        "status": "error",
+                        "message": "Payment must be confirmed before this order can be accepted.",
+                    }, status=status.HTTP_409_CONFLICT)
+
+                unsettled_or_paid = {
+                    Payment.Status.PENDING,
+                    Payment.Status.SUCCESS,
+                    Payment.Status.REFUND_PENDING,
+                }
+                if (
+                    to_status in {Order.Status.CANCELLED, Order.Status.REJECTED}
+                    and payment.status in unsettled_or_paid
+                ):
+                    return Response({
+                        "status": "error",
+                        "message": "Complete payment verification or refund before cancelling this order.",
+                    }, status=status.HTTP_409_CONFLICT)
+
+            # The state machine reuses the surrounding transaction and locks
+            # the order before validating the transition.
+            updated_order, success = OrderStateMachine.transition(
+                order_id=order.id,
+                to_status=to_status,
+                user=request.user,
+                metadata=metadata,
+                reason=reason
+            )
         
         if not success:
             return Response({

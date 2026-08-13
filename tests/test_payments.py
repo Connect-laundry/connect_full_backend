@@ -17,7 +17,7 @@ from laundries.models.category import Category
 from laundries.models.laundry import Laundry
 from laundries.models.service import LaundryService
 from ordering.models import LaunderableItem, Order, OrderItem
-from payments.models import Payment, WebhookEvent
+from payments.models import OrderSettlement, Payment, WebhookEvent
 from users.models import User
 
 
@@ -149,6 +149,23 @@ class TestPaymentFlow:
         assert response.status_code == status.HTTP_200_OK
         assert Payment.objects.filter(order=order, currency='GHS').exists()
 
+    @override_settings(PAYSTACK_APP_CALLBACK_URL='connect-laundry://orders/payment-callback')
+    def test_https_callback_bridges_to_fixed_mobile_scheme(self):
+        response = APIClient().get(
+            reverse('payment_callback'),
+            {'reference': 'ORD-CALLBACK-123'},
+        )
+
+        assert response.status_code == status.HTTP_302_FOUND
+        assert response['Location'].startswith(
+            'connect-laundry://orders/payment-callback?'
+        )
+        assert 'reference=ORD-CALLBACK-123' in response['Location']
+
+    def test_https_callback_rejects_missing_reference(self):
+        response = APIClient().get(reverse('payment_callback'))
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
     @patch('payments.services.paystack.PaystackService.verify_transaction')
     def test_payment_verification_updates_payment_and_order(self, mock_verify):
         customer, order = _build_order()
@@ -184,8 +201,60 @@ class TestPaymentFlow:
         order.refresh_from_db()
         assert payment.status == Payment.Status.SUCCESS
         assert order.status == Order.Status.CONFIRMED
+        assert OrderSettlement.objects.filter(order=order).count() == 1
         assert order.payment_status == Order.PaymentStatus.PAID
 
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_payment_verification_rejects_missing_metadata(self, mock_verify):
+        customer, order, payment = _build_pending_payment('ORD-VERIFY-NO-METADATA')
+        mock_verify.return_value = {
+            'status': True,
+            'data': {
+                'status': 'success',
+                'reference': payment.transaction_reference,
+                'amount': 2500,
+                'currency': 'GHS',
+                'metadata': {},
+            },
+        }
+
+        response = _auth_client(customer).get(
+            reverse('payment_verify', kwargs={'reference': payment.transaction_reference})
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == Payment.Status.FAILED
+        assert order.payment_status == Order.PaymentStatus.UNPAID
+        assert not OrderSettlement.objects.filter(order=order).exists()
+
+    @override_settings(PAYSTACK_SECRET_KEY='sk_live_example')
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_live_backend_rejects_test_transaction_domain(self, mock_verify):
+        customer, order, payment = _build_pending_payment('ORD-VERIFY-WRONG-DOMAIN')
+        mock_verify.return_value = {
+            'status': True,
+            'data': {
+                'domain': 'test',
+                'status': 'success',
+                'reference': payment.transaction_reference,
+                'amount': 2500,
+                'currency': 'GHS',
+                'metadata': {
+                    'order_id': str(order.id),
+                    'user_id': str(customer.id),
+                },
+            },
+        }
+
+        response = _auth_client(customer).get(
+            reverse('payment_verify', kwargs={'reference': payment.transaction_reference})
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.FAILED
     @patch('payments.services.paystack.PaystackService.verify_transaction')
     def test_payment_verification_rejects_amount_mismatch(self, mock_verify):
         customer, order = _build_order()
@@ -278,6 +347,7 @@ class TestPaystackWebhookAbuse:
         assert payment.status == Payment.Status.SUCCESS
         assert order.payment_status == Order.PaymentStatus.PAID
         assert order.status == Order.Status.CONFIRMED
+        assert OrderSettlement.objects.filter(order=order).count() == 1
 
     def test_webhook_rejects_duplicate_replay_after_success_without_double_mutation(self):
         _, order, payment = _build_pending_payment('ORD-WEBHOOK-REPLAY')
@@ -446,6 +516,25 @@ class TestHardenPaymentAudit:
         assert ref_1 == ref_2
         assert Payment.objects.filter(order=order).count() == 1
 
+    @patch('payments.services.paystack.PaystackService.initialize_transaction')
+    def test_old_pending_payment_is_reused_without_new_provider_charge(self, mock_init):
+        customer, order, payment = _build_pending_payment('ORD-PENDING-REUSE')
+        payment.paystack_reference = 'OLD-ACCESS-CODE'
+        payment.save(update_fields=['paystack_reference'])
+        Payment.objects.filter(id=payment.id).update(
+            created_at=timezone.now() - timezone.timedelta(hours=3)
+        )
+
+        response = _auth_client(customer).post(
+            reverse('payment_initialize'),
+            {'order_id': str(order.id), 'payment_method': 'CARD'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()['data']['reference'] == payment.transaction_reference
+        assert response.json()['data']['authorization_url'].endswith('OLD-ACCESS-CODE')
+        mock_init.assert_not_called()
     def test_payment_state_machine_validation(self):
         customer, order = _build_order()
         payment = Payment.objects.create(
@@ -494,6 +583,7 @@ class TestHardenPaymentAudit:
         assert payment.status == Payment.Status.SUCCESS
         assert order.payment_status == Order.PaymentStatus.PAID
         assert order.status == Order.Status.CONFIRMED
+        assert OrderSettlement.objects.filter(order=order).count() == 1
 
     def test_get_receipt_unauthorized_returns_404(self):
         customer, order, payment = _build_pending_payment('ORD-RECEIPT-AUTH')

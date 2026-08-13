@@ -1,20 +1,21 @@
 databases:
   - name: connectlaundry-db
-    plan: free
+    plan: basic-256mb
     databaseName: connectlaundry_db
     user: connect_admin
 
 services:
   - type: redis
     name: connectlaundry-redis
-    plan: free
+    plan: starter
     ipAllowList: [] # Only allow internal connections
 
   - type: web
     name: connect-laundry-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: starter
+    healthCheckPath: /readiness/
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -68,6 +69,8 @@ services:
         value: GHS
       - key: EXPO_PUSH_ENABLED
         value: "True"
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
       - key: WEATHER_PROMO_ENABLED
         value: "True"
       - key: WEATHER_PROMO_PROVIDER
@@ -100,7 +103,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     command: celery -A config worker --loglevel=info
-    plan: free
+    plan: starter
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -139,6 +142,8 @@ services:
         value: GHS
       - key: EXPO_PUSH_ENABLED
         value: "True"
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: CLERK_APPLICATION_ID
@@ -161,7 +166,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     command: celery -A config beat --loglevel=info
-    plan: free
+    plan: starter
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -200,6 +205,8 @@ services:
         value: GHS
       - key: EXPO_PUSH_ENABLED
         value: "True"
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
       - key: WEATHER_PROMO_ENABLED
         value: "True"
       - key: WEATHER_PROMO_PROVIDER

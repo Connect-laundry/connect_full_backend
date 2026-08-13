@@ -7,11 +7,13 @@ from .views import (
     PaymentAnalyticsView,
     PaymentOwnerStatsView,
     PaymentRefundView,
+    payment_callback,
 )
 from .webhooks import paystack_webhook
 
 urlpatterns = [
     path('initialize/', PaymentInitializeView.as_view(), name='payment_initialize'),
+    path('callback/', payment_callback, name='payment_callback'),
     path('verify/<str:reference>/', PaymentVerifyView.as_view(), name='payment_verify'),
     path('status/<str:reference>/', PaymentStatusView.as_view(), name='payment_status'),
     path('receipt/<str:reference>/', PaymentReceiptView.as_view(), name='payment_receipt'),

@@ -30,7 +30,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--email', help='Send to every active device of this user.')
         parser.add_argument('--token', help='Send to one Expo push token directly.')
-        parser.add_argument('--title', default='Connect Laundry')
+        parser.add_argument('--title', default='Simame')
         parser.add_argument('--body', default='Test push — if you can see this, push is working.')
         parser.add_argument(
             '--wait', type=int, default=10,

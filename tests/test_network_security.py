@@ -26,6 +26,17 @@ class TestNetworkSecurity:
             assert set(response.json().keys()) == {'status'}
             assert 'components' not in response.json()
 
+    def test_liveness_and_readiness_have_distinct_public_semantics(self):
+        with override_settings(ROOT_URLCONF='config.urls'):
+            client = APIClient()
+            live = client.get('/live/')
+            ready = client.get('/readiness/')
+
+            assert live.status_code == status.HTTP_200_OK
+            assert live.json() == {'status': 'alive'}
+            assert live['Cache-Control'] == 'no-store'
+            assert ready.status_code in {status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE}
+            assert set(ready.json().keys()) == {'status'}
     def test_internal_health_endpoint_can_return_component_state(self):
         with mock.patch.dict(os.environ, {'INTERNAL_HEALTH_TOKEN': 'health-secret'}, clear=False):
             with override_settings(ROOT_URLCONF='config.urls'):

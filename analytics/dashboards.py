@@ -9,7 +9,7 @@ import csv
 from datetime import timedelta
 
 # pyre-ignore[missing-module]
-from rest_framework import viewsets, permissions, decorators
+from rest_framework import viewsets, permissions, decorators, serializers
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
@@ -24,9 +24,15 @@ from . import metrics
 from .exports import build_rows_export
 
 
+class DashboardResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    data = serializers.JSONField()
+
+
 class DashboardViewSet(viewsets.GenericViewSet):
     """Admin-only analytics dashboards. All actions accept ?days=N (default 30)."""
     queryset = AnalyticsEvent.objects.none()
+    serializer_class = DashboardResponseSerializer
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def _days(self, request):

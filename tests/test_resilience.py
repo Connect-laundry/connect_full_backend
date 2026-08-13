@@ -226,7 +226,7 @@ def test_payment_verify_handles_malformed_payload(auth_client):
         return_value={'status': True},  # no 'data' key at all
     ):
         response = auth_client.get('/api/v1/payments/verify/REF-DOES-NOT-EXIST/')
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 # --------------------------------------------------- missing-relation hardening

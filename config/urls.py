@@ -23,7 +23,7 @@ from django.views.generic import RedirectView, TemplateView
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
-from config.views.health import health_check
+from config.views.health import health_check, liveness_check, readiness_check
 # pyre-ignore[missing-module]
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from marketplace.views.legal import PublicLegalHtmlView
@@ -45,6 +45,8 @@ root_target = '/api/docs/' if settings.DEBUG else '/health/'
 urlpatterns = [
     path('', RedirectView.as_view(url=root_target, permanent=False), name='root'),
     path('health/', health_check, name='health_check'),
+    path('live/', liveness_check, name='liveness_check'),
+    path('readiness/', readiness_check, name='readiness_check'),
     path('dashboard/', RedirectView.as_view(url='/admin/', permanent=False), name='dashboard_redirect'),
     path('manifest.webmanifest', TemplateView.as_view(
         template_name='pwa/manifest.html',

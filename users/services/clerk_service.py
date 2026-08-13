@@ -10,13 +10,20 @@ from django.conf import settings # type: ignore
 from django.db import transaction # type: ignore
 from django.utils.dateparse import parse_datetime # type: ignore
 from django.utils import timezone # type: ignore
-from rest_framework.exceptions import AuthenticationFailed, ValidationError # type: ignore
+from rest_framework.exceptions import APIException, AuthenticationFailed, ValidationError # type: ignore
 
 from marketplace.models import AuditLog
 from marketplace.services.audit import record_audit
 from users.models import User
 
 logger = logging.getLogger(__name__)
+
+
+class ClerkDeletionUnavailable(APIException):
+    status_code = 503
+    default_detail = 'Account deletion is temporarily unavailable. Please try again.'
+    default_code = 'clerk_deletion_unavailable'
+
 
 ALLOWED_SOCIAL_ROLES = {User.Role.CUSTOMER, User.Role.OWNER}
 ALLOWED_SOCIAL_PROVIDERS = {'oauth_google', 'oauth_facebook', 'google', 'facebook'}
@@ -277,6 +284,31 @@ def fetch_clerk_profile_by_user_id(clerk_user_id: str) -> ClerkProfile:
         raise ValidationError({'clerk': ['Unable to fetch Clerk user profile.']}) from exc
 
 
+def delete_clerk_user(clerk_user_id: str) -> None:
+    """Delete a Clerk identity before completing local account anonymization."""
+    secret_key = getattr(settings, 'CLERK_SECRET_KEY', '')
+    if not secret_key:
+        logger.error('Clerk account deletion requested without CLERK_SECRET_KEY')
+        raise ClerkDeletionUnavailable()
+
+    api_base_url = getattr(settings, 'CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
+    timeout = getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5)
+    try:
+        response = requests.delete(
+            f'{api_base_url}/v1/users/{clerk_user_id}',
+            headers={'Authorization': f'Bearer {secret_key}'},
+            timeout=timeout,
+        )
+        if response.status_code == 404:
+            return
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning(
+            'Clerk account deletion failed',
+            extra={'error_type': type(exc).__name__},
+        )
+        raise ClerkDeletionUnavailable() from exc
+
 def normalize_provider(provider: str) -> str:
     provider = (provider or '').strip().lower()
     aliases = {
@@ -380,31 +412,13 @@ def sync_user_from_clerk(
 
 
 def deactivate_user_from_clerk(clerk_user_id: str, *, request=None, reason: str = 'clerk_user_deleted') -> User | None:
-    with transaction.atomic():
-        user = User.objects.select_for_update().filter(clerk_user_id=clerk_user_id).first()
-        if user is None:
-            return None
-        now = timezone.now()
-        changed = ['is_active', 'clerk_status', 'last_clerk_sync', 'deactivated_at', 'deactivation_reason']
-        user.is_active = False
-        user.clerk_status = 'deleted'
-        user.last_clerk_sync = now
-        if user.deactivated_at is None:
-            user.deactivated_at = now
-        user.deactivation_reason = reason
-        user.save(update_fields=changed)
+    user = User.objects.filter(clerk_user_id=clerk_user_id).first()
+    if user is None:
+        return None
 
-    record_audit(
-        action=AuditLog.Action.SECURITY_EVENT,
-        actor=user,
-        request=request,
-        target_type='User',
-        target_id=user.id, # type: ignore
-        target_repr=user.email,
-        metadata={'event': 'clerk_user_deleted', 'clerk_user_id': clerk_user_id},
-    )
-    return user
+    from users.services.account_deletion import anonymize_local_account
 
+    return anonymize_local_account(user, reason=reason, request=request).user
 
 def authenticate_clerk_token(token: str, *, requested_role: str | None = None, request=None):
     payload = ClerkTokenVerifier().verify(token)

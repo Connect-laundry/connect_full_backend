@@ -1,11 +1,13 @@
 import uuid
 import logging
 from decimal import Decimal
+from urllib.parse import urlencode
 from django.db import transaction
 from django.db.models import Avg, Sum, Count
 from django.utils import timezone
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponseBadRequest, HttpResponseRedirect
 from rest_framework import serializers, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -152,6 +154,9 @@ def _validate_verified_payment(payment, payload):
     expected_minor = _to_minor_units(payment.amount)
     expected_currency = str(payment.currency or settings.PAYMENT_CURRENCY).upper()
 
+    if str(data.get('reference') or '') != payment.transaction_reference:
+        return False, 'Payment reference verification failed.'
+
     if expected_minor is None or amount_minor != expected_minor:
         return False, 'Payment amount verification failed.'
 
@@ -160,10 +165,17 @@ def _validate_verified_payment(payment, payload):
 
     metadata_order_id = str(metadata.get('order_id') or '')
     metadata_user_id = str(metadata.get('user_id') or '')
-    if metadata_order_id and metadata_order_id != str(payment.order_id):
+    if metadata_order_id != str(payment.order_id):
         return False, 'Payment order verification failed.'
-    if metadata_user_id and metadata_user_id != str(payment.user_id):
+    if metadata_user_id != str(payment.user_id):
         return False, 'Payment user verification failed.'
+
+    provider_domain = str(data.get('domain') or '').lower()
+    secret_key = str(settings.PAYSTACK_SECRET_KEY or '')
+    if secret_key.startswith('sk_live_') and provider_domain != 'live':
+        return False, 'Payment environment verification failed.'
+    if secret_key.startswith('sk_test_') and provider_domain != 'test':
+        return False, 'Payment environment verification failed.'
 
     return True, None
 
@@ -191,12 +203,15 @@ class PaymentInitializeView(APIView):
         request=PaymentInitializeRequestSerializer,
         responses=PaymentInitializeResponseSerializer,
     )
+    @transaction.atomic
     def post(self, request):
         order_id = request.data.get('order_id')
         payment_method = _normalize_payment_method(request.data.get('payment_method', 'CARD'))
         
         # 1. Validate order existence and ownership
-        order = get_object_or_404(Order, id=order_id, user=request.user)
+        order = get_object_or_404(
+            Order.objects.select_for_update(), id=order_id, user=request.user
+        )
         
         # 2. Reject if status is not PENDING
         if order.status != Order.Status.PENDING:
@@ -222,32 +237,33 @@ class PaymentInitializeView(APIView):
         ).first()
         
         if existing_payment and existing_payment.paystack_reference:
-            # Only reuse if created in last 1 hour
-            if existing_payment.created_at >= timezone.now() - timezone.timedelta(hours=1):
-                authorization_url = f"https://checkout.paystack.com/{existing_payment.paystack_reference}"
-                
-                record_audit(
-                    action="PAYMENT_INITIALIZED_REUSED",
-                    actor=request.user,
-                    request=request,
-                    target_type="Payment",
-                    target_id=str(existing_payment.id),
-                    target_repr=f"Payment {existing_payment.transaction_reference} Reused",
-                    metadata={
-                        "amount": str(order.total_amount),
-                        "method": payment_method,
-                        "reference": existing_payment.transaction_reference
-                    }
-                )
-                
-                return Response({
-                    "status": "success",
-                    "message": "Existing payment session resumed successfully",
-                    "data": {
-                        "authorization_url": authorization_url,
-                        "reference": existing_payment.transaction_reference
-                    }
-                }, status=status.HTTP_200_OK)
+            # Never replace a still-pending provider reference. A second charge
+            # could later succeed after this row was overwritten, leaving real
+            # money with no payment record to reconcile.
+            authorization_url = f"https://checkout.paystack.com/{existing_payment.paystack_reference}"
+
+            record_audit(
+                action="PAYMENT_INITIALIZED_REUSED",
+                actor=request.user,
+                request=request,
+                target_type="Payment",
+                target_id=str(existing_payment.id),
+                target_repr=f"Payment {existing_payment.transaction_reference} Reused",
+                metadata={
+                    "amount": str(order.total_amount),
+                    "method": payment_method,
+                    "reference": existing_payment.transaction_reference
+                }
+            )
+
+            return Response({
+                "status": "success",
+                "message": "Existing payment session resumed successfully",
+                "data": {
+                    "authorization_url": authorization_url,
+                    "reference": existing_payment.transaction_reference
+                }
+            }, status=status.HTTP_200_OK)
 
         # 5. Generate unique reference
         reference = f"ORD-{uuid.uuid4().hex[:10].upper()}"
@@ -349,6 +365,25 @@ class PaymentInitializeView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
+class MobileAppRedirect(HttpResponseRedirect):
+    allowed_schemes = ['connect-laundry']
+
+
+def payment_callback(request):
+    """Bridge Paystack's HTTPS callback back into the installed mobile app."""
+    reference = request.GET.get('reference') or request.GET.get('trxref')
+    if not reference:
+        return HttpResponseBadRequest('Payment reference is required.')
+
+    app_callback = str(settings.PAYSTACK_APP_CALLBACK_URL or '')
+    if not app_callback.startswith('connect-laundry://'):
+        logger.error('PAYSTACK_APP_CALLBACK_URL is not a permitted Simame app URL.')
+        return HttpResponseBadRequest('Payment callback is unavailable.')
+
+    separator = '&' if '?' in app_callback else '?'
+    location = f"{app_callback}{separator}{urlencode({'reference': reference, 'trxref': reference})}"
+    return MobileAppRedirect(location)
+
 class PaymentVerifyView(APIView):
     """
     GET /api/v1/payments/verify/{reference}/
@@ -358,6 +393,9 @@ class PaymentVerifyView(APIView):
 
     @extend_schema(request=None, responses=PaymentVerifyResponseSerializer)
     def get(self, request, reference):
+        owned_payment = get_object_or_404(
+            Payment, transaction_reference=reference, user=request.user
+        )
         paystack = PaystackService()
         verify_data = paystack.verify_transaction(reference)
 
@@ -365,7 +403,7 @@ class PaymentVerifyView(APIView):
         if verify_data.get('status') and verify_payload.get('status') == 'success':
             # Use select_for_update() and transaction.atomic()
             with transaction.atomic():
-                payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
+                payment = Payment.objects.select_for_update().filter(pk=owned_payment.pk).first()
 
                 if not payment:
                     return Response({
@@ -433,6 +471,14 @@ class PaymentVerifyView(APIView):
                     order = payment.order
                     order.payment_status = Order.PaymentStatus.PAID
                     order.save(update_fields=['payment_status', 'updated_at'])
+
+                    from .webhooks import _paystack_fee
+                    from .services.settlement_service import SettlementService
+                    SettlementService.record_for_order(
+                        order,
+                        processor_fee=_paystack_fee(verify_data.get('data', {})),
+                        settled_directly=payment.settled_directly,
+                    )
                     
                     # Transition order using OrderStateMachine to trigger signal pipeline
                     OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=request.user)
@@ -481,6 +527,7 @@ class PaymentStatusView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(request=None, responses=PaymentVerifyResponseSerializer)
     def get(self, request, reference):
         payment = get_object_or_404(Payment, transaction_reference=reference, user=request.user)
         return Response({

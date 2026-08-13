@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from rest_framework import viewsets, permissions, status
+from rest_framework import mixins, viewsets, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
@@ -289,7 +289,7 @@ class BookingViewSet(viewsets.GenericViewSet):
             return Response(response_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
     """Viewset for managing and tracking orders."""
     queryset = Order.objects.none()
     permission_classes = [permissions.IsAuthenticated]

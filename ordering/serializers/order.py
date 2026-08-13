@@ -61,6 +61,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
     price_breakdown = serializers.SerializerMethodField()
     payment_reference = serializers.CharField(source='payment.transaction_reference', read_only=True, default='')
+    provider_payment_status = serializers.CharField(source='payment.status', read_only=True, default='')
+    payment_method = serializers.CharField(source='payment.payment_method', read_only=True, default='')
     
     class Meta:
         model = Order
@@ -73,7 +75,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'address',
             'special_instructions', 'items', 'created_at',
-            'payment_reference',
+            'payment_reference', 'provider_payment_status', 'payment_method',
             # Lets the app and owner tell a quote request or a weight order
             # apart from an itemised one on the tracking and receipt screens.
             'pricing_mode', 'estimated_weight_kg',

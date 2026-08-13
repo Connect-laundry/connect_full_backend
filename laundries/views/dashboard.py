@@ -22,7 +22,7 @@ from ..serializers.dashboard import (
     ServiceStatusUpdateSerializer
 )
 # pyre-ignore[missing-module]
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 
 class IsLaundryOwner(permissions.BasePermission):
     """
@@ -196,6 +196,7 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
     """
     permission_classes = [IsLaundryOwner]
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT)
     def get(self, request):
         laundry = self.get_laundry(request)
         if not laundry:

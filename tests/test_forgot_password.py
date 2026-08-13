@@ -37,7 +37,7 @@ class TestForgotPassword:
         assert PasswordResetToken.objects.filter(user=user).exists()
         assert len(mail.outbox) == 1
         assert mail.outbox[0].to == ["test@example.com"]
-        assert "Reset Your Connect Laundry Password" in mail.outbox[0].subject
+        assert "Reset Your Simame Password" in mail.outbox[0].subject
 
     def test_forgot_password_unknown_email_no_leak(self, client):
         """Unknown email still returns 200 — enumeration protection."""

@@ -9,27 +9,27 @@ from marketplace.utils.legal_content import extract_docx_markdown
 
 DEFAULT_DOCS = {
     'CONNECTLAUNDRY PRIVACY POLICY.docx': {
-        'title': 'Connect Laundry Privacy Policy',
+        'title': 'Simame Privacy Policy',
         'slug': 'privacy-policy',
         'document_type': 'PRIVACY_POLICY',
     },
     'CONNECTLAUNDRY TERMS OF SERVICE.docx': {
-        'title': 'Connect Laundry Terms of Service',
+        'title': 'Simame Terms of Service',
         'slug': 'terms-of-service',
         'document_type': 'TERMS_OF_SERVICE',
     },
     'CONNECTLAUNDRY NDA.docx': {
-        'title': 'Connect Laundry NDA',
+        'title': 'Simame NDA',
         'slug': 'nda',
         'document_type': 'NDA',
     },
     'CONNECTLAUNDRY FOUNDERS AGREEMENT.docx': {
-        'title': 'Connect Laundry Founders Agreement',
+        'title': 'Simame Founders Agreement',
         'slug': 'founders-agreement',
         'document_type': 'FOUNDERS_AGREEMENT',
     },
     'CONNECTLAUNDRY VENDOR PARTNER AGREEMENT.docx': {
-        'title': 'Connect Laundry Vendor Partner Agreement',
+        'title': 'Simame Vendor Partner Agreement',
         'slug': 'vendor-partner-agreement',
         'document_type': 'VENDOR_PARTNER_AGREEMENT',
     },
@@ -37,7 +37,7 @@ DEFAULT_DOCS = {
 
 
 class Command(BaseCommand):
-    help = 'Import Connect Laundry legal DOCX files into the versioned Legal CMS.'
+    help = 'Import Simame legal DOCX files into the versioned Legal CMS.'
 
     def add_arguments(self, parser):
         parser.add_argument(

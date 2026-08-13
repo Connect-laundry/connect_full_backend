@@ -110,4 +110,6 @@ class TestOrderListQueryCount:
         # These are exactly the fields that caused the extra queries.
         assert rows[0]['laundryName'] == 'Query Count Laundry'
         assert rows[0]['payment_reference'].startswith('ORD-QC')
+        assert rows[0]['provider_payment_status'] == 'PENDING'
+        assert rows[0]['payment_method'] == 'CARD'
         assert rows[0]['price_breakdown']['currency'] == 'GHS'

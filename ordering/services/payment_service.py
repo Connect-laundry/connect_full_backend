@@ -97,6 +97,7 @@ class PaymentService:
                     'payment_method': normalized_method,
                     'transaction_reference': reference,
                     'status': 'PENDING',
+                    'paystack_reference': data.get('access_code'),
                     # Recorded now, not at webhook time: the laundry's routing
                     # could change between charge and confirmation, and this
                     # transaction's fate was decided here.
@@ -114,7 +115,7 @@ class PaymentService:
                 "access_code": data.get('access_code')
             }
         
-        logger.error(f"Paystack init failed for Order {order.id}: {response}")
+        logger.error("Paystack initialization failed", extra={"order_id": str(order.id)})
         return {
             "transaction_id": reference,
             "amount": str(amount),

@@ -44,7 +44,7 @@ def trigger_order_notifications(sender, order, from_status, to_status, **kwargs)
         'IN_PROCESS': ("Washing Started", "Your laundry is now being processed."),
         'OUT_FOR_DELIVERY': ("Out for Delivery", "Your laundry is on its way back to you!"),
         'DELIVERED': ("Order Delivered", "Your laundry has been delivered successfully."),
-        'COMPLETED': ("Order Complete", "Your order is complete. Thanks for choosing Connect Laundry!"),
+        'COMPLETED': ("Order Complete", "Your order is complete. Thanks for choosing Simame!"),
         'CANCELLED': ("Order Cancelled", f"Your order has been cancelled. Reason: {order.cancellation_reason or 'No reason provided'}."),
         'REJECTED': ("Order Rejected", f"The laundry has rejected your order. Reason: {order.rejection_reason or 'No reason provided'}."),
     }

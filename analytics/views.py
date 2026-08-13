@@ -7,6 +7,7 @@ from rest_framework import status, permissions
 from rest_framework.views import APIView
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 # pyre-ignore[missing-module]
 from django.db.models import Count
 # pyre-ignore[missing-module]
@@ -31,6 +32,7 @@ class AnalyticsIngestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AnalyticsIngestThrottle]
 
+    @extend_schema(request=AnalyticsBatchSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request):
         serializer = AnalyticsBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -68,6 +70,7 @@ class AnalyticsSummaryView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT)
     def get(self, request):
         try:
             days = min(int(request.query_params.get('days', 30)), 365)

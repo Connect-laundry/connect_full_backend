@@ -136,7 +136,7 @@ class PayoutService:
             amount=claimed.amount,
             recipient_code=recipient,
             reference=reference,
-            reason=f"Connect Laundry payout {reference}",
+            reason=f"Simame payout {reference}",
         )
 
         if response.get('status'):

@@ -108,15 +108,10 @@ class TestPaymentVerifyOwnership:
             status=Payment.Status.PENDING,
         )
 
-        # Pretend Paystack reports success so we reach the ownership gate.
-        monkeypatch.setattr(
-            PaystackService,
-            'verify_transaction',
-            lambda self, reference: {
-                'status': True,
-                'data': {'status': 'success', 'amount': int(payment.amount * 100), 'currency': 'GHS'},
-            },
-        )
+        def should_not_call_paystack(self, reference):
+            raise AssertionError('Foreign references must be rejected before provider lookup.')
+
+        monkeypatch.setattr(PaystackService, 'verify_transaction', should_not_call_paystack)
 
         attacker = User.objects.create_user(
             email='attacker@example.com', phone='233000000999', password='StrongPass123!'
