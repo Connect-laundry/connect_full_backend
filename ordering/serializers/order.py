@@ -60,9 +60,12 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     laundryName = serializers.CharField(source='laundry.name', read_only=True)
     price_breakdown = serializers.SerializerMethodField()
-    payment_reference = serializers.CharField(source='payment.transaction_reference', read_only=True, default='')
-    provider_payment_status = serializers.CharField(source='payment.status', read_only=True, default='')
-    payment_method = serializers.CharField(source='payment.payment_method', read_only=True, default='')
+    payment_reference = serializers.SerializerMethodField()
+    provider_payment_status = serializers.SerializerMethodField()
+    payment_state = serializers.SerializerMethodField()
+    amount_due = serializers.SerializerMethodField()
+    amount_collected = serializers.SerializerMethodField()
+    cash_collected_at = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -76,10 +79,65 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'address',
             'special_instructions', 'items', 'created_at',
             'payment_reference', 'provider_payment_status', 'payment_method',
+            'payment_state', 'amount_due', 'amount_collected', 'cash_collected_at',
             # Lets the app and owner tell a quote request or a weight order
             # apart from an itemised one on the tracking and receipt screens.
             'pricing_mode', 'estimated_weight_kg',
         ]
+
+    @staticmethod
+    def _payment(obj):
+        try:
+            return obj.payment
+        except Exception:
+            return None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_payment_reference(self, obj):
+        if obj.payment_method == Order.PaymentMethod.CASH:
+            return None
+        payment = self._payment(obj)
+        return payment.transaction_reference if payment else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_provider_payment_status(self, obj):
+        if obj.payment_method == Order.PaymentMethod.CASH:
+            return None
+        payment = self._payment(obj)
+        return payment.status if payment else None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_payment_state(self, obj):
+        if obj.pricing_mode == Order.PricingMode.CUSTOM_QUOTE and obj.priced_at is None:
+            return 'AWAITING_QUOTE'
+        if obj.payment_method == Order.PaymentMethod.CASH:
+            return 'CASH_COLLECTED' if obj.payment_status == Order.PaymentStatus.PAID else 'CASH_DUE'
+        if obj.payment_status == Order.PaymentStatus.PAID:
+            return 'PAID'
+        payment = self._payment(obj)
+        return f'ONLINE_{payment.status}' if payment else 'ONLINE_REQUIRED'
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_amount_due(self, obj):
+        return str(Decimal('0.00') if obj.payment_status == Order.PaymentStatus.PAID else obj.total_amount)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_amount_collected(self, obj):
+        payment = self._payment(obj)
+        if (
+            payment
+            and obj.payment_method == Order.PaymentMethod.CASH
+            and obj.payment_status == Order.PaymentStatus.PAID
+        ):
+            return str(payment.amount_collected)
+        return '0.00'
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_cash_collected_at(self, obj):
+        payment = self._payment(obj)
+        if payment and obj.payment_method == Order.PaymentMethod.CASH:
+            return payment.paid_at
+        return None
 
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_price_breakdown(self, obj):
@@ -106,8 +164,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     pickup_lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
     delivery_lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
     delivery_lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
-    # payment_method accepted for future use but not saved on Order
-    payment_method = serializers.CharField(required=False, write_only=True)
+    payment_method = serializers.ChoiceField(
+        choices=['CARD', 'PAYSTACK', 'CASH', 'CASH_ON_DELIVERY', 'BANK_TRANSFER', 'TRANSFER'],
+        required=False,
+        default=Order.PaymentMethod.CARD,
+    )
 
     class Meta:
         model = Order
@@ -182,23 +243,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items = data.get('items') or []
         weight = data.get('estimated_weight_kg')
 
-        # A pay-after-quote order has no upfront price, so it collects no
-        # payment method here; the customer pays the invoice later.
-        if pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
-            data['payment_method'] = None
+        # The payment method is an order-level business choice. It remains
+        # explicit even while a custom quote is waiting for its final price.
+        payment_method = str(data.get('payment_method') or Order.PaymentMethod.CARD).upper()
+        if payment_method in {'PAYSTACK', 'CARD'}:
+            data['payment_method'] = Order.PaymentMethod.CARD
+        elif payment_method in {'CASH', 'CASH_ON_DELIVERY'}:
+            data['payment_method'] = Order.PaymentMethod.CASH
         else:
-            payment_method = str(data.get('payment_method') or 'CARD').strip().upper()
-            if payment_method in {'PAYSTACK', 'CARD'}:
-                payment_method = 'CARD'
-            elif payment_method in {'CASH', 'CASH_ON_DELIVERY'}:
-                payment_method = 'CASH'
-            elif payment_method in {'BANK_TRANSFER', 'TRANSFER'}:
-                payment_method = 'BANK_TRANSFER'
-            else:
-                raise serializers.ValidationError({
-                    "payment_method": "Unsupported payment method. Use CARD, CASH, or BANK_TRANSFER."
-                })
-            data['payment_method'] = payment_method
+            data['payment_method'] = Order.PaymentMethod.BANK_TRANSFER
 
         # Per-mode requirements. Each mode carries exactly what it needs and
         # nothing it does not, so a stray weight on an itemised order or missing
@@ -275,7 +328,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             items_data = validated_data.pop('items', []) or []
             coupon_obj = validated_data.pop('coupon_obj', None)
-            validated_data.pop('payment_method', None)
             validated_data.pop('coupon_code', None)
             pricing_mode = validated_data.get('pricing_mode') or Order.PricingMode.BY_ITEM
             user = self.context['request'].user

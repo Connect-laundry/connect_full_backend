@@ -35,29 +35,18 @@ class PaymentService:
         reference = f"ORD-{order_ref}-{uuid.uuid4().hex[:6]}"
 
         if normalized_method == Payment.Method.CASH:
-            cash_reference = f"COD-{order_ref}-{uuid.uuid4().hex[:6]}"
-            Payment.objects.update_or_create(
-                order=order,
-                defaults={
-                    'user': order.user,
-                    'amount': amount,
-                    'currency': settings.PAYMENT_CURRENCY,
-                    'payment_method': Payment.Method.CASH,
-                    'transaction_reference': cash_reference,
-                    'status': Payment.Status.PENDING,
-                    'paystack_reference': None,
-                }
-            )
+            # COD is a promise to pay at fulfillment, not a gateway payment.
+            # The successful cash Payment row is created only when the owner
+            # explicitly confirms receipt.
             return {
-                "transaction_id": cash_reference,
+                "transaction_id": None,
                 "amount": str(amount),
                 "currency": settings.PAYMENT_CURRENCY,
-                "status": "PENDING",
+                "status": "CASH_DUE",
                 "payment_method": Payment.Method.CASH,
                 "authorization_url": None,
                 "access_code": None,
             }
-        
         paystack = PaystackService()
         metadata = {
             'order_id': str(order.id),

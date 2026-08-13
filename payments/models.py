@@ -31,8 +31,19 @@ class Payment(models.Model):
     payment_method = models.CharField(max_length=20, choices=Method.choices, default=Method.CARD)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     
-    transaction_reference = models.CharField(max_length=100, unique=True)
+    # Cash collection never passes through Paystack and therefore has no
+    # provider transaction reference. Online payments always populate this.
+    transaction_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     paystack_reference = models.CharField(max_length=100, null=True, blank=True)
+
+    amount_collected = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cash_payments_collected',
+    )
     
     raw_response = models.JSONField(null=True, blank=True)
 

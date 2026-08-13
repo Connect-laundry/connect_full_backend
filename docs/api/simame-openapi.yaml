@@ -1246,6 +1246,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderTransition'
           description: ''
+  /api/v1/booking/lifecycle/{id}/collect-cash/:
+    post:
+      operationId: api_v1_booking_lifecycle_collect_cash_create
+      description: Confirm COD cash received at fulfillment without touching Paystack.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCollectionResponse'
+          description: ''
   /api/v1/booking/lifecycle/{id}/complete/:
     patch:
       operationId: api_v1_booking_lifecycle_complete_partial_update
@@ -4249,6 +4284,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderTransition'
           description: ''
+  /api/v1/orders/lifecycle/{id}/collect-cash/:
+    post:
+      operationId: api_v1_orders_lifecycle_collect_cash_create
+      description: Confirm COD cash received at fulfillment without touching Paystack.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCollectionResponse'
+          description: ''
   /api/v1/orders/lifecycle/{id}/complete/:
     patch:
       operationId: api_v1_orders_lifecycle_complete_partial_update
@@ -5973,6 +6043,31 @@ components:
       description: |-
         * `USER` - User
         * `ADMIN` - Admin
+    CashCollectionRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - amount
+    CashCollectionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        already_collected:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/OrderDetail'
+      required:
+      - already_collected
+      - data
+      - message
+      - status
     Category:
       type: object
       properties:
@@ -6195,12 +6290,36 @@ components:
         pickup_address:
           type: string
           nullable: true
+        pricing_mode:
+          $ref: '#/components/schemas/PricingModeEnum'
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodBc5Enum'
+        payment_status:
+          $ref: '#/components/schemas/PaymentStatusEnum'
+        payment_state:
+          type: string
+          readOnly: true
+        amount_due:
+          type: string
+          readOnly: true
+        amount_collected:
+          type: string
+          readOnly: true
+        cash_collected_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
       required:
+      - amount_collected
+      - amount_due
+      - cash_collected_at
       - created_at
       - customer_name
       - customer_phone
       - id
       - order_no
+      - payment_state
       - pickup_date
       - status_display
     DashboardResponse:
@@ -8460,6 +8579,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OrderItemCreate'
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/OrderCreatePaymentMethodEnum'
+          default: CARD
         pricing_mode:
           allOf:
           - $ref: '#/components/schemas/PricingModeEnum'
@@ -8472,6 +8595,22 @@ components:
       required:
       - laundry
       - pickup_date
+    OrderCreatePaymentMethodEnum:
+      enum:
+      - CARD
+      - PAYSTACK
+      - CASH
+      - CASH_ON_DELIVERY
+      - BANK_TRANSFER
+      - TRANSFER
+      type: string
+      description: |-
+        * `CARD` - CARD
+        * `PAYSTACK` - PAYSTACK
+        * `CASH` - CASH
+        * `CASH_ON_DELIVERY` - CASH_ON_DELIVERY
+        * `BANK_TRANSFER` - BANK_TRANSFER
+        * `TRANSFER` - TRANSFER
     OrderCreateRequest:
       type: object
       properties:
@@ -8519,9 +8658,9 @@ components:
           writeOnly: true
           minLength: 1
         payment_method:
-          type: string
-          writeOnly: true
-          minLength: 1
+          allOf:
+          - $ref: '#/components/schemas/OrderCreatePaymentMethodEnum'
+          default: CARD
         pricing_mode:
           allOf:
           - $ref: '#/components/schemas/PricingModeEnum'
@@ -8612,16 +8751,28 @@ components:
           readOnly: true
         payment_reference:
           type: string
+          nullable: true
           readOnly: true
-          default: ''
         provider_payment_status:
           type: string
+          nullable: true
           readOnly: true
-          default: ''
         payment_method:
+          $ref: '#/components/schemas/PaymentMethodBc5Enum'
+        payment_state:
           type: string
           readOnly: true
-          default: ''
+        amount_due:
+          type: string
+          readOnly: true
+        amount_collected:
+          type: string
+          readOnly: true
+        cash_collected_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         pricing_mode:
           $ref: '#/components/schemas/PricingModeEnum'
         estimated_weight_kg:
@@ -8630,14 +8781,17 @@ components:
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
           nullable: true
       required:
+      - amount_collected
+      - amount_due
+      - cash_collected_at
       - created_at
       - id
       - items
       - laundry
       - laundryName
       - order_no
-      - payment_method
       - payment_reference
+      - payment_state
       - pickup_date
       - price_breakdown
       - provider_payment_status
@@ -9279,6 +9433,18 @@ components:
       required:
       - authorization_url
       - reference
+    PaymentInitializeRequestPaymentMethodEnum:
+      enum:
+      - CARD
+      - PAYSTACK
+      - BANK_TRANSFER
+      - TRANSFER
+      type: string
+      description: |-
+        * `CARD` - CARD
+        * `PAYSTACK` - PAYSTACK
+        * `BANK_TRANSFER` - BANK_TRANSFER
+        * `TRANSFER` - TRANSFER
     PaymentInitializeRequestRequest:
       type: object
       properties:
@@ -9287,7 +9453,7 @@ components:
           format: uuid
         payment_method:
           allOf:
-          - $ref: '#/components/schemas/PaymentMethodEnum'
+          - $ref: '#/components/schemas/PaymentInitializeRequestPaymentMethodEnum'
           default: CARD
       required:
       - order_id
@@ -9304,22 +9470,16 @@ components:
       - data
       - message
       - status
-    PaymentMethodEnum:
+    PaymentMethodBc5Enum:
       enum:
       - CARD
-      - PAYSTACK
-      - CASH
-      - CASH_ON_DELIVERY
       - BANK_TRANSFER
-      - TRANSFER
+      - CASH
       type: string
       description: |-
-        * `CARD` - CARD
-        * `PAYSTACK` - PAYSTACK
-        * `CASH` - CASH
-        * `CASH_ON_DELIVERY` - CASH_ON_DELIVERY
-        * `BANK_TRANSFER` - BANK_TRANSFER
-        * `TRANSFER` - TRANSFER
+        * `CARD` - Paystack
+        * `BANK_TRANSFER` - Bank transfer
+        * `CASH` - Cash on delivery
     PaymentRefundRequest:
       type: object
       description: Body for POST /payments/refund/{reference}/.
@@ -9953,7 +10113,7 @@ components:
           maxLength: 150
         role:
           allOf:
-          - $ref: '#/components/schemas/Role9e8Enum'
+          - $ref: '#/components/schemas/RegisterRoleEnum'
           default: CUSTOMER
       required:
       - email
@@ -9984,13 +10144,21 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/Role9e8Enum'
+          - $ref: '#/components/schemas/RegisterRoleEnum'
           default: CUSTOMER
       required:
       - email
       - password
       - password_confirm
       - phone
+    RegisterRoleEnum:
+      enum:
+      - CUSTOMER
+      - OWNER
+      type: string
+      description: |-
+        * `CUSTOMER` - CUSTOMER
+        * `OWNER` - OWNER
     ResetPassword:
       type: object
       properties:
@@ -10065,14 +10233,6 @@ components:
           type: string
       required:
       - detail
-    Role9e8Enum:
-      enum:
-      - CUSTOMER
-      - OWNER
-      type: string
-      description: |-
-        * `CUSTOMER` - CUSTOMER
-        * `OWNER` - OWNER
     RoundingStrategyEnum:
       enum:
       - NONE
@@ -10158,7 +10318,7 @@ components:
       properties:
         role:
           allOf:
-          - $ref: '#/components/schemas/Role9e8Enum'
+          - $ref: '#/components/schemas/SocialLoginRoleEnum'
           default: CUSTOMER
     SocialLoginRequest:
       type: object
@@ -10169,10 +10329,18 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/Role9e8Enum'
+          - $ref: '#/components/schemas/SocialLoginRoleEnum'
           default: CUSTOMER
       required:
       - clerk_token
+    SocialLoginRoleEnum:
+      enum:
+      - OWNER
+      - CUSTOMER
+      type: string
+      description: |-
+        * `OWNER` - OWNER
+        * `CUSTOMER` - CUSTOMER
     SocialSession:
       type: object
       properties:

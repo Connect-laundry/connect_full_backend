@@ -8,6 +8,7 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 # pyre-ignore[missing-module]
 from ordering.models import Order
+from payments.models import Payment
 # pyre-ignore[missing-module]
 from laundries.models.laundry import Laundry
 # pyre-ignore[missing-module]
@@ -23,7 +24,24 @@ class DashboardTests(APITestCase):
         
         # Create some orders
         Order.objects.create(user=self.customer, laundry=self.laundry, status='PENDING', pickup_date=timezone.now(), total_amount=50.0)
-        Order.objects.create(user=self.customer, laundry=self.laundry, status='DELIVERED', pickup_date=timezone.now(), total_amount=150.0)
+        delivered = Order.objects.create(
+            user=self.customer,
+            laundry=self.laundry,
+            status='DELIVERED',
+            payment_status=Order.PaymentStatus.PAID,
+            payment_method=Order.PaymentMethod.CASH,
+            pickup_date=timezone.now(),
+            total_amount=150.0,
+        )
+        Payment.objects.create(
+            user=self.customer,
+            order=delivered,
+            amount=150.0,
+            amount_collected=150.0,
+            payment_method=Payment.Method.CASH,
+            status=Payment.Status.SUCCESS,
+            paid_at=timezone.now(),
+        )
 
     def test_owner_can_access_stats(self):
         self.client.force_authenticate(user=self.owner)

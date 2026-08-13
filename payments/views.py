@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class PaymentInitializeRequestSerializer(serializers.Serializer):
     order_id = serializers.UUIDField()
     payment_method = serializers.ChoiceField(
-        choices=['CARD', 'PAYSTACK', 'CASH', 'CASH_ON_DELIVERY', 'BANK_TRANSFER', 'TRANSFER'],
+        choices=['CARD', 'PAYSTACK', 'BANK_TRANSFER', 'TRANSFER'],
         required=False,
         default='CARD',
     )
@@ -205,22 +205,54 @@ class PaymentInitializeView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        order_id = request.data.get('order_id')
-        payment_method = _normalize_payment_method(request.data.get('payment_method', 'CARD'))
-        
+        request_serializer = PaymentInitializeRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        order_id = request_serializer.validated_data['order_id']
+        payment_method = _normalize_payment_method(
+            request_serializer.validated_data.get('payment_method', 'CARD')
+        )
+
         # 1. Validate order existence and ownership
         order = get_object_or_404(
             Order.objects.select_for_update(), id=order_id, user=request.user
         )
         
-        # 2. Reject if status is not PENDING
-        if order.status != Order.Status.PENDING:
+        # Accepted custom quotes remain payable; ordinary online orders must
+        # still pay before the laundry can accept them.
+        accepted_quote = (
+            order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+            and order.status == Order.Status.CONFIRMED
+        )
+        if order.status != Order.Status.PENDING and not accepted_quote:
             return Response({
                 "status": "error",
                 "message": f"Cannot pay for order in {order.status} status.",
                 "data": {}
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
+        if (
+            order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+            and (order.priced_at is None or order.total_amount <= 0)
+        ):
+            return Response({
+                "status": "error",
+                "message": "This order is still waiting for its quote.",
+                "data": {},
+            }, status=status.HTTP_409_CONFLICT)
+
+        if order.payment_method == Order.PaymentMethod.CASH:
+            return Response({
+                "status": "error",
+                "message": "This is a cash-on-delivery order. Payment is collected at fulfillment.",
+                "data": {},
+            }, status=status.HTTP_409_CONFLICT)
+
+        if payment_method != order.payment_method:
+            return Response({
+                "status": "error",
+                "message": "Payment method does not match the method selected for this order.",
+                "data": {},
+            }, status=status.HTTP_409_CONFLICT)
         # 3. Reject if successful payment already exists
         if Payment.objects.filter(order=order, status=Payment.Status.SUCCESS).exists():
              return Response({
@@ -268,30 +300,6 @@ class PaymentInitializeView(APIView):
         # 5. Generate unique reference
         reference = f"ORD-{uuid.uuid4().hex[:10].upper()}"
 
-        if payment_method == Payment.Method.CASH:
-            with transaction.atomic():
-                Payment.objects.update_or_create(
-                    order=order,
-                    defaults={
-                        'user': request.user,
-                        'amount': order.total_amount,
-                        'currency': settings.PAYMENT_CURRENCY,
-                        'transaction_reference': f"COD-{uuid.uuid4().hex[:10].upper()}",
-                        'payment_method': Payment.Method.CASH,
-                        'status': Payment.Status.PENDING,
-                        'paystack_reference': None,
-                    },
-                )
-
-            return Response({
-                "status": "success",
-                "message": "Cash payment recorded successfully",
-                "data": {
-                    "authorization_url": None,
-                    "reference": None,
-                }
-            }, status=status.HTTP_200_OK)
-        
         paystack = PaystackService()
         metadata = {
             "booking_id": str(order.id),

@@ -33,6 +33,8 @@ def refund_payment(payment, *, amount=None, reason='', actor=None, request=None)
     Returns the refreshed payment. Raises :class:`RefundError` when the
     payment is not in a refundable state or the gateway rejects the request.
     """
+    if payment.payment_method == Payment.Method.CASH:
+        raise RefundError('Cash collections must be refunded outside Paystack and reconciled manually.')
     if payment.status == Payment.Status.REFUNDED:
         raise RefundError('This payment has already been refunded.')
     if payment.status == Payment.Status.REFUND_PENDING:
@@ -91,6 +93,8 @@ def mark_refund_settled(payment, *, request=None):
 
     Idempotent — a repeated `refund.processed` webhook is a no-op.
     """
+    if payment.payment_method == Payment.Method.CASH:
+        raise RefundError('Cash collections must be refunded outside Paystack and reconciled manually.')
     if payment.status == Payment.Status.REFUNDED:
         return False
 

@@ -1,7 +1,8 @@
 # pyre-ignore[missing-module]
-from rest_framework import viewsets, status, decorators, permissions
+from rest_framework import viewsets, status, decorators, permissions, serializers
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 # pyre-ignore[missing-module]
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -15,8 +16,19 @@ from ..serializers.order import OrderDetailSerializer
 # pyre-ignore[missing-module]
 from ..permissions import IsOrderParticipant, CanManageLifecycle
 import logging
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+
+class CashCollectionSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
+
+class CashCollectionResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    already_collected = serializers.BooleanField()
+    data = OrderDetailSerializer()
 
 class OrderLifecycleViewSet(viewsets.GenericViewSet):
     """
@@ -50,13 +62,31 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
             )
             order = Order.objects.select_for_update().get(id=order.id)
 
-            if payment and payment.payment_method != Payment.Method.CASH:
-                if to_status == Order.Status.CONFIRMED and payment.status != Payment.Status.SUCCESS:
+            if (
+                to_status == Order.Status.COMPLETED
+                and order.payment_method == Order.PaymentMethod.CASH
+                and order.payment_status != Order.PaymentStatus.PAID
+            ):
+                return Response({
+                    'status': 'error',
+                    'message': 'Confirm cash collection before completing this COD order.',
+                }, status=status.HTTP_409_CONFLICT)
+
+            if to_status == Order.Status.CONFIRMED:
+                accepts_before_payment = (
+                    order.payment_method == Order.PaymentMethod.CASH
+                    or order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+                )
+                if (
+                    not accepts_before_payment
+                    and (payment is None or payment.status != Payment.Status.SUCCESS)
+                ):
                     return Response({
                         "status": "error",
                         "message": "Payment must be confirmed before this order can be accepted.",
                     }, status=status.HTTP_409_CONFLICT)
 
+            if payment and payment.payment_method != Payment.Method.CASH:
                 unsettled_or_paid = {
                     Payment.Status.PENDING,
                     Payment.Status.SUCCESS,
@@ -70,7 +100,6 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
                         "status": "error",
                         "message": "Complete payment verification or refund before cancelling this order.",
                     }, status=status.HTTP_409_CONFLICT)
-
             # The state machine reuses the surrounding transaction and locks
             # the order before validating the transition.
             updated_order, success = OrderStateMachine.transition(
@@ -168,6 +197,159 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         """PENDING/CONFIRMED -> CANCELLED (Customer/Laundry)"""
         return self._handle_transition(request, Order.Status.CANCELLED)
 
+    @extend_schema(
+        request=CashCollectionSerializer,
+        responses=CashCollectionResponseSerializer,
+    )
+    @decorators.action(
+        detail=True,
+        methods=['post'],
+        url_path='collect-cash',
+        serializer_class=CashCollectionSerializer,
+    )
+    def collect_cash(self, request, pk=None):
+        """Confirm COD cash received at fulfillment without touching Paystack."""
+        from payments.models import Payment
+        from django.utils import timezone
+        from marketplace.services.audit import record_audit
+        from marketplace.services.notification_service import NotificationService
+        from marketplace.models import Notification
+
+        order = self.get_order()
+        if not (
+            request.user.is_staff
+            or request.user.role == 'ADMIN'
+            or order.laundry.owner_id == request.user.id
+        ):
+            return Response(
+                {"status": "error", "message": "Only the laundry can confirm cash collection."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        submitted_amount = serializer.validated_data['amount']
+        allowed_statuses = {
+            Order.Status.OUT_FOR_DELIVERY,
+            Order.Status.DELIVERED,
+            Order.Status.COMPLETED,
+        }
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.payment_method != Order.PaymentMethod.CASH:
+                return Response(
+                    {"status": "error", "message": "This order is not cash on delivery."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.status not in allowed_statuses:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Cash can be confirmed only at or after delivery.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if submitted_amount != order.total_amount:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": f"Collected amount must equal GHS {order.total_amount}.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            payment = Payment.objects.select_for_update().filter(order=order).first()
+            if order.payment_status == Order.PaymentStatus.PAID:
+                if (
+                    payment
+                    and payment.payment_method == Payment.Method.CASH
+                    and payment.status == Payment.Status.SUCCESS
+                    and payment.amount_collected == submitted_amount
+                ):
+                    return Response({
+                        "status": "success",
+                        "message": "Cash collection was already confirmed.",
+                        "already_collected": True,
+                        "data": OrderDetailSerializer(order).data,
+                    })
+                return Response(
+                    {"status": "error", "message": "This order is already marked paid."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            collected_at = timezone.now()
+            if payment:
+                if payment.payment_method != Payment.Method.CASH:
+                    return Response(
+                        {"status": "error", "message": "An online payment already exists for this order."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if payment.status != Payment.Status.PENDING:
+                    return Response(
+                        {"status": "error", "message": "The existing cash payment cannot be collected."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                payment.amount = order.total_amount
+                payment.amount_collected = submitted_amount
+                payment.status = Payment.Status.SUCCESS
+                payment.transaction_reference = None
+                payment.paystack_reference = None
+                payment.paid_at = collected_at
+                payment.collected_by = request.user
+                payment.save(update_fields=[
+                    'amount', 'amount_collected', 'status', 'transaction_reference',
+                    'paystack_reference', 'paid_at', 'collected_by', 'updated_at',
+                ])
+            else:
+                payment = Payment.objects.create(
+                    user=order.user,
+                    order=order,
+                    amount=order.total_amount,
+                    amount_collected=submitted_amount,
+                    currency=order.currency,
+                    payment_method=Payment.Method.CASH,
+                    status=Payment.Status.SUCCESS,
+                    transaction_reference=None,
+                    paystack_reference=None,
+                    paid_at=collected_at,
+                    collected_by=request.user,
+                    raw_response={"source": "owner_cash_collection"},
+                )
+
+            order.payment_status = Order.PaymentStatus.PAID
+            order.save(update_fields=['payment_status', 'updated_at'])
+            record_audit(
+                action="CASH_COLLECTED",
+                actor=request.user,
+                request=request,
+                target_type="Payment",
+                target_id=str(payment.id),
+                target_repr=f"Cash collected for {order.order_no}",
+                metadata={
+                    "order_id": str(order.id),
+                    "amount": str(submitted_amount),
+                    "currency": order.currency,
+                },
+            )
+
+        NotificationService.notify_user(
+            user=order.user,
+            title="Cash payment confirmed",
+            body=f"Your cash payment of GHS {submitted_amount} for order {order.order_no} was confirmed.",
+            type=Notification.Type.ORDER,
+            category="CASH_COLLECTED",
+            related_order=order,
+            dedup_key=f"cash_collected_{order.id}",
+        )
+
+        return Response({
+            "status": "success",
+            "message": "Cash collection confirmed.",
+            "already_collected": False,
+            "data": OrderDetailSerializer(order).data,
+        })
+
     @decorators.action(detail=True, methods=['post'])
     def quote(self, request, pk=None):
         """
@@ -249,7 +431,10 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         NotificationService.notify_user(
             user=order.user,
             title="Your invoice is ready",
-            body=f"Your laundry has been quoted GHS {order.total_amount} for order {order.order_no}. Tap to review and pay.",
+            body=(
+                f"Your laundry has been quoted GHS {order.total_amount} for order {order.order_no}. "
+                + ("Pay cash at delivery." if order.payment_method == Order.PaymentMethod.CASH else "Tap to review and pay.")
+            ),
             type=Notification.Type.ORDER,
             category="QUOTE_READY",
             related_order=order,

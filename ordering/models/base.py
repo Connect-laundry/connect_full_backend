@@ -62,6 +62,11 @@ class Order(models.Model):
         # are no items and no price until that quote arrives.
         CUSTOM_QUOTE = 'CUSTOM_QUOTE', _('Pay after quote')
 
+    class PaymentMethod(models.TextChoices):
+        CARD = 'CARD', _('Paystack')
+        BANK_TRANSFER = 'BANK_TRANSFER', _('Bank transfer')
+        CASH = 'CASH', _('Cash on delivery')
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_no = models.CharField(max_length=20, unique=True, editable=False)
     
@@ -71,6 +76,9 @@ class Order(models.Model):
     
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+    payment_method = models.CharField(
+        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CARD
+    )
 
     # How this order was priced. BY_ITEM is the default so every existing order
     # and every request from older clients keeps its current behaviour.

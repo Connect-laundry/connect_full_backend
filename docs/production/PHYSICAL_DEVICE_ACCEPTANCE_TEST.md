@@ -129,3 +129,25 @@ Test foreground, background and killed app for each relevant event.
 Release owner approval: __________  Date: __________
 
 Any unresolved P0/P1, production test credential, false payment state, cross-user data exposure, failed account deletion or unsigned/uninspected artifact blocks release.
+
+## Cash On Delivery And Custom Quote
+
+Record customer order ID, owner screen evidence and backend payment/settlement evidence. Do not record full addresses or customer payment details.
+
+- [ ] Customer selects **Cash on Delivery** and sees **Pay when your laundry is delivered**.
+- [ ] Checkout creates the COD order without opening Paystack or returning an authorization URL/reference.
+- [ ] Owner receives the order, sees COD and the exact amount due, and accepts it before payment.
+- [ ] Customer sees the accepted order while payment remains **Cash Due**, not paid/Paystack success.
+- [ ] Move through pickup, processing and out-for-delivery; verify payment remains cash due.
+- [ ] Attempt completion before collection; verify it is blocked until cash is confirmed.
+- [ ] Owner selects **Confirm cash received**, reviews the exact amount and confirms once.
+- [ ] Repeated/double submission creates no second payment or financial event.
+- [ ] Customer refresh changes to **Paid in Cash**, amount collected and collection time.
+- [ ] Order detail/receipt shows cash and contains no Paystack reference or Paystack-processing claim.
+- [ ] Confirm no Paystack transaction, OrderSettlement, held balance or available payout was created for cash.
+- [ ] Cancel an unpaid COD order and verify no refund request or Paystack call.
+- [ ] Create a custom quote with COD, accept before payment, finalize the quote, fulfill and collect cash.
+- [ ] Create a custom quote with online payment, accept before payment, finalize the quote, then complete the normal Paystack flow.
+- [ ] Confirm an unpaid custom quote does not appear in paid owner earnings.
+
+Post-collection cash refund behavior is not automated: **MANUAL PRODUCT POLICY REQUIRED FOR POST-COLLECTION CASH REFUNDS**.

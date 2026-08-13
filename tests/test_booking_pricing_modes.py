@@ -130,9 +130,8 @@ class TestByWeightBooking:
         resp = client.post(reverse('booking-create'), payload, format='json')
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_by_weight_starts_a_payment_like_any_paid_order(self):
-        # Cash on delivery, so this asserts a Payment is opened without needing
-        # a live Paystack key in the test environment.
+    def test_by_weight_cod_stays_due_without_a_fake_payment(self):
+        # COD is an explicit promise to pay at fulfillment, not a gateway payment.
         customer, laundry, *_ = _build_booking_catalog(prefix='Wt6')
         _add_weight_tariff(laundry, per_kg='2.00', minimum_charge='0.00')
         client = _auth_client(customer)
@@ -146,7 +145,11 @@ class TestByWeightBooking:
 
         resp = client.post(reverse('booking-create'), payload, format='json')
         assert resp.status_code == status.HTTP_201_CREATED
-        assert Payment.objects.filter(order_id=resp.data['id']).exists()
+        assert resp.data['payment_method'] == 'CASH'
+        assert resp.data['payment_state'] == 'CASH_DUE'
+        assert resp.data['payment_reference'] is None
+        assert resp.data['payment_intent']['authorization_url'] is None
+        assert not Payment.objects.filter(order_id=resp.data['id']).exists()
 
 
 @pytest.mark.django_db

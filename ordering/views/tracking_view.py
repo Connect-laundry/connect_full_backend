@@ -227,13 +227,17 @@ def _build_charges_and_payment(order: Order) -> dict:
     payment = getattr(order, "payment", None)
     paid_amount = Decimal("0.00")
     payment_status = "UNPAID"
-    payment_method = None
+    payment_method = order.payment_method
     paid_at = None
     transaction_reference = None
     if payment is not None:
         payment_status = payment.status
-        payment_method = payment.payment_method
-        transaction_reference = payment.transaction_reference
+        payment_method = order.payment_method
+        transaction_reference = (
+            payment.transaction_reference
+            if order.payment_method != Order.PaymentMethod.CASH
+            else None
+        )
         paid_at = _serialize_iso(payment.paid_at)
         if payment.status == "SUCCESS":
             paid_amount = Decimal(str(payment.amount or "0"))
@@ -262,6 +266,9 @@ def _build_charges_and_payment(order: Order) -> dict:
             "balance": str(balance),
             "paid_at": paid_at,
             "transaction_reference": transaction_reference,
+            "amount_collected": str(
+                payment.amount_collected if payment and payment_method == Order.PaymentMethod.CASH else Decimal("0.00")
+            ),
         },
     }
 

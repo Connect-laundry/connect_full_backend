@@ -241,10 +241,10 @@ class BookingViewSet(viewsets.GenericViewSet):
                     "amount": "0.00",
                     "currency": "GHS",
                     "status": "QUOTE_PENDING",
-                    "payment_method": None,
+                    "payment_method": order.payment_method,
                     "authorization_url": None,
                     "access_code": None,
-                    "message": "Pickup requested. You'll get an invoice to pay once the laundry weighs your items.",
+                    "message": "Pickup requested. You'll get a quote before payment is due.",
                 }
                 if cache_key:
                     cache.set(

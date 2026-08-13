@@ -27,8 +27,7 @@ No deployment, credential rotation, production build, OTA publish, store submiss
 1. All EAS profiles currently resolve to the same production Render API; a genuinely isolated staging backend is not evidenced. Preview testing can affect production data.
 2. Sentry code/config hooks exist, but production organization/project credentials, source maps, alert routing, PII scrubbing and release dashboard evidence are incomplete. Local exports warned that Sentry organization/project config was missing.
 3. Push code and token lifecycle are implemented, but production Expo credential rotation, APNs/FCM delivery and physical-device deep-link behavior remain unverified.
-4. Owner acceptance when no `Payment` record exists remains a business-policy decision for cash/custom-quote orders. The backend enforces rules when a payment exists; product must define whether prepayment is mandatory before acceptance.
-5. Production Django security settings were not available locally. `check --deploy` ran against local debug settings and warned about DEBUG, HTTPS redirect, HSTS and secure cookies. The deployed environment must be checked with its actual environment values.
+4. Production Django security settings were not available locally. `check --deploy` ran against local debug settings and warned about DEBUG, HTTPS redirect, HSTS and secure cookies. The deployed environment must be checked with its actual environment values.
 
 ## P2 Improvements
 
@@ -206,14 +205,14 @@ Invoke-WebRequest https://connect-full-backend.onrender.com/readiness/
 
 | Surface | Result |
 |---|---|
-| Backend full suite, final | **696 passed**, 14 deprecation warnings |
+| Backend full suite, final | **710 passed, 1 skipped**, 14 deprecation warnings |
 | Backend focused account deletion/Clerk | **5 passed** |
-| Backend focused payment suites | **30 passed** plus lifecycle/order/security focused passes |
+| Backend focused COD/order/payment suites | **49 passed, 1 skipped**; the skip is the PostgreSQL row-lock concurrency case under SQLite |
 | Django normal check | **0 issues** |
 | Django deploy check in local debug env | **7 warnings**, including debug/HTTPS/cookies and schema enum warnings |
-| Migration drift / pending migrations | **none** |
+| Migration drift / pending migrations | **No model drift**; `0018_order_payment_method` and `0012_payment_amount_collected_payment_collected_by_and_more` are pending deployment |
 | OpenAPI | **0 errors**, 3 warnings |
-| Mobile Jest | **31 suites, 266 tests passed** |
+| Mobile Jest | **31 suites, 269 tests passed** |
 | Mobile TypeScript | **pass** |
 | Mobile lint | **0 errors, 49 warnings** |
 | Expo Doctor | **18/18 passed** |
@@ -221,7 +220,7 @@ Invoke-WebRequest https://connect-full-backend.onrender.com/readiness/
 | iOS export | **pass**, 71 files / 21.55 MB total, 9.44 MB Hermes bundle |
 | All-platform export | Native bundles completed; web failed on native-only `react-native-maps` |
 | Strict release validation | **failed as expected**, 15 missing names plus 3 derived constraints |
-| Owner tests | **3 files, 5 tests passed** |
+| Owner tests | **4 files, 8 tests passed** |
 | Owner TypeScript/build | **pass / pass** |
 | Owner lint | **0 errors, 181 warnings** |
 | Owner dependency audit | **0 vulnerabilities** |
@@ -280,3 +279,19 @@ The worktrees were already dirty and remain uncommitted. No unrelated work was r
 ## Final Release Recommendation
 
 Do **not** submit to TestFlight, Play closed testing or production yet. First complete P0 manual configuration/rotation, restore live health, deploy and verify readiness, pass strict EAS validation, inspect signed artifacts, run controlled Paystack live tests and execute the physical-device plan. Re-run this certification against the exact release commit and production environment; only then consider changing NO-GO.
+
+## Approved COD / Custom-Quote Certification
+
+> Simame supports Cash on Delivery. Cash/COD orders may be accepted by an owner before payment and remain financially unpaid until cash is actually collected. Custom-quote orders may also be accepted before payment. Paystack/online-payment controls remain strict and separate.
+
+The prior unpaid-owner-acceptance P1 ambiguity is resolved in source:
+
+- COD is explicit on Order; a missing Payment row is never interpreted as COD.
+- COD booking and acceptance create no fake payment, provider reference, settlement, payout balance or paid earnings.
+- Owner/admin cash collection is server-authoritative, exact-amount, fulfillment-state constrained, audited, transactional and idempotent.
+- Ordinary unpaid online orders remain blocked from acceptance even when no Payment row exists.
+- Custom quote is a pricing mode, not a payment method. It can be accepted before payment and follows COD or Paystack rules after pricing.
+- Paid owner revenue requires PAID payment status; collected cash is reported separately from Paystack payout balances.
+- COD completion requires confirmed cash collection. Unpaid COD cancellation has no refund; post-collection cash refunds require a separately approved manual product policy.
+
+This policy fix does not change the overall **NO-GO** verdict or resolve the independent production blockers above.

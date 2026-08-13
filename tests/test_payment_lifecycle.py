@@ -53,6 +53,8 @@ class TestPaymentAwareOrderLifecycle:
         _, order, payment = _build_pending_payment('ORD-LIFECYCLE-CASH')
         payment.payment_method = Payment.Method.CASH
         payment.save(update_fields=['payment_method'])
+        order.payment_method = order.PaymentMethod.CASH
+        order.save(update_fields=['payment_method', 'updated_at'])
 
         response = _auth_client(order.laundry.owner).patch(
             reverse('order-lifecycle-accept', kwargs={'pk': order.id}),

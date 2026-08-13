@@ -64,11 +64,29 @@ These are `OWNER_ONLY_EXPECTED`, `ADMIN_ONLY_EXPECTED`, or infrastructure `NOT_A
 3. **Fixed P0 - account deletion identity gap:** local deletion did not reliably delete the Clerk identity. The backend now fails closed when Clerk deletion cannot be completed, then transactionally anonymizes local identity data and revokes sessions while retaining legally necessary transaction records under a tombstoned user.
 4. **Fixed P1 - Paystack ownership check order:** verification now rejects a foreign reference before contacting Paystack.
 5. **Frontend-only P2:** `app/settings/payment.tsx` is an orphaned “Payment Methods Placeholder.” There is no backend saved-card/payment-method product. It is not linked from Settings and must not be promoted until product, PCI and tokenization rules exist.
-6. **Product-policy P1:** owner acceptance of an unpaid order is technically possible where no `Payment` record exists. Whether cash/custom-quote orders may be accepted before payment is a business rule; do not change without an explicit policy decision.
+6. **Fixed P1 - approved COD/custom-quote acceptance:** COD is now an explicit order method and custom quote remains a separate pricing mode. Both may be accepted before payment; ordinary unpaid online orders may not. Cash becomes paid only through the audited collection action.
 
 ## OpenAPI Drift
 
 - Regeneration: `python manage.py spectacular --file docs/api/simame-openapi.yaml --validate` -> 0 errors, 3 enum-name warnings.
 - Actual but intentionally undocumented: Paystack browser callback and two webhook aliases. They should receive explicit schema annotations in a later documentation pass; runtime authentication/idempotency tests exist.
 - Removed from the regenerated contract: generic PUT/PATCH/DELETE order operations that are no longer allowed.
-- Added to order responses: `payment_reference`, `provider_payment_status`, and `payment_method`.
+- Added to order responses: payment method/state, amount due/collected, cash collection time, and nullable online provider status/reference.
+
+## Approved COD And Custom-Quote Policy
+
+> Simame supports Cash on Delivery. Cash/COD orders may be accepted by an owner before payment and remain financially unpaid until cash is actually collected. Custom-quote orders may also be accepted before payment. Paystack/online-payment controls remain strict and separate.
+
+Implementation parity:
+
+| Capability | Backend authority | Customer mobile | Owner web | Financial effect |
+|---|---|---|---|---|
+| Select COD | Order payment method is CASH; no Payment row at booking | Checkout sends CASH; never opens Paystack | Shows Cash on Delivery and amount due | None until collection |
+| Accept unpaid COD | Explicit lifecycle exception for payment method CASH | Shows accepted order with cash still due | Accept remains available | No settlement, payout or paid earnings |
+| Accept custom quote | Explicit lifecycle exception for CUSTOM_QUOTE pricing | Keeps selected payment method while awaiting quote | Accept remains available | No paid earnings until actual payment |
+| Collect COD | POST /orders/lifecycle/{id}/collect-cash/; owner/admin, exact amount, fulfillment state, transaction and row lock | Refresh renders Paid in Cash, amount and time | Confirmation dialog with loading/error/refresh | Successful CASH payment; no Paystack settlement |
+| Online order | Payment success required before ordinary acceptance | Backend Paystack initialization/verify flow | Accept hidden while unpaid and backend rejects bypass | Existing settlement/payout path only |
+
+Order responses now expose payment method/state, amount due, amount collected, cash collection time, online provider status and online reference. Provider fields are null for COD. Awaiting quote is distinct from the payment method.
+
+The prior product-policy P1 is resolved by approved policy and server-side enforcement. Remaining release blockers are independent and unchanged.

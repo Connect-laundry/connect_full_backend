@@ -49,7 +49,7 @@ class DashboardOrderViewSet(viewsets.ReadOnlyModelViewSet, DashboardBaseView):
         laundry = self.get_laundry(self.request)
         if not laundry:
             return Order.objects.none()
-        return Order.objects.filter(laundry=laundry).select_related('user')
+        return Order.objects.filter(laundry=laundry).select_related('user', 'payment')
 
 class DashboardStatsView(views.APIView, DashboardBaseView):
     """
@@ -76,13 +76,14 @@ class DashboardStatsView(views.APIView, DashboardBaseView):
         )
 
         # Revenue today, this month, AOV (Average Order Value)
-        # Note: we use status__in=['DELIVERED', 'COMPLETED'] for realized revenue
+        # Only paid delivered/completed orders are realized revenue.
         revenue_stats = Order.objects.filter(
             laundry=laundry,
-            status__in=['DELIVERED', 'COMPLETED']
+            status__in=['DELIVERED', 'COMPLETED'],
+            payment_status=Order.PaymentStatus.PAID
         ).aggregate(
-            revenue_today=Sum('total_amount', filter=Q(created_at__gte=today_start), default=0.00),
-            revenue_this_month=Sum('total_amount', filter=Q(created_at__gte=month_start), default=0.00),
+            revenue_today=Sum('total_amount', filter=Q(payment__paid_at__gte=today_start), default=0.00),
+            revenue_this_month=Sum('total_amount', filter=Q(payment__paid_at__gte=month_start), default=0.00),
             average_order_value=Avg('total_amount', default=0.00)
         )
 
@@ -165,11 +166,12 @@ class DashboardEarningsView(views.APIView, DashboardBaseView):
 
         earnings = Order.objects.filter(
             laundry=laundry, 
-            status__in=['DELIVERED', 'COMPLETED']
+            status__in=['DELIVERED', 'COMPLETED'],
+            payment_status=Order.PaymentStatus.PAID
         ).aggregate(
-            today=Sum('total_amount', filter=Q(created_at__gte=today_start), default=0),
-            this_week=Sum('total_amount', filter=Q(created_at__gte=week_start), default=0),
-            this_month=Sum('total_amount', filter=Q(created_at__gte=month_start), default=0),
+            today=Sum('total_amount', filter=Q(payment__paid_at__gte=today_start), default=0),
+            this_week=Sum('total_amount', filter=Q(payment__paid_at__gte=week_start), default=0),
+            this_month=Sum('total_amount', filter=Q(payment__paid_at__gte=month_start), default=0),
             total_revenue=Sum('total_amount', default=0)
         )
 
@@ -202,7 +204,7 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
         if not laundry:
             return Response({"error": "Laundry not found"}, status=404)
 
-        from payments.models import OrderSettlement, Payout
+        from payments.models import OrderSettlement, Payment, Payout
         from payments.services.settlement_service import SettlementService
 
         settlements = (
@@ -211,11 +213,19 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
             .order_by('-created_at')[:50]
         )
         payouts = Payout.objects.filter(laundry=laundry).order_by('-created_at')[:20]
+        cash_collected = Payment.objects.filter(
+            order__laundry=laundry,
+            payment_method=Payment.Method.CASH,
+            status=Payment.Status.SUCCESS,
+        ).aggregate(total=Sum('amount_collected', default=0))['total']
 
         return Response({
             "status": "success",
             "data": {
-                "summary": SettlementService.earnings_summary(laundry),
+                "summary": {
+                    **SettlementService.earnings_summary(laundry),
+                    "cash_collected": str(cash_collected),
+                },
                 "settles_directly": bool(laundry.split_payments_enabled),
                 "settlements": [
                     {
