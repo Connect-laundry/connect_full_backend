@@ -420,6 +420,28 @@ SPECTACULAR_SETTINGS = {
             ('COMPLETED', 'Completed'),
             ('CANCELLED', 'Cancelled'),
         ],
+        'NotificationTypeEnum': [
+            ('ORDER', 'Order'),
+            ('PROMOTION', 'Promotion'),
+            ('SYSTEM', 'System'),
+            ('ACCOUNT', 'Account'),
+            ('MARKETING', 'Marketing'),
+        ],
+        'PaymentMethodEnum': [
+            ('CARD', 'Card'),
+            ('BANK_TRANSFER', 'Bank Transfer'),
+            ('CASH', 'Cash on Delivery'),
+            ('WALLET', 'Wallet Balance'),
+            ('MOBILE_MONEY', 'Mobile Money'),
+        ],
+        'PaymentRecordStatusEnum': [
+            ('PENDING', 'Pending'),
+            ('SUCCESS', 'Successful'),
+            ('FAILED', 'Failed'),
+            ('EXPIRED', 'Expired'),
+            ('REFUND_PENDING', 'Refund pending'),
+            ('REFUNDED', 'Refunded'),
+        ],
     },
 }
 

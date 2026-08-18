@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Connect Laundry API
+  title: Simame API
   version: 1.0.0
-  description: API documentation for Connect Laundry marketplace.
+  description: API documentation for the Simame laundry marketplace.
 paths:
   /api/v1/addresses/:
     get:
@@ -369,6 +369,172 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminSearchResponse'
+          description: ''
+  /api/v1/analytics/dashboards/executive/:
+    get:
+      operationId: api_v1_analytics_dashboards_executive_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/export/:
+    get:
+      operationId: api_v1_analytics_dashboards_export_retrieve
+      description: |-
+        Tabular export. ?dataset=orders|payments|events, ?fmt=csv|xlsx|pdf, ?days=N.
+
+        Note: the param is `fmt`, not `format` — DRF reserves `format` for
+        content-negotiation (renderer selection).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/notifications/:
+    get:
+      operationId: api_v1_analytics_dashboards_notifications_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/orders/:
+    get:
+      operationId: api_v1_analytics_dashboards_orders_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/referrals/:
+    get:
+      operationId: api_v1_analytics_dashboards_referrals_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/revenue/:
+    get:
+      operationId: api_v1_analytics_dashboards_revenue_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/dashboards/users/:
+    get:
+      operationId: api_v1_analytics_dashboards_users_retrieve
+      description: Admin-only analytics dashboards. All actions accept ?days=N (default
+        30).
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/analytics/events/:
+    post:
+      operationId: api_v1_analytics_events_create
+      description: |-
+        POST a batch of client events. Authenticated; events are attributed to
+        the requesting user and PII-redacted before persistence.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsBatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyticsBatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyticsBatchRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/analytics/summary/:
+    get:
+      operationId: api_v1_analytics_summary_retrieve
+      description: |-
+        Admin-only summary metrics for the analytics dashboard.
+
+        Lightweight aggregation over a date window (default 30 days): event totals,
+        a daily active-users curve, and a top-events breakdown. Heavy cohort /
+        materialized-view work is layered on top of this in later phases.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/auth/account/:
     delete:
@@ -819,95 +985,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderDetail'
           description: ''
-    put:
-      operationId: api_v1_booking_update
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-        required: true
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderCreate'
-          description: ''
-    patch:
-      operationId: api_v1_booking_partial_update
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderCreate'
-          description: ''
-    delete:
-      operationId: api_v1_booking_destroy
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      security:
-      - BearerAuth: []
-      responses:
-        '204':
-          description: No response body
   /api/v1/booking/{id}/price-breakdown/:
     get:
       operationId: api_v1_booking_price_breakdown_retrieve
       description: Calculates stored totals and applies business logic using FinanceService.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/booking/{id}/tracking/:
+    get:
+      operationId: api_v1_booking_tracking_retrieve
+      description: |-
+        Aggregated tracking payload for the customer order detail / tracking screen.
+
+        Returns header info, derived OTP, milestone timeline (one entry per
+        backend Order.Status the order has reached or could reach), item
+        breakdown, charges/payment summary, laundry info, and the full
+        OrderStatusHistory activity log. The schema is stable even when the
+        order is brand new — fields that don't apply yet return null/empty.
       parameters:
       - in: path
         name: id
@@ -940,7 +1051,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderCreate'
+                $ref: '#/components/schemas/OrderDetail'
           description: ''
   /api/v1/booking/calculate/:
     post:
@@ -1135,6 +1246,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderTransition'
           description: ''
+  /api/v1/booking/lifecycle/{id}/collect-cash/:
+    post:
+      operationId: api_v1_booking_lifecycle_collect_cash_create
+      description: Confirm COD cash received at fulfillment without touching Paystack.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCollectionResponse'
+          description: ''
   /api/v1/booking/lifecycle/{id}/complete/:
     patch:
       operationId: api_v1_booking_lifecycle_complete_partial_update
@@ -1172,7 +1318,18 @@ paths:
   /api/v1/booking/lifecycle/{id}/mark-delivered/:
     patch:
       operationId: api_v1_booking_lifecycle_mark_delivered_partial_update
-      description: OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)
+      description: |-
+        OUT_FOR_DELIVERY -> DELIVERED (Laundry)
+
+        Accepts an optional ``handover_code``: the four digits the customer
+        reads out when they take their clothes back. A correct code proves the
+        delivery and releases the customer's payment immediately.
+
+        A wrong code is rejected outright, because a laundry typing digits at
+        random must not be able to stumble into an instant payout. Sending no
+        code at all is allowed and still closes the order, since customers are
+        not always reachable, but the money then waits out a dispute window
+        before it can be paid.
       parameters:
       - in: path
         name: id
@@ -1296,6 +1453,49 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedOrderTransitionRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
+  /api/v1/booking/lifecycle/{id}/quote/:
+    post:
+      operationId: api_v1_booking_lifecycle_quote_create
+      description: |-
+        Price a pay-after-quote order (Laundry only).
+
+        This is the other half of the Pay After flow: the customer requested a
+        pickup with no price, the laundry weighed and inspected the items, and
+        now sends the invoice. Adding the priced lines here freezes the total
+        and makes the order payable, so the customer's payment screen can charge
+        it through the normal path.
+
+        Body: ``{"items": [{"name": str, "quantity": int, "price": "0.00"}]}``.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
       security:
       - BearerAuth: []
       responses:
@@ -1467,6 +1667,74 @@ paths:
     patch:
       operationId: api_v1_laundries_admin_laundries_reject_partial_update
       description: Reject a laundry business.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLaundryApproval'
+          description: ''
+  /api/v1/laundries/admin/laundries/{id}/request-changes/:
+    patch:
+      operationId: api_v1_laundries_admin_laundries_request_changes_partial_update
+      description: Ask the owner to fix specific issues before approval.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Laundry.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminLaundryApprovalRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLaundryApproval'
+          description: ''
+  /api/v1/laundries/admin/laundries/{id}/suspend/:
+    patch:
+      operationId: api_v1_laundries_admin_laundries_suspend_partial_update
+      description: Suspend an approved laundry.
       parameters:
       - in: path
         name: id
@@ -2091,6 +2359,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardOrder'
+          description: ''
+  /api/v1/laundries/dashboard/payouts/:
+    get:
+      operationId: api_v1_laundries_dashboard_payouts_retrieve
+      description: |-
+        What the platform is holding, what it owes, and what it has paid.
+
+        This is the money view for the owner web platform, and it is deliberately
+        separate from `DashboardEarningsView`, which reports revenue booked from
+        completed orders. Revenue and cash are not the same thing: an order can be
+        delivered and its money still be a day away, and an owner who cannot see
+        the difference will assume the platform is holding out on them.
+
+        Three numbers, in the order an owner cares about:
+
+        * ``held``      — customers have paid, the orders are not yet delivered.
+        * ``available`` — delivered and earned, waiting for the next payout.
+        * ``paid``      — already sent.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/laundries/dashboard/price-imports/:
     post:
@@ -3726,95 +4023,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderDetail'
           description: ''
-    put:
-      operationId: api_v1_orders_update
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OrderCreateRequest'
-        required: true
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderCreate'
-          description: ''
-    patch:
-      operationId: api_v1_orders_partial_update
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedOrderCreateRequest'
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderCreate'
-          description: ''
-    delete:
-      operationId: api_v1_orders_destroy
-      description: Viewset for managing and tracking orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this order.
-        required: true
-      tags:
-      - api
-      security:
-      - BearerAuth: []
-      responses:
-        '204':
-          description: No response body
   /api/v1/orders/{id}/price-breakdown/:
     get:
       operationId: api_v1_orders_price_breakdown_retrieve
       description: Calculates stored totals and applies business logic using FinanceService.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCreate'
+          description: ''
+  /api/v1/orders/{id}/tracking/:
+    get:
+      operationId: api_v1_orders_tracking_retrieve
+      description: |-
+        Aggregated tracking payload for the customer order detail / tracking screen.
+
+        Returns header info, derived OTP, milestone timeline (one entry per
+        backend Order.Status the order has reached or could reach), item
+        breakdown, charges/payment summary, laundry info, and the full
+        OrderStatusHistory activity log. The schema is stable even when the
+        order is brand new — fields that don't apply yet return null/empty.
       parameters:
       - in: path
         name: id
@@ -3847,7 +4089,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderCreate'
+                $ref: '#/components/schemas/OrderDetail'
           description: ''
   /api/v1/orders/calculate/:
     post:
@@ -4042,6 +4284,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderTransition'
           description: ''
+  /api/v1/orders/lifecycle/{id}/collect-cash/:
+    post:
+      operationId: api_v1_orders_lifecycle_collect_cash_create
+      description: Confirm COD cash received at fulfillment without touching Paystack.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashCollectionRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCollectionResponse'
+          description: ''
   /api/v1/orders/lifecycle/{id}/complete/:
     patch:
       operationId: api_v1_orders_lifecycle_complete_partial_update
@@ -4079,7 +4356,18 @@ paths:
   /api/v1/orders/lifecycle/{id}/mark-delivered/:
     patch:
       operationId: api_v1_orders_lifecycle_mark_delivered_partial_update
-      description: OUT_FOR_DELIVERY -> DELIVERED (Rider/Laundry)
+      description: |-
+        OUT_FOR_DELIVERY -> DELIVERED (Laundry)
+
+        Accepts an optional ``handover_code``: the four digits the customer
+        reads out when they take their clothes back. A correct code proves the
+        delivery and releases the customer's payment immediately.
+
+        A wrong code is rejected outright, because a laundry typing digits at
+        random must not be able to stumble into an instant payout. Sending no
+        code at all is allowed and still closes the order, since customers are
+        not always reachable, but the money then waits out a dispute window
+        before it can be paid.
       parameters:
       - in: path
         name: id
@@ -4212,6 +4500,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderTransition'
           description: ''
+  /api/v1/orders/lifecycle/{id}/quote/:
+    post:
+      operationId: api_v1_orders_lifecycle_quote_create
+      description: |-
+        Price a pay-after-quote order (Laundry only).
+
+        This is the other half of the Pay After flow: the customer requested a
+        pickup with no price, the laundry weighed and inspected the items, and
+        now sends the invoice. Adding the priced lines here freezes the total
+        and makes the order payable, so the customer's payment screen can charge
+        it through the normal path.
+
+        Body: ``{"items": [{"name": str, "quantity": int, "price": "0.00"}]}``.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this order.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderTransitionRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTransition'
+          description: ''
   /api/v1/orders/lifecycle/{id}/reject/:
     patch:
       operationId: api_v1_orders_lifecycle_reject_partial_update
@@ -4303,6 +4634,23 @@ paths:
                 items:
                   $ref: '#/components/schemas/LaunderableItem'
           description: ''
+  /api/v1/payments/analytics/:
+    get:
+      operationId: api_v1_payments_analytics_retrieve
+      description: |-
+        GET /api/v1/payments/analytics/
+        Admin metrics on payments.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+          description: ''
   /api/v1/payments/initialize/:
     post:
       operationId: api_v1_payments_initialize_create
@@ -4331,6 +4679,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentInitializeResponse'
+          description: ''
+  /api/v1/payments/owner-stats/:
+    get:
+      operationId: api_v1_payments_owner_stats_retrieve
+      description: |-
+        GET /api/v1/payments/owner-stats/
+        Financial dashboard stats for laundry owners.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerStatsResponse'
+          description: ''
+  /api/v1/payments/receipt/{reference}/:
+    get:
+      operationId: api_v1_payments_receipt_retrieve
+      description: |-
+        GET /api/v1/payments/receipt/{reference}/
+        Compiles structured receipt info.
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptResponse'
+          description: ''
+  /api/v1/payments/refund/{reference}/:
+    post:
+      operationId: api_v1_payments_refund_create
+      description: |-
+        POST /api/v1/payments/refund/{reference}/
+
+        Staff-only. Starts a refund with Paystack; the payment moves to
+        REFUND_PENDING and reaches REFUNDED when the `refund.processed` webhook
+        lands. Refunds are money-moving and irreversible, so this is never
+        exposed to customers or laundry owners.
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRefundRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/payments/status/{reference}/:
+    get:
+      operationId: api_v1_payments_status_retrieve
+      description: |-
+        GET /api/v1/payments/status/{reference}/
+        Retrieves the database status of the payment.
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentVerifyResponse'
           description: ''
   /api/v1/payments/verify/{reference}/:
     get:
@@ -4394,6 +4839,293 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReferralStatsResponse'
+          description: ''
+  /api/v1/support/campaigns/:
+    get:
+      operationId: api_v1_support_campaigns_list
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+    post:
+      operationId: api_v1_support_campaigns_create
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+  /api/v1/support/campaigns/{id}/:
+    get:
+      operationId: api_v1_support_campaigns_retrieve
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+    put:
+      operationId: api_v1_support_campaigns_update
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+    patch:
+      operationId: api_v1_support_campaigns_partial_update
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationCampaignRequest'
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+    delete:
+      operationId: api_v1_support_campaigns_destroy
+      description: CRUD + send/schedule/preview/analytics for notification campaigns.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/support/campaigns/{id}/analytics/:
+    get:
+      operationId: api_v1_support_campaigns_analytics_retrieve
+      description: Per-campaign delivery + engagement metrics.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+  /api/v1/support/campaigns/{id}/schedule/:
+    post:
+      operationId: api_v1_support_campaigns_schedule_create
+      description: 'Schedule a campaign for a future time. Body: {"scheduled_for":
+        ISO8601}.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+  /api/v1/support/campaigns/{id}/send/:
+    post:
+      operationId: api_v1_support_campaigns_send_create
+      description: Send a campaign now (async via Celery).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification Campaign.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+  /api/v1/support/campaigns/analytics-overview/:
+    get:
+      operationId: api_v1_support_campaigns_analytics_overview_retrieve
+      description: Platform-wide notification analytics for the admin dashboard.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
+          description: ''
+  /api/v1/support/campaigns/preview/:
+    post:
+      operationId: api_v1_support_campaigns_preview_create
+      description: Return the audience size for a segment without sending anything.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationCampaignRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCampaign'
           description: ''
   /api/v1/support/faqs/:
     get:
@@ -4632,6 +5364,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notification'
           description: ''
+  /api/v1/support/notifications/{id}/track/:
+    post:
+      operationId: api_v1_support_notifications_track_create
+      description: |-
+        Record an engagement event for a notification.
+
+        Body: {"event": "opened" | "clicked"}. Idempotent — repeated events
+        only count once. Drives campaign open/click analytics. Scoped to the
+        requesting user's own notifications via get_object()/get_queryset().
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Notification.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
   /api/v1/support/notifications/mark-all-read/:
     post:
       operationId: api_v1_support_notifications_mark_all_read_create
@@ -4650,6 +5422,46 @@ paths:
             schema:
               $ref: '#/components/schemas/NotificationRequest'
         required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/support/notifications/preferences/:
+    get:
+      operationId: api_v1_support_notifications_preferences_retrieve
+      description: Get or update the current user's notification preferences.
+      tags:
+      - api
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+    patch:
+      operationId: api_v1_support_notifications_preferences_partial_update
+      description: Get or update the current user's notification preferences.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationRequest'
       security:
       - BearerAuth: []
       responses:
@@ -4882,7 +5694,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/LaundryApprovalStatusEnum'
+          - $ref: '#/components/schemas/Status50cEnum'
           title: Approval status
         is_active:
           type: boolean
@@ -5103,6 +5915,118 @@ components:
       - data
       - message
       - status
+    AnalyticsBatchRequest:
+      type: object
+      description: A batch upload — the app flushes its offline queue in one request.
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsEventInRequest'
+      required:
+      - events
+    AnalyticsEventInPlatformEnum:
+      enum:
+      - ios
+      - android
+      - web
+      - server
+      - unknown
+      type: string
+      description: |-
+        * `ios` - iOS
+        * `android` - Android
+        * `web` - Web
+        * `server` - Server
+        * `unknown` - Unknown
+    AnalyticsEventInRequest:
+      type: object
+      description: Inbound event from the mobile client. Kept permissive but bounded.
+      properties:
+        event_name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        session_id:
+          type: string
+          default: ''
+          maxLength: 64
+        device_id:
+          type: string
+          default: ''
+          maxLength: 128
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/AnalyticsEventInPlatformEnum'
+          default: unknown
+        os_version:
+          type: string
+          default: ''
+          maxLength: 32
+        app_version:
+          type: string
+          default: ''
+          maxLength: 32
+        screen_name:
+          type: string
+          default: ''
+          maxLength: 64
+        event_data:
+          type: object
+          additionalProperties: {}
+        occurred_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - event_name
+    AnalyticsPaymentMethodBreakdown:
+      type: object
+      properties:
+        payment_method:
+          type: string
+        count:
+          type: integer
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - count
+      - payment_method
+      - total_amount
+    AnalyticsResponse:
+      type: object
+      properties:
+        total_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        success_rate:
+          type: number
+          format: double
+        count_success:
+          type: integer
+        count_failed:
+          type: integer
+        count_pending:
+          type: integer
+        average_order_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        method_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPaymentMethodBreakdown'
+      required:
+      - average_order_value
+      - count_failed
+      - count_pending
+      - count_success
+      - method_breakdown
+      - success_rate
+      - total_revenue
     AssignmentTypeEnum:
       enum:
       - PICKUP
@@ -5119,6 +6043,31 @@ components:
       description: |-
         * `USER` - User
         * `ADMIN` - Admin
+    CashCollectionRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - amount
+    CashCollectionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        already_collected:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/OrderDetail'
+      required:
+      - already_collected
+      - data
+      - message
+      - status
     Category:
       type: object
       properties:
@@ -5315,6 +6264,9 @@ components:
         customer_name:
           type: string
           readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
         status:
           $ref: '#/components/schemas/OrderStatusEnum'
         status_display:
@@ -5335,13 +6287,50 @@ components:
           type: string
           format: date-time
           nullable: true
+        pickup_address:
+          type: string
+          nullable: true
+        pricing_mode:
+          $ref: '#/components/schemas/PricingModeEnum'
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodBc5Enum'
+        payment_status:
+          $ref: '#/components/schemas/PaymentStatusEnum'
+        payment_state:
+          type: string
+          readOnly: true
+        amount_due:
+          type: string
+          readOnly: true
+        amount_collected:
+          type: string
+          readOnly: true
+        cash_collected_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
       required:
+      - amount_collected
+      - amount_due
+      - cash_collected_at
       - created_at
       - customer_name
+      - customer_phone
       - id
       - order_no
+      - payment_state
       - pickup_date
       - status_display
+    DashboardResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        data: {}
+      required:
+      - data
+      - status
     DashboardStats:
       type: object
       properties:
@@ -5797,6 +6786,12 @@ components:
       - date
     LaunderableItem:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         id:
           type: string
@@ -5822,20 +6817,14 @@ components:
       - id
       - item_category_name
       - name
-    LaundryApprovalStatusEnum:
-      enum:
-      - PENDING
-      - APPROVED
-      - REJECTED
-      - SUSPENDED
-      type: string
-      description: |-
-        * `PENDING` - Pending
-        * `APPROVED` - Approved
-        * `REJECTED` - Rejected
-        * `SUSPENDED` - Suspended
     LaundryDetail:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         id:
           type: string
@@ -5867,10 +6856,17 @@ components:
         phone_number:
           type: string
           maxLength: 20
+        phone:
+          type: string
+          readOnly: true
         priceRange:
           type: string
         pricingModel:
           type: string
+          readOnly: true
+        weightPricing:
+          type: object
+          additionalProperties: {}
           readOnly: true
         estimated_delivery_hours:
           type: integer
@@ -5908,25 +6904,65 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           readOnly: true
+        pickup_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        pickupFee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        opening_hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpeningHoursDetail'
+          readOnly: true
+        isOpen:
+          type: boolean
+          readOnly: true
+        features:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        tagline:
+          type: string
+          readOnly: true
       required:
       - address
       - deliveryFee
+      - features
       - id
       - imageUrl
       - isFavorite
+      - isOpen
       - latitude
       - longitude
       - minOrder
       - name
+      - opening_hours
+      - phone
       - phone_number
+      - pickupFee
+      - pickup_fee
       - priceRange
       - pricingModel
       - rating
       - reviews
       - reviewsCount
       - services
+      - tagline
+      - weightPricing
     LaundryDetailRequest:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         name:
           type: string
@@ -5971,6 +7007,12 @@ components:
       - priceRange
     LaundryList:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         id:
           type: string
@@ -6028,6 +7070,10 @@ components:
           type: number
           format: float
           readOnly: true
+        minServicePrice:
+          type: number
+          format: float
+          readOnly: true
         latitude:
           type: string
           format: decimal
@@ -6049,6 +7095,7 @@ components:
       - location
       - longitude
       - minOrder
+      - minServicePrice
       - name
       - priceRange
       - pricingModel
@@ -6056,6 +7103,20 @@ components:
       - reviewsCount
     LaundryPricingItem:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         id:
           type: string
@@ -6102,6 +7163,20 @@ components:
       - updated_at
     LaundryPricingItemRequest:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         item_name:
           type: string
@@ -6929,7 +8004,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/LaundryApprovalStatusEnum'
+          - $ref: '#/components/schemas/Status50cEnum'
           readOnly: true
           title: Approval status
         approved_at:
@@ -7092,11 +8167,232 @@ components:
           type: string
           format: uuid
           nullable: true
+        campaign:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        push_status:
+          allOf:
+          - $ref: '#/components/schemas/PushStatusEnum'
+          readOnly: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        opened_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        clicked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
+      - campaign
+      - clicked_at
       - created_at
+      - delivered_at
       - id
+      - opened_at
+      - push_status
       - read_at
       - title
+    NotificationCampaign:
+      type: object
+      description: Full campaign representation with computed engagement rates.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        segment:
+          $ref: '#/components/schemas/SegmentEnum'
+        segment_params: {}
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        action_url:
+          type: string
+          maxLength: 500
+        promo_code:
+          type: string
+          maxLength: 50
+        notification_type:
+          $ref: '#/components/schemas/NotificationTypeEnum'
+        category:
+          type: string
+          maxLength: 40
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/NotificationCampaignStatusEnum'
+          readOnly: true
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        recipients_count:
+          type: integer
+          readOnly: true
+        delivered_count:
+          type: integer
+          readOnly: true
+        skipped_count:
+          type: integer
+          readOnly: true
+        failed_count:
+          type: integer
+          readOnly: true
+        opened_count:
+          type: integer
+          readOnly: true
+        clicked_count:
+          type: integer
+          readOnly: true
+        converted_count:
+          type: integer
+          readOnly: true
+        revenue_generated:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        delivery_rate:
+          type: number
+          format: double
+          readOnly: true
+        open_rate:
+          type: number
+          format: double
+          readOnly: true
+        click_rate:
+          type: number
+          format: double
+          readOnly: true
+        failure_rate:
+          type: number
+          format: double
+          readOnly: true
+        conversion_rate:
+          type: number
+          format: double
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        sent_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - body
+      - click_rate
+      - clicked_count
+      - conversion_rate
+      - converted_count
+      - created_at
+      - created_by
+      - delivered_count
+      - delivery_rate
+      - failed_count
+      - failure_rate
+      - id
+      - name
+      - open_rate
+      - opened_count
+      - recipients_count
+      - revenue_generated
+      - sent_at
+      - skipped_count
+      - status
+      - title
+    NotificationCampaignRequest:
+      type: object
+      description: Full campaign representation with computed engagement rates.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        segment:
+          $ref: '#/components/schemas/SegmentEnum'
+        segment_params: {}
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+        image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        action_url:
+          type: string
+          maxLength: 500
+        promo_code:
+          type: string
+          maxLength: 50
+        notification_type:
+          $ref: '#/components/schemas/NotificationTypeEnum'
+        category:
+          type: string
+          minLength: 1
+          maxLength: 40
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - body
+      - name
+      - title
+    NotificationCampaignStatusEnum:
+      enum:
+      - DRAFT
+      - SCHEDULED
+      - SENDING
+      - SENT
+      - FAILED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `SCHEDULED` - Scheduled
+        * `SENDING` - Sending
+        * `SENT` - Sent
+        * `FAILED` - Failed
     NotificationRequest:
       type: object
       properties:
@@ -7127,6 +8423,16 @@ components:
           nullable: true
       required:
       - title
+    NotificationTypeEnum:
+      enum:
+      - ORDER
+      - SYSTEM
+      - PROMO
+      type: string
+      description: |-
+        * `ORDER` - Order Update
+        * `SYSTEM` - System Message
+        * `PROMO` - Promotion
     OpeningHours:
       type: object
       properties:
@@ -7155,6 +8461,59 @@ components:
       required:
       - day
       - id
+    OpeningHoursDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        day:
+          allOf:
+          - $ref: '#/components/schemas/DayEnum'
+          minimum: -2147483648
+          maximum: 2147483647
+        dayDisplay:
+          type: string
+          readOnly: true
+        opening_time:
+          type: string
+          format: time
+        closing_time:
+          type: string
+          format: time
+        is_closed:
+          type: boolean
+        is_overnight:
+          type: boolean
+      required:
+      - closing_time
+      - day
+      - dayDisplay
+      - id
+      - opening_time
+    OpeningHoursDetailRequest:
+      type: object
+      properties:
+        day:
+          allOf:
+          - $ref: '#/components/schemas/DayEnum'
+          minimum: -2147483648
+          maximum: 2147483647
+        opening_time:
+          type: string
+          format: time
+        closing_time:
+          type: string
+          format: time
+        is_closed:
+          type: boolean
+        is_overnight:
+          type: boolean
+      required:
+      - closing_time
+      - day
+      - opening_time
     OpeningHoursRequest:
       type: object
       properties:
@@ -7220,10 +8579,38 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OrderItemCreate'
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/OrderCreatePaymentMethodEnum'
+          default: CARD
+        pricing_mode:
+          allOf:
+          - $ref: '#/components/schemas/PricingModeEnum'
+          default: BY_ITEM
+        estimated_weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
       required:
-      - items
       - laundry
       - pickup_date
+    OrderCreatePaymentMethodEnum:
+      enum:
+      - CARD
+      - PAYSTACK
+      - CASH
+      - CASH_ON_DELIVERY
+      - BANK_TRANSFER
+      - TRANSFER
+      type: string
+      description: |-
+        * `CARD` - CARD
+        * `PAYSTACK` - PAYSTACK
+        * `CASH` - CASH
+        * `CASH_ON_DELIVERY` - CASH_ON_DELIVERY
+        * `BANK_TRANSFER` - BANK_TRANSFER
+        * `TRANSFER` - TRANSFER
     OrderCreateRequest:
       type: object
       properties:
@@ -7271,11 +8658,19 @@ components:
           writeOnly: true
           minLength: 1
         payment_method:
+          allOf:
+          - $ref: '#/components/schemas/OrderCreatePaymentMethodEnum'
+          default: CARD
+        pricing_mode:
+          allOf:
+          - $ref: '#/components/schemas/PricingModeEnum'
+          default: BY_ITEM
+        estimated_weight_kg:
           type: string
-          writeOnly: true
-          minLength: 1
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
       required:
-      - items
       - laundry
       - pickup_date
     OrderDetail:
@@ -7291,6 +8686,9 @@ components:
         laundryName:
           type: string
           readOnly: true
+        laundry:
+          type: string
+          format: uuid
         status:
           $ref: '#/components/schemas/OrderStatusEnum'
         payment_status:
@@ -7351,14 +8749,52 @@ components:
           type: string
           format: date-time
           readOnly: true
+        payment_reference:
+          type: string
+          nullable: true
+          readOnly: true
+        provider_payment_status:
+          type: string
+          nullable: true
+          readOnly: true
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodBc5Enum'
+        payment_state:
+          type: string
+          readOnly: true
+        amount_due:
+          type: string
+          readOnly: true
+        amount_collected:
+          type: string
+          readOnly: true
+        cash_collected_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        pricing_mode:
+          $ref: '#/components/schemas/PricingModeEnum'
+        estimated_weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
       required:
+      - amount_collected
+      - amount_due
+      - cash_collected_at
       - created_at
       - id
       - items
+      - laundry
       - laundryName
       - order_no
+      - payment_reference
+      - payment_state
       - pickup_date
       - price_breakdown
+      - provider_payment_status
     OrderItem:
       type: object
       properties:
@@ -7395,10 +8831,10 @@ components:
       properties:
         item:
           type: string
-          format: uuid
+          maxLength: 255
         service_type:
           type: string
-          format: uuid
+          maxLength: 255
         quantity:
           type: integer
           maximum: 99
@@ -7412,10 +8848,12 @@ components:
       properties:
         item:
           type: string
-          format: uuid
+          minLength: 1
+          maxLength: 255
         service_type:
           type: string
-          format: uuid
+          minLength: 1
+          maxLength: 255
         quantity:
           type: integer
           maximum: 99
@@ -7453,6 +8891,36 @@ components:
         reason:
           type: string
         metadata: {}
+    OrderTransitionRequest:
+      type: object
+      description: Generic serializer for status transitions that may require a reason.
+      properties:
+        reason:
+          type: string
+        metadata: {}
+    OwnerStatsResponse:
+      type: object
+      properties:
+        total_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        count_success:
+          type: integer
+        count_failed:
+          type: integer
+        count_pending:
+          type: integer
+        method_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPaymentMethodBreakdown'
+      required:
+      - count_failed
+      - count_pending
+      - count_success
+      - method_breakdown
+      - total_revenue
     PaginatedLaundryListList:
       type: object
       required:
@@ -7510,7 +8978,7 @@ components:
       properties:
         status:
           allOf:
-          - $ref: '#/components/schemas/LaundryApprovalStatusEnum'
+          - $ref: '#/components/schemas/Status50cEnum'
           title: Approval status
         is_active:
           type: boolean
@@ -7594,6 +9062,12 @@ components:
           maxLength: 255
     PatchedLaundryDetailRequest:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         name:
           type: string
@@ -7631,6 +9105,20 @@ components:
           type: boolean
     PatchedLaundryPricingItemRequest:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         item_name:
           type: string
@@ -7801,6 +9289,50 @@ components:
           type: boolean
         ironing_available:
           type: boolean
+    PatchedNotificationCampaignRequest:
+      type: object
+      description: Full campaign representation with computed engagement rates.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        segment:
+          $ref: '#/components/schemas/SegmentEnum'
+        segment_params: {}
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+        image_url:
+          type: string
+          format: uri
+          maxLength: 200
+        action_url:
+          type: string
+          maxLength: 500
+        promo_code:
+          type: string
+          maxLength: 50
+        notification_type:
+          $ref: '#/components/schemas/NotificationTypeEnum'
+        category:
+          type: string
+          minLength: 1
+          maxLength: 40
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
     PatchedNotificationRequest:
       type: object
       properties:
@@ -7829,56 +9361,6 @@ components:
           type: string
           format: uuid
           nullable: true
-    PatchedOrderCreateRequest:
-      type: object
-      properties:
-        laundry:
-          type: string
-          format: uuid
-        pickup_date:
-          type: string
-          format: date-time
-        pickup_address:
-          type: string
-          nullable: true
-        pickup_lat:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
-          nullable: true
-        pickup_lng:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
-          nullable: true
-        delivery_address:
-          type: string
-          nullable: true
-        delivery_lat:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
-          nullable: true
-        delivery_lng:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
-          nullable: true
-        special_instructions:
-          type: string
-          nullable: true
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/OrderItemCreateRequest'
-        coupon_code:
-          type: string
-          writeOnly: true
-          minLength: 1
-        payment_method:
-          type: string
-          writeOnly: true
-          minLength: 1
     PatchedOrderTransitionRequest:
       type: object
       description: Generic serializer for status transitions that may require a reason.
@@ -7896,6 +9378,20 @@ components:
         items_data: {}
     PatchedProfileRequest:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         phone:
           type: string
@@ -7937,6 +9433,18 @@ components:
       required:
       - authorization_url
       - reference
+    PaymentInitializeRequestPaymentMethodEnum:
+      enum:
+      - CARD
+      - PAYSTACK
+      - BANK_TRANSFER
+      - TRANSFER
+      type: string
+      description: |-
+        * `CARD` - CARD
+        * `PAYSTACK` - PAYSTACK
+        * `BANK_TRANSFER` - BANK_TRANSFER
+        * `TRANSFER` - TRANSFER
     PaymentInitializeRequestRequest:
       type: object
       properties:
@@ -7945,7 +9453,7 @@ components:
           format: uuid
         payment_method:
           allOf:
-          - $ref: '#/components/schemas/PaymentMethodEnum'
+          - $ref: '#/components/schemas/PaymentInitializeRequestPaymentMethodEnum'
           default: CARD
       required:
       - order_id
@@ -7962,22 +9470,29 @@ components:
       - data
       - message
       - status
-    PaymentMethodEnum:
+    PaymentMethodBc5Enum:
       enum:
       - CARD
-      - PAYSTACK
-      - CASH
-      - CASH_ON_DELIVERY
       - BANK_TRANSFER
-      - TRANSFER
+      - CASH
       type: string
       description: |-
-        * `CARD` - CARD
-        * `PAYSTACK` - PAYSTACK
-        * `CASH` - CASH
-        * `CASH_ON_DELIVERY` - CASH_ON_DELIVERY
-        * `BANK_TRANSFER` - BANK_TRANSFER
-        * `TRANSFER` - TRANSFER
+        * `CARD` - Paystack
+        * `BANK_TRANSFER` - Bank transfer
+        * `CASH` - Cash on delivery
+    PaymentRefundRequest:
+      type: object
+      description: Body for POST /payments/refund/{reference}/.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+          description: Partial refund amount in GHS. Omit for a full refund.
+        reason:
+          type: string
+          maxLength: 200
     PaymentStatusEnum:
       enum:
       - PAID
@@ -8014,18 +9529,6 @@ components:
       - data
       - message
       - status
-    PlatformEnum:
-      enum:
-      - ios
-      - android
-      - web
-      - unknown
-      type: string
-      description: |-
-        * `ios` - iOS
-        * `android` - Android
-        * `web` - Web
-        * `unknown` - Unknown
     PriceImportConfirmRequest:
       type: object
       properties:
@@ -8226,6 +9729,16 @@ components:
       required:
       - display_order
       - id
+    PricingModeEnum:
+      enum:
+      - BY_ITEM
+      - BY_WEIGHT
+      - CUSTOM_QUOTE
+      type: string
+      description: |-
+        * `BY_ITEM` - By item
+        * `BY_WEIGHT` - By weight
+        * `CUSTOM_QUOTE` - Pay after quote
     PricingModelEnum:
       enum:
       - BY_ITEM
@@ -8250,6 +9763,20 @@ components:
         * `URGENT` - Urgent
     Profile:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         id:
           type: string
@@ -8315,6 +9842,20 @@ components:
       - social_provider
     ProfileRequest:
       type: object
+      description: |-
+        Serializer mixin: defer optional file/image writes until after the row
+        is saved, degrading to "no file" on storage failure instead of raising.
+
+        Without this, a ``ModelSerializer`` writes the upload to storage *during*
+        ``Model.save()``; a misconfigured/unreachable backend then raises and DRF
+        surfaces an unhandled HTTP 500. Declare the optional fields on ``Meta``::
+
+            class Meta:
+                optional_media_fields = ['avatar']
+
+        Only the write path changes; reads still use the ``Safe*`` field mapping.
+        Combine with :class:`SafeMediaModelSerializer`, e.g.
+        ``class FooSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer)``.
       properties:
         phone:
           type: string
@@ -8357,7 +9898,7 @@ components:
           type: string
           maxLength: 128
         platform:
-          $ref: '#/components/schemas/PlatformEnum'
+          $ref: '#/components/schemas/PushDevicePlatformEnum'
         app_version:
           type: string
           maxLength: 50
@@ -8381,6 +9922,140 @@ components:
       - is_active
       - last_registered_at
       - token
+    PushDevicePlatformEnum:
+      enum:
+      - ios
+      - android
+      - web
+      - unknown
+      type: string
+      description: |-
+        * `ios` - iOS
+        * `android` - Android
+        * `web` - Web
+        * `unknown` - Unknown
+    PushStatusEnum:
+      enum:
+      - NONE
+      - PENDING
+      - SENT
+      - SKIPPED
+      - FAILED
+      type: string
+      description: |-
+        * `NONE` - No push
+        * `PENDING` - Queued
+        * `SENT` - Sent to Expo
+        * `SKIPPED` - Skipped
+        * `FAILED` - Failed
+    ReceiptCustomer:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+      required:
+      - email
+      - name
+      - phone
+    ReceiptItem:
+      type: object
+      properties:
+        name:
+          type: string
+        service_type:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: string
+        total:
+          type: string
+      required:
+      - name
+      - price
+      - quantity
+      - service_type
+      - total
+    ReceiptLaundry:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        phone_number:
+          type: string
+      required:
+      - address
+      - name
+      - phone_number
+    ReceiptPayment:
+      type: object
+      properties:
+        method:
+          type: string
+        status:
+          type: string
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - method
+      - paid_at
+      - status
+    ReceiptPricing:
+      type: object
+      properties:
+        items_subtotal:
+          type: string
+        total_amount:
+          type: string
+        currency:
+          type: string
+      required:
+      - currency
+      - items_subtotal
+      - total_amount
+    ReceiptResponse:
+      type: object
+      properties:
+        receipt_no:
+          type: string
+        transaction_reference:
+          type: string
+        order_no:
+          type: string
+        laundry:
+          $ref: '#/components/schemas/ReceiptLaundry'
+        customer:
+          $ref: '#/components/schemas/ReceiptCustomer'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptItem'
+        pricing:
+          $ref: '#/components/schemas/ReceiptPricing'
+        payment:
+          $ref: '#/components/schemas/ReceiptPayment'
+      required:
+      - customer
+      - items
+      - laundry
+      - order_no
+      - payment
+      - pricing
+      - receipt_no
+      - transaction_reference
     ReferralApply:
       type: object
       properties:
@@ -8438,7 +10113,7 @@ components:
           maxLength: 150
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
@@ -8469,21 +10144,13 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
       - password
       - password_confirm
       - phone
-    RegisterRoleEnum:
-      enum:
-      - CUSTOMER
-      - OWNER
-      type: string
-      description: |-
-        * `CUSTOMER` - CUSTOMER
-        * `OWNER` - OWNER
     ResetPassword:
       type: object
       properties:
@@ -8558,6 +10225,14 @@ components:
           type: string
       required:
       - detail
+    Role9e8Enum:
+      enum:
+      - CUSTOMER
+      - OWNER
+      type: string
+      description: |-
+        * `CUSTOMER` - CUSTOMER
+        * `OWNER` - OWNER
     RoundingStrategyEnum:
       enum:
       - NONE
@@ -8602,6 +10277,32 @@ components:
       required:
       - effective_at
       - pricing_data
+    SegmentEnum:
+      enum:
+      - ALL
+      - ACTIVE
+      - INACTIVE
+      - PENDING_ORDERS
+      - UNPAID
+      - PROMO_OPT_IN
+      - ABANDONED_BOOKING
+      - REFERRAL
+      - NEVER_ORDERED
+      - CITY
+      - CUSTOM
+      type: string
+      description: |-
+        * `ALL` - All users
+        * `ACTIVE` - Active users
+        * `INACTIVE` - Inactive users
+        * `PENDING_ORDERS` - Users with pending orders
+        * `UNPAID` - Users with unpaid orders
+        * `PROMO_OPT_IN` - Users opted into promotions
+        * `ABANDONED_BOOKING` - Users with abandoned bookings
+        * `REFERRAL` - Users who referred others
+        * `NEVER_ORDERED` - Users who never ordered
+        * `CITY` - Users in a city
+        * `CUSTOM` - Custom (explicit user ids)
     ServiceStatusUpdate:
       type: object
       properties:
@@ -8617,7 +10318,7 @@ components:
       properties:
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
     SocialLoginRequest:
       type: object
@@ -8628,18 +10329,10 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - clerk_token
-    SocialLoginRoleEnum:
-      enum:
-      - OWNER
-      - CUSTOMER
-      type: string
-      description: |-
-        * `OWNER` - OWNER
-        * `CUSTOMER` - CUSTOMER
     SocialSession:
       type: object
       properties:
@@ -8653,6 +10346,12 @@ components:
       - user
     SpecialOffer:
       type: object
+      description: |-
+        ModelSerializer that maps model file/image fields to the safe variants.
+
+        Auto-built fields keep their model-derived kwargs (validators, blank/null),
+        but their read path degrades to ``None`` instead of raising when the
+        storage backend is misconfigured or unreachable.
       properties:
         id:
           type: string
@@ -8679,6 +10378,20 @@ components:
       - id
       - image
       - title
+    Status50cEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - CHANGES_REQUESTED
+      - SUSPENDED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `CHANGES_REQUESTED` - Changes Requested
+        * `SUSPENDED` - Suspended
     SupportedCitiesResponse:
       type: object
       properties:

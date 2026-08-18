@@ -83,3 +83,44 @@ def handle_coupon_usage(sender, order, from_status, to_status, **kwargs):
         logger.info(
             f"Coupon {order.coupon.code} confirmed for Order {order.order_no}"
         )
+
+
+from django.db.models.signals import post_save
+from ordering.models.base import Order
+
+
+@receiver(post_save, sender=Order)
+def notify_order_created(sender, instance, created, **kwargs):
+    """Notify customer and laundry owner immediately when a new order is placed."""
+    if not created:
+        return
+    from marketplace.models import Notification
+    from marketplace.services.notification_service import NotificationService
+
+    try:
+        NotificationService.notify_user(
+            instance.user,
+            title="Order Placed",
+            body=f"Your order #{instance.order_no} has been received and is waiting for confirmation.",
+            type=Notification.Type.ORDER,
+            category='ORDER_CREATED',
+            related_order=instance,
+            dedup_key=f'order_created:{instance.id}',
+        )
+        owner = getattr(getattr(instance, 'laundry', None), 'owner', None)
+        if owner:
+            NotificationService.notify_user(
+                owner,
+                title="New Order Received",
+                body=f"You received a new order #{instance.order_no}.",
+                type=Notification.Type.ORDER,
+                category='ORDER_CREATED',
+                related_order=instance,
+                dedup_key=f'owner_order_created:{instance.id}',
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "Failed to send order created notifications",
+            extra={'order_id': str(instance.id), 'error': str(exc)},
+        )
+

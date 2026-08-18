@@ -214,6 +214,43 @@ class TestClerkSocialAuth:
         assert second.email == 'social+updated@example.com'
         assert second.role == User.Role.CUSTOMER
 
+    def test_apple_social_sign_in_creates_user(self):
+        synced, created = sync_user_from_clerk(
+            profile=_profile(
+                clerk_user_id='user_apple_987',
+                email='appleuser@example.com',
+                first_name='Kwame',
+                last_name='Mensah',
+                provider='oauth_apple',
+            ),
+            requested_role=User.Role.CUSTOMER,
+        )
+
+        assert created is True
+        assert synced.email == 'appleuser@example.com'
+        assert synced.first_name == 'Kwame'
+        assert synced.last_name == 'Mensah'
+        assert synced.social_provider == 'oauth_apple'
+        assert synced.clerk_user_id == 'user_apple_987'
+        assert synced.role == User.Role.CUSTOMER
+
+    def test_apple_hide_my_email_sign_in(self):
+        synced, created = sync_user_from_clerk(
+            profile=_profile(
+                clerk_user_id='user_apple_relay_456',
+                email='k39f82kd@privaterelay.appleid.com',
+                first_name='Anonymous',
+                last_name='User',
+                provider='apple',
+            ),
+            requested_role=User.Role.CUSTOMER,
+        )
+
+        assert created is True
+        assert synced.email == 'k39f82kd@privaterelay.appleid.com'
+        assert synced.social_provider == 'oauth_apple'
+        assert synced.clerk_user_id == 'user_apple_relay_456'
+
     def test_privileged_role_request_is_rejected(self):
         response = APIClient().post(
             reverse('auth_social_login'),

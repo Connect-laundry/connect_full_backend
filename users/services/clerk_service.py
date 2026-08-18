@@ -26,7 +26,7 @@ class ClerkDeletionUnavailable(APIException):
 
 
 ALLOWED_SOCIAL_ROLES = {User.Role.CUSTOMER, User.Role.OWNER}
-ALLOWED_SOCIAL_PROVIDERS = {'oauth_google', 'oauth_facebook', 'google', 'facebook'}
+ALLOWED_SOCIAL_PROVIDERS = {'oauth_google', 'oauth_facebook', 'oauth_apple', 'google', 'facebook', 'apple'}
 
 
 @dataclass(frozen=True)
@@ -314,6 +314,7 @@ def normalize_provider(provider: str) -> str:
     aliases = {
         'google': 'oauth_google',
         'facebook': 'oauth_facebook',
+        'apple': 'oauth_apple',
     }
     return aliases.get(provider, provider)
 
@@ -331,7 +332,7 @@ def sync_user_from_clerk(
 
     provider = normalize_provider(profile.provider)
     if provider and provider not in ALLOWED_SOCIAL_PROVIDERS:
-        raise ValidationError({'provider': ['Only Google and Facebook sign-in are supported.']})
+        raise ValidationError({'provider': ['Only Google, Apple, and Facebook sign-in are supported.']})
 
     if requested_role and requested_role not in ALLOWED_SOCIAL_ROLES:
         raise ValidationError({'role': ['Only CUSTOMER and OWNER can be requested during social sign-in.']})
