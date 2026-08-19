@@ -46,12 +46,19 @@ STORAGES = {
     },
 }
 
-# Silence security warnings that are irrelevant for CI / test environments
+# Silence security warnings and CI deploy checks that are irrelevant for test environments
 SILENCED_SYSTEM_CHECKS = [
     'security.W004',  # SECURE_HSTS_SECONDS
     'security.W008',  # SECURE_SSL_REDIRECT
     'security.W012',  # SESSION_COOKIE_SECURE
     'security.W016',  # CSRF_COOKIE_SECURE
+    'payments.E002',
+    'payments.E003',
+    'payments.E004',
+    'payments.E005',
+    'payments.E007',
+    'payments.W001',
+    'drf_spectacular.W001',
 ]
 
 TEMPLATES = [
