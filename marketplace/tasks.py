@@ -346,6 +346,9 @@ def weekly_pending_orders_reminder():
 def inactivity_reactivation(inactive_days=14):
     """Win back customers who haven't opened the app in `inactive_days`.
     Monthly cap per user so we never nag."""
+    from django.conf import settings as _settings
+    if not getattr(_settings, 'INACTIVITY_REACTIVATION_ENABLED', False):
+        return 0
     from marketplace.models import Notification, NotificationCampaign
     from marketplace.services.campaign_service import CampaignService
     from django.utils import timezone

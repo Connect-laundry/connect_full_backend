@@ -734,9 +734,9 @@ MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', '')
 # OCR provider for AI-assisted price-list import. '' / 'null' = stub (no extraction).
 OCR_PROVIDER = os.getenv('OCR_PROVIDER', '').lower()
 
-# Rainy-day promo weather feed. Disabled by default so production can opt in
-# after choosing the exact city/coordinate target.
-WEATHER_PROMO_ENABLED = os.getenv('WEATHER_PROMO_ENABLED', 'False') == 'True'
+# Rainy-day promo weather feed.  Founder-approved; enabled by default.
+# Set WEATHER_PROMO_ENABLED=False to silence without a code change.
+WEATHER_PROMO_ENABLED = os.getenv('WEATHER_PROMO_ENABLED', 'True') == 'True'
 WEATHER_PROMO_PROVIDER = os.getenv('WEATHER_PROMO_PROVIDER', 'open-meteo').lower()
 WEATHER_PROMO_OPEN_METEO_URL = os.getenv(
     'WEATHER_PROMO_OPEN_METEO_URL',
@@ -756,6 +756,11 @@ WEATHER_PROMO_BODY = os.getenv(
 )
 WEATHER_PROMO_ACTION_URL = os.getenv('WEATHER_PROMO_ACTION_URL', '/home')
 
+# Inactivity reactivation push campaign
+# -------------------------------------------------------------------------
+# Sends a "We miss you" push to customers who haven't placed an order in N
+# days.  Enabled by default (founder-approved); set to False to silence.
+INACTIVITY_REACTIVATION_ENABLED = os.getenv('INACTIVITY_REACTIVATION_ENABLED', 'True') == 'True'
 
 # Unfold Admin Configuration
 from django.urls import reverse_lazy
