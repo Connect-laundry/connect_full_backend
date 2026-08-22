@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from ordering.models import Order
-from payments.models import Payment
+from payments.models import Payment, WebhookEvent
 from users.models import User
 
 from test_payments import (
@@ -132,6 +132,42 @@ class TestRefundFlow:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         mock_refund.assert_not_called()
 
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    def test_refund_is_reserved_before_the_provider_call(self, mock_refund):
+        _, _, payment = self._paid_payment('ORD-REFUND-RESERVED')
+
+        def provider_call(*args, **kwargs):
+            payment.refresh_from_db()
+            assert payment.status == Payment.Status.REFUND_PENDING
+            return {'status': True, 'data': {'id': 1}}
+
+        mock_refund.side_effect = provider_call
+        response = _auth_client(self._staff()).post(
+            reverse('payment_refund', args=[payment.transaction_reference]), {}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert mock_refund.call_count == 1
+
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    def test_unknown_refund_outcome_stays_pending_and_cannot_be_retried(self, mock_refund):
+        mock_refund.return_value = {
+            'status': False,
+            'indeterminate': True,
+            'message': 'Refund outcome is unknown. Review it before retrying.',
+        }
+        _, _, payment = self._paid_payment('ORD-REFUND-UNKNOWN')
+        client = _auth_client(self._staff())
+        url = reverse('payment_refund', args=[payment.transaction_reference])
+
+        first = client.post(url, {}, format='json')
+        second = client.post(url, {}, format='json')
+
+        assert first.status_code == status.HTTP_202_ACCEPTED
+        assert second.status_code == status.HTTP_400_BAD_REQUEST
+        assert mock_refund.call_count == 1
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.REFUND_PENDING
+
     # ---- settlement via webhook -----------------------------------------
 
     def _refund_event(self, payment, event_type, event_id):
@@ -186,7 +222,7 @@ class TestRefundFlow:
         # Back to SUCCESS so an admin can retry the refund.
         assert payment.status == Payment.Status.SUCCESS
 
-    def test_refund_webhook_for_unknown_reference_is_a_safe_no_op(self):
+    def test_refund_webhook_for_unknown_reference_is_retryable(self):
         payload = {
             'event': 'refund.processed',
             'data': {
@@ -197,4 +233,5 @@ class TestRefundFlow:
 
         response = _post_signed_webhook(APIClient(), payload)
 
-        assert response.status_code == 200
+        assert response.status_code == 503
+        assert not WebhookEvent.objects.filter(event_id='evt_refund_unknown').exists()

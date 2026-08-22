@@ -126,9 +126,6 @@ MIDDLEWARE = [
     'config.middleware.request_id.RequestIDMiddleware',
 ]
 
-# Security Settings
-DEBUG = os.getenv('DEBUG', 'False') == 'True'        
-
 if not DEBUG:    
     # SSL/HTTPS
     SECURE_SSL_REDIRECT = True
@@ -224,34 +221,10 @@ if USE_POSTGIS:
 else:
     DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
 
-# Redis & Cache Configuration
+# REDIS_URL is used by the CACHES block further down and by Celery.
 REDIS_URL = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL')
-USE_REDIS_CACHE = os.getenv('USE_REDIS_CACHE', 'True' if REDIS_URL else 'False') == 'True'
 
-if REDIS_URL and USE_REDIS_CACHE:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'IGNORE_EXCEPTIONS': True,
-            }
-        }
-    }
-else:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        }
-    }
-
-# Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or REDIS_URL or 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND') or REDIS_URL or 'redis://localhost:6379/0'
-
-# Expo Push Notifications
-EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False').lower() in ('true', '1', 't')
+# Expo Push Notifications — access token for enhanced push security.
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 
 
@@ -534,10 +507,6 @@ LAUNDRY_APPROVAL_NOTIFY_SMS = [
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
 
 
-# DEBUG = False
-# SECURE_SSL_REDIRECT = True
-# SESSION_COOKIE_SECURE = True
-# CSRF_COOKIE_SECURE = True
 
 # --- Observability ---
 

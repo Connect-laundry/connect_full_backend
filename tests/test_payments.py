@@ -149,6 +149,65 @@ class TestPaymentFlow:
         assert response.status_code == status.HTTP_200_OK
         assert Payment.objects.filter(order=order, currency='GHS').exists()
 
+    @patch('payments.services.paystack.PaystackService.initialize_transaction')
+    def test_payment_reference_exists_before_provider_initialization(self, mock_init):
+        customer, order = _build_order()
+
+        def provider_call(*args, **kwargs):
+            reference = kwargs.get('reference') or args[2]
+            reserved = Payment.objects.get(order=order)
+            assert reserved.transaction_reference == reference
+            assert reserved.status == Payment.Status.PENDING
+            assert reserved.paystack_reference is None
+            return {
+                'status': True,
+                'data': {
+                    'authorization_url': 'https://paystack.example/authorize',
+                    'access_code': 'ACCESS-RESERVED',
+                },
+            }
+
+        mock_init.side_effect = provider_call
+        response = _auth_client(customer).post(
+            reverse('payment_initialize'),
+            {'order_id': str(order.id), 'payment_method': 'CARD'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        payment = Payment.objects.get(order=order)
+        assert payment.paystack_reference == 'ACCESS-RESERVED'
+
+    @patch('payments.services.paystack.PaystackService.initialize_transaction')
+    def test_payment_timeout_retries_with_the_same_reserved_reference(self, mock_init):
+        customer, order = _build_order()
+        mock_init.side_effect = [
+            {
+                'status': False,
+                'retryable': True,
+                'indeterminate': True,
+                'message': 'Payment provider did not respond in time. Please retry safely.',
+            },
+            {
+                'status': True,
+                'data': {
+                    'authorization_url': 'https://paystack.example/authorize',
+                    'access_code': 'ACCESS-RETRY',
+                },
+            },
+        ]
+        client = _auth_client(customer)
+        payload = {'order_id': str(order.id), 'payment_method': 'CARD'}
+
+        first = client.post(reverse('payment_initialize'), payload, format='json')
+        reserved = Payment.objects.get(order=order)
+        second = client.post(reverse('payment_initialize'), payload, format='json')
+
+        assert first.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert second.status_code == status.HTTP_200_OK
+        assert Payment.objects.filter(order=order).count() == 1
+        assert mock_init.call_args_list[0].kwargs['reference'] == reserved.transaction_reference
+        assert mock_init.call_args_list[1].kwargs['reference'] == reserved.transaction_reference
     @override_settings(PAYSTACK_APP_CALLBACK_URL='connect-laundry://orders/payment-callback')
     def test_https_callback_bridges_to_fixed_mobile_scheme(self):
         response = APIClient().get(

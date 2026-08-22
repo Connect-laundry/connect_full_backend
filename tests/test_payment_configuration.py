@@ -41,6 +41,29 @@ def test_order_payment_intent_persists_paystack_access_code(mock_initialize):
     assert intent['transaction_id'] == payment.transaction_reference
     assert payment.paystack_reference == 'access-code'
 
+@pytest.mark.django_db
+@patch('payments.services.paystack.PaystackService.initialize_transaction')
+def test_booking_payment_reference_exists_before_provider_call(mock_initialize):
+    _, order = _build_order()
+
+    def provider_call(*args, **kwargs):
+        reference = kwargs.get('reference') or args[2]
+        payment = Payment.objects.get(order=order)
+        assert payment.transaction_reference == reference
+        assert payment.paystack_reference is None
+        return {
+            'status': True,
+            'data': {
+                'authorization_url': 'https://checkout.paystack.com/access-code',
+                'access_code': 'access-code',
+            },
+        }
+
+    mock_initialize.side_effect = provider_call
+    intent = PaymentService.create_payment_intent(order, payment_method='CARD')
+
+    assert intent['status'] == 'PENDING'
+    assert Payment.objects.get(order=order).paystack_reference == 'access-code'
 
 @override_settings(
     DEBUG=False,
@@ -55,6 +78,29 @@ def test_deploy_check_rejects_test_keys_and_non_https_callback():
 
     assert {'payments.E002', 'payments.E003', 'payments.E005'} <= ids
 
+@pytest.mark.django_db
+@patch('payments.services.paystack.PaystackService.initialize_transaction')
+def test_booking_payment_reference_exists_before_provider_call(mock_initialize):
+    _, order = _build_order()
+
+    def provider_call(*args, **kwargs):
+        reference = kwargs.get('reference') or args[2]
+        payment = Payment.objects.get(order=order)
+        assert payment.transaction_reference == reference
+        assert payment.paystack_reference is None
+        return {
+            'status': True,
+            'data': {
+                'authorization_url': 'https://checkout.paystack.com/access-code',
+                'access_code': 'access-code',
+            },
+        }
+
+    mock_initialize.side_effect = provider_call
+    intent = PaymentService.create_payment_intent(order, payment_method='CARD')
+
+    assert intent['status'] == 'PENDING'
+    assert Payment.objects.get(order=order).paystack_reference == 'access-code'
 
 @override_settings(
     DEBUG=False,
