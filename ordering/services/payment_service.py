@@ -2,6 +2,8 @@ import uuid
 import logging
 from payments.services.paystack import PaystackService
 from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -23,21 +25,12 @@ class PaymentService:
     
     @staticmethod
     def create_payment_intent(order, payment_method='CARD'):
-        """
-        Initializes a Paystack transaction and creates a Payment record.
-        """
+        """Reserve a durable reference, then initialize Paystack without DB locks."""
         from payments.models import Payment
-        normalized_method = PaymentService._normalize_payment_method(payment_method)
-        email = order.user.email
-        amount = order.total_amount
-        # Safe string conversion for UUID
-        order_ref = str(order.id).replace('-', '')[:10]
-        reference = f"ORD-{order_ref}-{uuid.uuid4().hex[:6]}"
 
+        normalized_method = PaymentService._normalize_payment_method(payment_method)
+        amount = order.total_amount
         if normalized_method == Payment.Method.CASH:
-            # COD is a promise to pay at fulfillment, not a gateway payment.
-            # The successful cash Payment row is created only when the owner
-            # explicitly confirms receipt.
             return {
                 "transaction_id": None,
                 "amount": str(amount),
@@ -47,24 +40,71 @@ class PaymentService:
                 "authorization_url": None,
                 "access_code": None,
             }
-        paystack = PaystackService()
+
+        from payments.services.split_routing import resolve_route
+        route = resolve_route(order)
+
+        with transaction.atomic():
+            locked_order = type(order).objects.select_for_update().get(pk=order.pk)
+            existing = Payment.objects.select_for_update().filter(order=locked_order).first()
+            if existing and existing.status == Payment.Status.SUCCESS:
+                return {
+                    "transaction_id": existing.transaction_reference,
+                    "amount": str(existing.amount),
+                    "currency": existing.currency,
+                    "status": "SUCCESS",
+                    "payment_method": existing.payment_method,
+                    "authorization_url": None,
+                    "access_code": existing.paystack_reference,
+                }
+            if existing and existing.status == Payment.Status.PENDING and existing.paystack_reference:
+                return {
+                    "transaction_id": existing.transaction_reference,
+                    "amount": str(existing.amount),
+                    "currency": existing.currency,
+                    "status": "PENDING",
+                    "payment_method": existing.payment_method,
+                    "authorization_url": f"https://checkout.paystack.com/{existing.paystack_reference}",
+                    "access_code": existing.paystack_reference,
+                }
+
+            stable_pending = (
+                existing
+                and existing.status == Payment.Status.PENDING
+                and existing.payment_method == normalized_method
+                and existing.transaction_reference
+            )
+            if stable_pending:
+                reference = existing.transaction_reference
+            else:
+                order_ref = str(order.id).replace('-', '')[:10]
+                reference = f"ORD-{order_ref}-{uuid.uuid4().hex[:6]}"
+
+            payment, _ = Payment.objects.update_or_create(
+                order=locked_order,
+                defaults={
+                    'user': locked_order.user,
+                    'amount': amount,
+                    'currency': settings.PAYMENT_CURRENCY,
+                    'payment_method': normalized_method,
+                    'transaction_reference': reference,
+                    'status': Payment.Status.PENDING,
+                    'paystack_reference': None,
+                    'settled_directly': route.is_direct,
+                },
+            )
+
         metadata = {
             'order_id': str(order.id),
             'user_id': str(order.user_id),
             'order_no': order.order_no,
         }
-
-        # Route the money. Direct settlement sends it to the laundry's own
-        # Paystack subaccount; otherwise it lands with the platform and the
-        # settlement ledger records what is owed.
-        from payments.services.split_routing import resolve_route
-        route = resolve_route(order)
         if route.is_direct:
             metadata['settlement'] = 'DIRECT'
             metadata['subaccount'] = route.subaccount_code
 
-        response = paystack.initialize_transaction(
-            email,
+        response = PaystackService().initialize_transaction(
+            order.user.email,
             amount,
             reference,
             metadata=metadata,
@@ -72,38 +112,24 @@ class PaymentService:
             transaction_charge=route.platform_charge_pesewas,
             bearer=route.bearer if route.is_direct else None,
         )
-
-        if response and response.get('status'):
-            data = response.get('data', {})
-            
-            # Create Payment record for tracking
-            Payment.objects.update_or_create(
-                order=order,
-                defaults={
-                    'user': order.user,
-                    'amount': amount,
-                    'currency': settings.PAYMENT_CURRENCY,
-                    'payment_method': normalized_method,
-                    'transaction_reference': reference,
-                    'status': 'PENDING',
-                    'paystack_reference': data.get('access_code'),
-                    # Recorded now, not at webhook time: the laundry's routing
-                    # could change between charge and confirmation, and this
-                    # transaction's fate was decided here.
-                    'settled_directly': route.is_direct,
-                }
-            )
-            
+        data = response.get('data', {}) if isinstance(response.get('data'), dict) else {}
+        access_code = data.get('access_code')
+        authorization_url = data.get('authorization_url')
+        if response.get('status') and access_code and authorization_url:
+            Payment.objects.filter(
+                pk=payment.pk,
+                transaction_reference=reference,
+            ).update(paystack_reference=access_code, updated_at=timezone.now())
             return {
                 "transaction_id": reference,
                 "amount": str(amount),
                 "currency": settings.PAYMENT_CURRENCY,
                 "status": "PENDING",
                 "payment_method": normalized_method,
-                "authorization_url": data.get('authorization_url'),
-                "access_code": data.get('access_code')
+                "authorization_url": authorization_url,
+                "access_code": access_code,
             }
-        
+
         logger.error("Paystack initialization failed", extra={"order_id": str(order.id)})
         return {
             "transaction_id": reference,
@@ -113,9 +139,9 @@ class PaymentService:
             "payment_method": normalized_method,
             "authorization_url": None,
             "access_code": None,
-            "message": "Payment initialization failed."
+            "retryable": bool(response.get('retryable') or response.get('indeterminate')),
+            "message": response.get('message') or "Payment initialization failed.",
         }
-
     @staticmethod
     def verify_payment(reference):
         """

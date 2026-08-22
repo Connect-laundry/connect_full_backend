@@ -202,7 +202,8 @@ def test_payment_initialize_handles_malformed_paystack_payload(auth_client, samp
             '/api/v1/payments/initialize/',
             {'order_id': str(sample_order.id), 'payment_method': 'CARD'},
         )
-    assert response.status_code == 400
+    assert response.status_code == 503
+    assert response.data['status'] == 'error'
     assert response.data['status'] == 'error'
 
 

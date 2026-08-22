@@ -205,16 +205,34 @@ class PaystackService:
                     "Paystack initialization returned non-JSON response",
                     extra={"status_code": response.status_code, "reference": mask_reference(reference)},
                 )
-                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
+                return {
+                    'status': False,
+                    'retryable': response.status_code >= 500,
+                    'message': 'Payment provider returned an invalid response.',
+                }
             if not response.ok:
                 logger.error(
                     "Paystack initialization failed",
                     extra={"status_code": response.status_code, "reference": mask_reference(reference)},
                 )
+                if response.status_code >= 500:
+                    data['retryable'] = True
             return data
+        except requests.exceptions.Timeout as e:
+            logger.error("Paystack initialization timed out", extra={"error": summarize_exception(e)})
+            return {
+                'status': False,
+                'indeterminate': True,
+                'retryable': True,
+                'message': 'Payment provider did not respond in time. Please retry safely.',
+            }
         except requests.exceptions.RequestException as e:
             logger.error("Paystack request error", extra={"error": summarize_exception(e)})
-            return {'status': False, 'message': str(e)}
+            return {
+                'status': False,
+                'retryable': True,
+                'message': 'Payment provider is temporarily unavailable.',
+            }
 
     def verify_transaction(self, reference):
         """
@@ -278,16 +296,36 @@ class PaystackService:
                     "Paystack refund returned non-JSON response",
                     extra={"status_code": response.status_code, "reference": mask_reference(reference)},
                 )
-                return {'status': False, 'message': 'Payment provider returned an invalid response.'}
+                return {
+                    'status': False,
+                    'indeterminate': True,
+                    'message': 'Payment provider returned an invalid response.',
+                }
             if not response.ok:
                 logger.error(
                     "Paystack refund failed",
                     extra={"status_code": response.status_code, "reference": mask_reference(reference)},
                 )
+                if response.status_code >= 500:
+                    data['indeterminate'] = True
             return data
+        except requests.exceptions.Timeout as e:
+            logger.error(
+                "Paystack refund timed out",
+                extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
+            )
+            return {
+                'status': False,
+                'indeterminate': True,
+                'message': 'Refund outcome is unknown. Review it before retrying.',
+            }
         except requests.exceptions.RequestException as e:
             logger.error(
                 "Paystack refund error",
                 extra={"reference": mask_reference(reference), "error": summarize_exception(e)},
             )
-            return {'status': False, 'message': str(e)}
+            return {
+                'status': False,
+                'indeterminate': True,
+                'message': 'Refund outcome is unknown. Review it before retrying.',
+            }

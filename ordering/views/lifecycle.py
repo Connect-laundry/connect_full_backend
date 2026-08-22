@@ -55,12 +55,12 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         from payments.models import Payment
 
         with transaction.atomic():
+            order = Order.objects.select_for_update().get(id=order.id)
             payment = (
                 Payment.objects.select_for_update()
                 .filter(order_id=order.id)
                 .first()
             )
-            order = Order.objects.select_for_update().get(id=order.id)
 
             if (
                 to_status == Order.Status.COMPLETED

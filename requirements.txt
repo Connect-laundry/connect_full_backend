@@ -12,7 +12,7 @@ click-repl==0.3.0
 colorama==0.4.6
 cryptography==50.0.0
 dj-database-url==3.1.2
-Django==6.0.7
+Django==6.0.8
 django-cloudinary-storage==0.3.0
 django-cors-headers==4.4.0
 django-filter==24.3
@@ -28,7 +28,7 @@ packaging==26.0
 pillow==12.3.0
 prompt_toolkit==3.0.52
 psycopg[binary]==3.3.3
-psycopg2-binary==2.9.10
+
 pyasn1==0.6.4
 pycparser==3.0
 python-dateutil==2.9.0.post0
@@ -55,7 +55,6 @@ google-cloud-vision==3.9.0
 
 
 # Analytics dashboard exports (Excel/PDF)
-openpyxl==3.1.5
 reportlab==5.0.0
 defusedcsv==3.0.0
 

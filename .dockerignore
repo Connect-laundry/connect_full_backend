@@ -47,10 +47,15 @@ verify_recommended.py
 
 # Local artefacts
 test_db.sqlite3
+*.sqlite3
 pytest_errors.txt
 pytest_output.txt
+*_output.txt
+*_errors.txt
 tmp/
 uploads/
 media/
 avatars/
 
+# Orphaned image uploads that ended up in source tree
+laundries/shop_*.png

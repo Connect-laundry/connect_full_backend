@@ -56,7 +56,62 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.API_BASE_URL || 'https://connect-full-backend.onrender.com';
+const TEST_PROFILE = __ENV.TEST_PROFILE || 'smoke';
+const selectedProfiles = {
+  smoke: {
+    executor: 'constant-vus',
+    vus: 1,
+    duration: '30s',
+    tags: { test_type: 'smoke' },
+  },
+  baseline: options.scenarios.baseline,
+  load: options.scenarios.launch_load,
+  spike: options.scenarios.campus_spike,
+  stress1000: options.scenarios.stress_test,
+  soak: {
+    executor: 'constant-vus',
+    vus: 100,
+    duration: '2h',
+    tags: { test_type: 'soak' },
+  },
+  burst: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '10s', target: 300 },
+      { duration: '20s', target: 300 },
+      { duration: '10s', target: 0 },
+    ],
+    tags: { test_type: 'burst' },
+  },
+};
+
+if (!selectedProfiles[TEST_PROFILE]) {
+  throw new Error(
+    `Unknown TEST_PROFILE "${TEST_PROFILE}". Use smoke, baseline, load, spike, stress1000, soak, or burst.`,
+  );
+}
+
+options.scenarios = {
+  [TEST_PROFILE]: { ...selectedProfiles[TEST_PROFILE], startTime: '0s' },
+};
+
+const BASE_URL = (__ENV.API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+
+export function setup() {
+  const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(BASE_URL);
+  const productionHost = /connect-full-backend-production\.onrender\.com/i.test(BASE_URL);
+  if (productionHost) {
+    throw new Error('Production load testing is blocked by this harness.');
+  }
+  if (!isLocal && __ENV.SIMAME_LOAD_TEST_ACK !== 'I_HAVE_STAGING_AUTHORIZATION') {
+    throw new Error(
+      'Remote load testing requires written staging authorization and ' +
+      'SIMAME_LOAD_TEST_ACK=I_HAVE_STAGING_AUTHORIZATION.',
+    );
+  }
+  return { target: BASE_URL };
+}
 
 export default function () {
   // 1. Health / Readiness check

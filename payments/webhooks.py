@@ -144,17 +144,17 @@ def _handle_transfer_event(request, event_type, event_data, dedup_key):
 
     try:
         with transaction.atomic():
-            if not _claim_event(dedup_key):
-                logger.info("Duplicate transfer event ignored", extra={"event_id": dedup_key})
-                return HttpResponse(status=200)
-
             payout = Payout.objects.select_for_update().filter(reference=reference).first()
             if not payout:
                 logger.error(
                     "Payout not found for transfer webhook",
                     extra={"reference": mask_reference(reference)},
                 )
-                return HttpResponse(status=200)  # Nothing to retry.
+                return HttpResponse(status=503)
+
+            if not _claim_event(dedup_key):
+                logger.info("Duplicate transfer event ignored", extra={"event_id": dedup_key})
+                return HttpResponse(status=200)
 
             if event_type == 'transfer.success':
                 PayoutService.mark_transfer_settled(payout, reference=reference)
@@ -188,21 +188,29 @@ def _handle_refund_event(request, event_type, event_data, dedup_key):
         logger.warning("Refund webhook carried no transaction reference")
         return HttpResponse(status=400)
 
+    payment_order_id = Payment.objects.filter(
+        transaction_reference=reference
+    ).values_list('order_id', flat=True).first()
+    if not payment_order_id:
+        logger.error(
+            "Payment not found for refund webhook",
+            extra={"reference": mask_reference(reference)},
+        )
+        return HttpResponse(status=503)
+
     try:
         with transaction.atomic():
+            Order.objects.select_for_update().get(pk=payment_order_id)
+            payment = Payment.objects.select_for_update().filter(
+                transaction_reference=reference,
+                order_id=payment_order_id,
+            ).first()
+            if not payment:
+                return HttpResponse(status=503)
+
             if not _claim_event(dedup_key):
                 logger.info("Duplicate refund event ignored", extra={"event_id": dedup_key})
                 return HttpResponse(status=200)
-
-            payment = Payment.objects.select_for_update().filter(
-                transaction_reference=reference
-            ).first()
-            if not payment:
-                logger.error(
-                    "Payment not found for refund webhook",
-                    extra={"reference": mask_reference(reference)},
-                )
-                return HttpResponse(status=200)  # Safe exit; nothing to retry.
 
             if event_type == 'refund.processed':
                 mark_refund_settled(payment, request=request)
@@ -298,27 +306,45 @@ def paystack_webhook(request):
         if not reference:
             return HttpResponse(status=400)
 
-        # 5. Use transaction.atomic() and select_for_update()
+        # Resolve the order before claiming the event. A provider callback can
+        # beat local persistence during a failure, and acknowledging an unknown
+        # reference would permanently consume a real payment event.
+        payment_order_id = Payment.objects.filter(
+            transaction_reference=reference
+        ).values_list('order_id', flat=True).first()
+        if not payment_order_id:
+            logger.error(
+                "Payment record not found for webhook reference",
+                extra={"reference": mask_reference(reference)},
+            )
+            return HttpResponse(status=503)
+
         try:
             with transaction.atomic():
-                # Claim the event atomically with the work it authorises.
-                # A concurrent delivery of the same event loses the race here
-                # and exits as a duplicate; a failure rolls this back.
+                # Keep the global lock order consistent: Order, then Payment.
+                # Initialization and lifecycle paths use the same order so a
+                # callback racing a button tap cannot deadlock the database.
+                order = Order.objects.select_for_update().filter(pk=payment_order_id).first()
+                payment = Payment.objects.select_for_update().filter(
+                    transaction_reference=reference,
+                    order_id=payment_order_id,
+                ).first()
+                if not order or not payment:
+                    logger.error(
+                        "Payment disappeared while processing webhook",
+                        extra={"reference": mask_reference(reference)},
+                    )
+                    return HttpResponse(status=503)
+
+                # Claim the event atomically with the work it authorises. A
+                # transient failure rolls both the claim and the state change
+                # back so Paystack's retry can safely reprocess it.
                 if not _claim_event(dedup_key):
                     logger.info(
                         "Duplicate webhook event ignored (concurrent delivery)",
                         extra={"event_id": dedup_key},
                     )
                     return HttpResponse(status=200)
-
-                payment = Payment.objects.select_for_update().filter(transaction_reference=reference).first()
-
-                if not payment:
-                    logger.error(
-                        "Payment record not found for webhook reference",
-                        extra={"reference": mask_reference(reference)},
-                    )
-                    return HttpResponse(status=200) # Safe exit
 
                 # 6. Idempotency Check / Terminal state validation
                 if payment.status in [Payment.Status.SUCCESS, Payment.Status.FAILED, Payment.Status.EXPIRED]:

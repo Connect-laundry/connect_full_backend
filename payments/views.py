@@ -203,7 +203,6 @@ class PaymentInitializeView(APIView):
         request=PaymentInitializeRequestSerializer,
         responses=PaymentInitializeResponseSerializer,
     )
-    @transaction.atomic
     def post(self, request):
         request_serializer = PaymentInitializeRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
@@ -212,130 +211,152 @@ class PaymentInitializeView(APIView):
             request_serializer.validated_data.get('payment_method', 'CARD')
         )
 
-        # 1. Validate order existence and ownership
-        order = get_object_or_404(
-            Order.objects.select_for_update(), id=order_id, user=request.user
-        )
-        
-        # Accepted custom quotes remain payable; ordinary online orders must
-        # still pay before the laundry can accept them.
-        accepted_quote = (
-            order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
-            and order.status == Order.Status.CONFIRMED
-        )
-        if order.status != Order.Status.PENDING and not accepted_quote:
-            return Response({
-                "status": "error",
-                "message": f"Cannot pay for order in {order.status} status.",
-                "data": {}
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        if (
-            order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
-            and (order.priced_at is None or order.total_amount <= 0)
-        ):
-            return Response({
-                "status": "error",
-                "message": "This order is still waiting for its quote.",
-                "data": {},
-            }, status=status.HTTP_409_CONFLICT)
-
-        if order.payment_method == Order.PaymentMethod.CASH:
-            return Response({
-                "status": "error",
-                "message": "This is a cash-on-delivery order. Payment is collected at fulfillment.",
-                "data": {},
-            }, status=status.HTTP_409_CONFLICT)
-
-        if payment_method != order.payment_method:
-            return Response({
-                "status": "error",
-                "message": "Payment method does not match the method selected for this order.",
-                "data": {},
-            }, status=status.HTTP_409_CONFLICT)
-        # 3. Reject if successful payment already exists
-        if Payment.objects.filter(order=order, status=Payment.Status.SUCCESS).exists():
-             return Response({
-                "status": "error",
-                "message": "Order is already paid.",
-                "data": {}
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # 4. Idempotency Check: reuse pending payment if same method exists
-        existing_payment = Payment.objects.filter(
-            order=order,
-            status=Payment.Status.PENDING,
-            payment_method=payment_method
-        ).first()
-        
-        if existing_payment and existing_payment.paystack_reference:
-            # Never replace a still-pending provider reference. A second charge
-            # could later succeed after this row was overwritten, leaving real
-            # money with no payment record to reconcile.
-            authorization_url = f"https://checkout.paystack.com/{existing_payment.paystack_reference}"
-
-            record_audit(
-                action="PAYMENT_INITIALIZED_REUSED",
-                actor=request.user,
-                request=request,
-                target_type="Payment",
-                target_id=str(existing_payment.id),
-                target_repr=f"Payment {existing_payment.transaction_reference} Reused",
-                metadata={
-                    "amount": str(order.total_amount),
-                    "method": payment_method,
-                    "reference": existing_payment.transaction_reference
-                }
+        # Reserve the local record before calling Paystack. Competing taps are
+        # serialized for this short transaction, while provider latency happens
+        # after locks and the database connection have been released.
+        with transaction.atomic():
+            order = get_object_or_404(
+                Order.objects.select_for_update(), id=order_id, user=request.user
             )
 
-            return Response({
-                "status": "success",
-                "message": "Existing payment session resumed successfully",
-                "data": {
-                    "authorization_url": authorization_url,
-                    "reference": existing_payment.transaction_reference
-                }
-            }, status=status.HTTP_200_OK)
+            accepted_quote = (
+                order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+                and order.status == Order.Status.CONFIRMED
+            )
+            if order.status != Order.Status.PENDING and not accepted_quote:
+                return Response({
+                    "status": "error",
+                    "message": f"Cannot pay for order in {order.status} status.",
+                    "data": {},
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-        # 5. Generate unique reference
-        reference = f"ORD-{uuid.uuid4().hex[:10].upper()}"
+            if (
+                order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+                and (order.priced_at is None or order.total_amount <= 0)
+            ):
+                return Response({
+                    "status": "error",
+                    "message": "This order is still waiting for its quote.",
+                    "data": {},
+                }, status=status.HTTP_409_CONFLICT)
 
-        paystack = PaystackService()
+            if order.payment_method == Order.PaymentMethod.CASH:
+                return Response({
+                    "status": "error",
+                    "message": "This is a cash-on-delivery order. Payment is collected at fulfillment.",
+                    "data": {},
+                }, status=status.HTTP_409_CONFLICT)
+
+            if payment_method != order.payment_method:
+                return Response({
+                    "status": "error",
+                    "message": "Payment method does not match the method selected for this order.",
+                    "data": {},
+                }, status=status.HTTP_409_CONFLICT)
+
+            existing_payment = Payment.objects.select_for_update().filter(order=order).first()
+            if existing_payment and existing_payment.status == Payment.Status.SUCCESS:
+                return Response({
+                    "status": "error",
+                    "message": "Order is already paid.",
+                    "data": {},
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if (
+                existing_payment
+                and existing_payment.status == Payment.Status.PENDING
+                and existing_payment.payment_method == payment_method
+                and existing_payment.paystack_reference
+            ):
+                record_audit(
+                    action="PAYMENT_INITIALIZED_REUSED",
+                    actor=request.user,
+                    request=request,
+                    target_type="Payment",
+                    target_id=str(existing_payment.id),
+                    target_repr=f"Payment {existing_payment.transaction_reference} Reused",
+                    metadata={
+                        "amount": str(order.total_amount),
+                        "method": payment_method,
+                        "reference": existing_payment.transaction_reference,
+                    },
+                )
+                return Response({
+                    "status": "success",
+                    "message": "Existing payment session resumed successfully",
+                    "data": {
+                        "authorization_url": (
+                            f"https://checkout.paystack.com/{existing_payment.paystack_reference}"
+                        ),
+                        "reference": existing_payment.transaction_reference,
+                    },
+                }, status=status.HTTP_200_OK)
+
+            reuse_unfinished_reference = (
+                existing_payment
+                and existing_payment.status == Payment.Status.PENDING
+                and existing_payment.payment_method == payment_method
+                and existing_payment.transaction_reference
+            )
+            reference = (
+                existing_payment.transaction_reference
+                if reuse_unfinished_reference
+                else f"ORD-{uuid.uuid4().hex[:10].upper()}"
+            )
+            payment, _ = Payment.objects.update_or_create(
+                order=order,
+                defaults={
+                    'user': request.user,
+                    'amount': order.total_amount,
+                    'currency': settings.PAYMENT_CURRENCY,
+                    'transaction_reference': reference,
+                    'payment_method': payment_method,
+                    'status': Payment.Status.PENDING,
+                    'paystack_reference': None,
+                },
+            )
+
+        secret_key = str(settings.PAYSTACK_SECRET_KEY or '')
+        provider_environment = (
+            'live' if secret_key.startswith('sk_live_')
+            else 'test' if secret_key.startswith('sk_test_')
+            else 'unconfigured'
+        )
         metadata = {
             "booking_id": str(order.id),
             "order_id": str(order.id),
             "user_id": str(request.user.id),
             "laundry_id": str(order.laundry_id),
             "order_no": order.order_no,
-            "environment": "development" if settings.DEBUG else "production",
-            "payment_method": payment_method
+            "environment": provider_environment,
+            "payment_method": payment_method,
         }
-        
-        # 6. Initialize with Paystack
-        response = paystack.initialize_transaction(
+        response = PaystackService().initialize_transaction(
             email=request.user.email,
             amount=order.total_amount,
             reference=reference,
-            metadata=metadata
+            metadata=metadata,
         )
-        
+
         response_data = response.get('data') if isinstance(response.get('data'), dict) else {}
-        if response.get('status') and response_data.get('access_code') and response_data.get('authorization_url'):
-            # 7. Atomic creation of Payment record
-            with transaction.atomic():
-                payment, _ = Payment.objects.update_or_create(
-                    order=order,
-                    defaults={
-                        'user': request.user,
-                        'amount': order.total_amount,
-                        'currency': settings.PAYMENT_CURRENCY,
-                        'transaction_reference': reference,
-                        'payment_method': payment_method,
-                        'status': Payment.Status.PENDING,
-                        'paystack_reference': response_data['access_code'],
-                    },
+        authorization_url = response_data.get('authorization_url')
+        access_code = response_data.get('access_code')
+        if response.get('status') and access_code and authorization_url:
+            updated = Payment.objects.filter(
+                pk=payment.pk,
+                transaction_reference=reference,
+            ).update(paystack_reference=access_code, updated_at=timezone.now())
+            if not updated:
+                logger.error(
+                    "Reserved payment changed during Paystack initialization",
+                    extra={"order_id": str(order.id)},
                 )
-                
+                return Response({
+                    "status": "error",
+                    "message": "Payment state changed. Refresh the order before trying again.",
+                    "data": {},
+                }, status=status.HTTP_409_CONFLICT)
+
             record_audit(
                 action="PAYMENT_INITIALIZED",
                 actor=request.user,
@@ -346,31 +367,51 @@ class PaymentInitializeView(APIView):
                 metadata={
                     "amount": str(order.total_amount),
                     "method": payment_method,
-                    "environment": metadata["environment"]
-                }
+                    "environment": provider_environment,
+                },
             )
-            
             return Response({
                 "status": "success",
                 "message": "Payment initialized successfully",
                 "data": {
-                    "authorization_url": response_data['authorization_url'],
-                    "reference": reference
-                }
+                    "authorization_url": authorization_url,
+                    "reference": reference,
+                },
+            }, status=status.HTTP_200_OK)
+
+        # A same-reference request may have won while this request was in
+        # flight. Return the durable checkout session instead of a false error.
+        payment.refresh_from_db()
+        if payment.paystack_reference:
+            return Response({
+                "status": "success",
+                "message": "Existing payment session resumed successfully",
+                "data": {
+                    "authorization_url": f"https://checkout.paystack.com/{payment.paystack_reference}",
+                    "reference": payment.transaction_reference,
+                },
             }, status=status.HTTP_200_OK)
 
         if response.get('status'):
-            # Paystack said OK but the payload is missing checkout fields —
-            # treat as a provider fault, not a client error.
             logger.error(
                 "Paystack initialization returned incomplete payload",
                 extra={"order_id": str(order.id)},
             )
+
+        provider_unavailable = (
+            response.get('retryable')
+            or response.get('indeterminate')
+            or response.get('status')
+        )
         return Response({
             "status": "error",
-            "message": response.get('message', 'Payment initialization failed.'),
-            "data": {}
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "message": response.get('message', 'Payment provider is temporarily unavailable.'),
+            "data": {},
+        }, status=(
+            status.HTTP_503_SERVICE_UNAVAILABLE
+            if provider_unavailable
+            else status.HTTP_400_BAD_REQUEST
+        ))
 
 
 class MobileAppRedirect(HttpResponseRedirect):
@@ -409,11 +450,15 @@ class PaymentVerifyView(APIView):
 
         verify_payload = verify_data.get('data') if isinstance(verify_data.get('data'), dict) else {}
         if verify_data.get('status') and verify_payload.get('status') == 'success':
-            # Use select_for_update() and transaction.atomic()
+            # Keep the shared lock order consistent with initialization,
+            # lifecycle actions, and webhooks: Order, then Payment.
             with transaction.atomic():
+                order = Order.objects.select_for_update().filter(
+                    pk=owned_payment.order_id
+                ).first()
                 payment = Payment.objects.select_for_update().filter(pk=owned_payment.pk).first()
 
-                if not payment:
+                if not order or not payment:
                     return Response({
                         "status": "error",
                         "message": "Payment record not found.",
@@ -475,8 +520,7 @@ class PaymentVerifyView(APIView):
                     
                     payment.save()
                     
-                    # Update order payment status
-                    order = payment.order
+                    # Update the already locked order payment status.
                     order.payment_status = Order.PaymentStatus.PAID
                     order.save(update_fields=['payment_status', 'updated_at'])
 
@@ -675,7 +719,7 @@ class PaymentRefundView(APIView):
 
     @extend_schema(request=PaymentRefundSerializer, responses=None)
     def post(self, request, reference):
-        from .services.refund import RefundError, refund_payment
+        from .services.refund import RefundError, RefundOutcomeUnknown, refund_payment
 
         serializer = PaymentRefundSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -689,6 +733,15 @@ class PaymentRefundView(APIView):
                 reason=serializer.validated_data.get('reason', ''),
                 actor=request.user,
                 request=request,
+            )
+        except RefundOutcomeUnknown as exc:
+            return Response(
+                {
+                    "status": "pending",
+                    "message": str(exc),
+                    "data": {"payment_status": Payment.Status.REFUND_PENDING},
+                },
+                status=status.HTTP_202_ACCEPTED,
             )
         except RefundError as exc:
             return Response(
