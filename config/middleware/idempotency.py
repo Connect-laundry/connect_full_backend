@@ -53,13 +53,22 @@ class IdempotencyMiddleware:
         try:
             record, claimed = self._claim(IdempotencyRecord, key, fingerprint)
         except Exception as exc:
-            # A storage failure must not take the endpoint down; fall through
-            # to normal (non-idempotent) handling and stay visible in logs.
-            logger.warning(
-                "Idempotency claim failed; processing without protection",
-                extra={"error": str(exc)},
+            # Never execute a keyed write when its duplicate guard cannot be
+            # established. Failing open here can create a second order or
+            # payment after a lost response.
+            logger.error(
+                "Idempotency claim failed; rejecting protected write",
+                extra={"error_type": type(exc).__name__},
             )
-            return self.get_response(request)
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "message": "We could not safely process this request. Please try again shortly.",
+                    "data": {},
+                },
+                status=503,
+                headers={"Retry-After": "3"},
+            )
 
         if not claimed:
             if record.fingerprint != fingerprint:

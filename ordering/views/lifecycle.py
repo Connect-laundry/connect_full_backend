@@ -340,7 +340,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
             type=Notification.Type.ORDER,
             category="CASH_COLLECTED",
             related_order=order,
-            dedup_key=f"cash_collected_{order.id}",
+            dedup_key=f"payment_success_user:{payment.id}",
         )
 
         return Response({

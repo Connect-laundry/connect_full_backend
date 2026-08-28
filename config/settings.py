@@ -469,6 +469,17 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = DEBUG
+CELERY_TASK_QUEUE_MAX_PRIORITY = 10
+CELERY_TASK_DEFAULT_PRIORITY = 5
+CELERY_TASK_ROUTES = {
+    'marketplace.tasks.send_real_push': {'queue': 'notifications', 'priority': 8},
+    'marketplace.tasks.process_push_receipts': {'queue': 'notifications', 'priority': 7},
+    'marketplace.tasks.dispatch_pending_pushes': {'queue': 'notifications', 'priority': 9},
+    'marketplace.tasks.run_campaign': {'queue': 'campaigns', 'priority': 2},
+    'marketplace.tasks.weekly_pending_orders_reminder': {'queue': 'campaigns', 'priority': 1},
+    'marketplace.tasks.inactivity_reactivation': {'queue': 'campaigns', 'priority': 1},
+    'marketplace.tasks.abandoned_booking_reminder': {'queue': 'campaigns', 'priority': 1},
+}
 
 
 # Email Settings
@@ -604,14 +615,23 @@ PAYSTACK_APP_CALLBACK_URL = os.getenv(
 )
 PAYMENT_CURRENCY = os.getenv('PAYMENT_CURRENCY', 'GHS').upper()
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'False' if DEBUG else 'True') == 'True'
+PUSH_ENVIRONMENT = os.getenv(
+    'PUSH_ENVIRONMENT', 'staging' if DEBUG else 'production',
+).strip().lower()
+if PUSH_ENVIRONMENT not in {'staging', 'production'}:
+    raise ImproperlyConfigured('PUSH_ENVIRONMENT must be staging or production.')
 # Required when "Enhanced Security for Push Notifications" is enabled on the
 # Expo project (expo.dev -> Project settings -> Notifications). With that
 # toggle on, Expo rejects any /push/send call that has no bearer token, so
 # every notification silently fails to reach the device.
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
-# When the Celery broker is down, a campaign is delivered inline only if the
-# audience is at or below this size; larger sends stay queued for the worker.
-PUSH_INLINE_MAX_RECIPIENTS = int(os.getenv('PUSH_INLINE_MAX_RECIPIENTS', 200))
+# Bound each minute-level durable outbox recovery sweep.
+PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', 500))
+PUSH_MAX_RECEIPT_RETRIES = int(os.getenv('PUSH_MAX_RECEIPT_RETRIES', 3))
+# Policy placeholders only. Automated notification deletion is intentionally
+# disabled until the business/privacy owner approves retention and recovery.
+NOTIFICATION_RETENTION_DAYS = int(os.getenv('NOTIFICATION_RETENTION_DAYS', 365))
+PUSH_DELIVERY_RETENTION_DAYS = int(os.getenv('PUSH_DELIVERY_RETENTION_DAYS', 90))
 
 # Web Push (VAPID) Settings
 WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', 'BIdn2JpX0b0J0gJ8_VlE-xG1-s2Rz6kU8eWd1Y4r5t-W-zLd6vGvLd6-rG9yYt2H-t_rWd3uX5r2')
@@ -874,6 +894,10 @@ ANALYTICS_RETENTION_DAYS = 180
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
+    'recover-pending-pushes-every-minute': {
+        'task': 'marketplace.tasks.dispatch_pending_pushes',
+        'schedule': 60.0,
+    },
     'prune-old-analytics-events-daily': {
         'task': 'analytics.tasks.prune_old_events',
         'schedule': crontab(hour=3, minute=0),  # daily at 3:00 AM

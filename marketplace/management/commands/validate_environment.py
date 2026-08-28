@@ -174,6 +174,11 @@ class Command(BaseCommand):
         return PASS, f'{"live" if live else "test"} key configured.'
 
     def check_expo(self):
+        push_environment = getattr(settings, 'PUSH_ENVIRONMENT', '')
+        if push_environment not in {'staging', 'production'}:
+            return FAIL, 'PUSH_ENVIRONMENT must be staging or production.'
+        if not settings.DEBUG and push_environment != 'production':
+            return FAIL, 'Production backend must use PUSH_ENVIRONMENT=production.'
         if not settings.EXPO_PUSH_ENABLED:
             return WARN, 'EXPO_PUSH_ENABLED=False — pushes are recorded as SKIPPED.'
         if not getattr(settings, 'EXPO_ACCESS_TOKEN', ''):
@@ -181,7 +186,7 @@ class Command(BaseCommand):
                 'EXPO_ACCESS_TOKEN not set — if "Enhanced Security for Push Notifications" '
                 'is enabled on the Expo project, every send is rejected.'
             )
-        return PASS, 'push delivery enabled with an access token.'
+        return PASS, f'push delivery enabled for {push_environment} with an access token.'
 
     def check_sentry(self):
         dsn = os.getenv('SENTRY_DSN', '')

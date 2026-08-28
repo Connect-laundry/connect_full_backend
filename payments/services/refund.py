@@ -56,6 +56,13 @@ def refund_payment(payment, *, amount=None, reason='', actor=None, request=None)
             )
         if amount is not None and amount > locked.amount:
             raise RefundError('Refund amount cannot exceed the amount paid.')
+        if amount is not None and amount != locked.amount:
+            # The current ledger has one terminal REFUNDED state and reverses
+            # the whole order settlement. Accepting a smaller provider refund
+            # would therefore make local accounting disagree with Paystack.
+            raise RefundError(
+                'Partial refunds are not supported yet. Refund the full payment amount.'
+            )
 
         locked.transition_to(Payment.Status.REFUND_PENDING)
         reference = locked.transaction_reference

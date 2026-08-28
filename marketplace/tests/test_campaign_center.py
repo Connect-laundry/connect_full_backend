@@ -325,7 +325,7 @@ class CampaignDispatchTests(TestCase):
 
     @patch('marketplace.tasks.requests.post')
     @patch('marketplace.tasks.run_campaign.delay')
-    def test_small_campaign_delivers_inline_when_broker_is_down(self, mock_delay, mock_post):
+    def test_small_campaign_stays_scheduled_when_broker_is_down(self, mock_delay, mock_post):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError('broker unreachable')
         mock_post.return_value.status_code = 200
@@ -335,11 +335,11 @@ class CampaignDispatchTests(TestCase):
         campaign = _campaign()
         result = CampaignService.dispatch(campaign)
 
-        self.assertTrue(result.ok)
+        self.assertEqual(result.outcome, CampaignDispatchResult.UNAVAILABLE)
         campaign.refresh_from_db()
-        self.assertEqual(campaign.status, Status.SENT)
+        self.assertEqual(campaign.status, Status.SCHEDULED)
+        mock_post.assert_not_called()
 
-    @override_settings(PUSH_INLINE_MAX_RECIPIENTS=0)
     @patch('marketplace.tasks.run_campaign.delay')
     def test_large_campaign_stays_scheduled_when_broker_is_down(self, mock_delay):
         from kombu.exceptions import OperationalError
@@ -406,7 +406,7 @@ class CampaignAdminActionTests(TestCase):
 
     @patch('marketplace.tasks.requests.post')
     @patch('marketplace.tasks.run_campaign.delay')
-    def test_action_delivers_inline_when_broker_is_down(self, mock_delay, mock_post):
+    def test_action_never_delivers_inline_when_broker_is_down(self, mock_delay, mock_post):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError('broker unreachable')
         mock_post.return_value.status_code = 200
@@ -418,7 +418,8 @@ class CampaignAdminActionTests(TestCase):
             self._request(), NotificationCampaign.objects.filter(pk=campaign.pk))
 
         campaign.refresh_from_db()
-        self.assertEqual(campaign.status, Status.SENT)
+        self.assertEqual(campaign.status, Status.SCHEDULED)
+        mock_post.assert_not_called()
 
     @patch('marketplace.tasks.send_real_push.delay')
     def test_action_handles_a_mixed_selection(self, _mock_push):

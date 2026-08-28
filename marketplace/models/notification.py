@@ -29,6 +29,7 @@ class Notification(models.Model):
         NONE = 'NONE', _('No push')          # in-app only / push not attempted
         PENDING = 'PENDING', _('Queued')      # push queued to Celery
         SENT = 'SENT', _('Sent to Expo')      # accepted by Expo push service
+        DELIVERED = 'DELIVERED', _('Delivered')  # APNs/FCM accepted (Expo receipt ok)
         SKIPPED = 'SKIPPED', _('Skipped')     # blocked by prefs / quiet hours
         FAILED = 'FAILED', _('Failed')        # delivery error
 
@@ -85,6 +86,7 @@ class Notification(models.Model):
         max_length=10, choices=PushStatus.choices, default=PushStatus.NONE, db_index=True
     )
     delivered_at = models.DateTimeField(null=True, blank=True)
+    push_last_queued_at = models.DateTimeField(null=True, blank=True, db_index=True)
     opened_at = models.DateTimeField(null=True, blank=True)
     clicked_at = models.DateTimeField(null=True, blank=True)
     # Set when this notification is credited with a downstream order.
@@ -148,7 +150,38 @@ class Notification(models.Model):
         return True
 
 
+class NotificationEventClaim(models.Model):
+    '''Database-backed claim that makes business-event dedup concurrency-safe.'''
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.CharField(max_length=64, unique=True, db_index=True)
+    audience = models.CharField(max_length=10, choices=Notification.Audience.choices)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notification_event_claims',
+    )
+    dedup_key = models.CharField(max_length=120)
+    notification = models.OneToOneField(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name='event_claim',
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return f'{self.audience}:{self.dedup_key}'
+
+
 class PushDevice(models.Model):
+    class Environment(models.TextChoices):
+        STAGING = 'staging', _('Staging')
+        PRODUCTION = 'production', _('Production')
+
     class Platform(models.TextChoices):
         IOS = 'ios', _('iOS')
         ANDROID = 'android', _('Android')
@@ -162,6 +195,10 @@ class PushDevice(models.Model):
         related_name='push_devices',
     )
     token = models.CharField(max_length=255, unique=True, db_index=True)
+    environment = models.CharField(
+        max_length=12, choices=Environment.choices,
+        default=Environment.STAGING, db_index=True,
+    )
     device_id = models.CharField(max_length=128, blank=True, db_index=True)
     platform = models.CharField(max_length=20, choices=Platform.choices, default=Platform.UNKNOWN)
     app_version = models.CharField(max_length=50, blank=True)
@@ -174,12 +211,48 @@ class PushDevice(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['user', 'is_active']),
-            models.Index(fields=['device_id']),
+            models.Index(fields=['user', 'environment', 'is_active']),
+            models.Index(fields=['device_id', 'environment']),
         ]
 
     def __str__(self):
         return f"{self.platform} push device for {self.user_id}"
+
+
+class PushDelivery(models.Model):
+    class Status(models.TextChoices):
+        TICKET_OK = 'TICKET_OK', _('Ticket accepted')
+        TICKET_ERROR = 'TICKET_ERROR', _('Ticket rejected')
+        RECEIPT_OK = 'RECEIPT_OK', _('Receipt delivered')
+        RECEIPT_ERROR = 'RECEIPT_ERROR', _('Receipt failed')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    notification = models.ForeignKey(
+        Notification, on_delete=models.CASCADE, related_name='push_deliveries',
+    )
+    device = models.ForeignKey(
+        PushDevice, on_delete=models.SET_NULL, related_name='push_deliveries',
+        null=True, blank=True,
+    )
+    ticket_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, db_index=True)
+    error_code = models.CharField(max_length=64, blank=True, default='')
+    error_message = models.TextField(blank=True, default='')
+    retry_count = models.PositiveSmallIntegerField(default=0)
+    receipt_payload = models.JSONField(default=dict, blank=True)
+    receipt_checked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['notification', 'status']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.notification_id}: {self.status}'
 
 
 class NotificationPreference(models.Model):

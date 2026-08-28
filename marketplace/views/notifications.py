@@ -2,10 +2,14 @@
 from rest_framework import viewsets, permissions, decorators, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 # pyre-ignore[missing-module]
 from config.throttling import NotifTrackThrottle
 # pyre-ignore[missing-module]
 from django.utils import timezone
+# pyre-ignore[missing-module]
+from django.db import transaction
+from django.conf import settings
 # pyre-ignore[missing-module]
 from marketplace.models import Notification, PushDevice, NotificationPreference
 # pyre-ignore[missing-module]
@@ -16,6 +20,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+class NotificationPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for checking and managing user notifications.
@@ -23,6 +33,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = NotificationPagination
 
     def get_queryset(self):
         queryset = Notification.objects.filter(
@@ -136,12 +147,26 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['post', 'delete'], url_path='push-device')
     def push_device(self, request):
+        push_environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
+        claimed_environment = request.data.get('environment')
+        if claimed_environment and claimed_environment != push_environment:
+            return Response(
+                {'environment': 'This app build targets a different push environment.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         """Register, refresh, or deactivate the user's Expo push token."""
         if request.method == 'DELETE':
             token = request.data.get('token')
-            qs = PushDevice.objects.filter(user=request.user, is_active=True)
-            if token:
+            device_id = request.data.get('device_id')
+            qs = PushDevice.objects.filter(
+                user=request.user, environment=push_environment, is_active=True,
+            )
+            if token and device_id:
+                qs = qs.filter(token=token, device_id=device_id)
+            elif token:
                 qs = qs.filter(token=token)
+            elif device_id:
+                qs = qs.filter(device_id=device_id)
             qs.update(is_active=False)
             return Response({
                 "status": "success",
@@ -154,11 +179,16 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         token = serializer.validated_data['token']
         defaults = {
             'user': request.user,
+            'environment': push_environment,
             'device_id': serializer.validated_data.get('device_id', ''),
             'platform': serializer.validated_data.get('platform', PushDevice.Platform.UNKNOWN),
             'app_version': serializer.validated_data.get('app_version', ''),
             'is_active': True,
         }
+        # Expo tokens are globally unique in our schema. Look up globally so a
+        # rebuilt app can safely move a token between staging and production
+        # without violating that constraint; sends remain server-environment
+        # scoped.
         existing = PushDevice.objects.filter(token=token).only('user_id').first()
         if existing and existing.user_id != request.user.id:
             logger.warning(
@@ -168,7 +198,15 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
                     "new_user_id": str(request.user.id),
                 },
             )
-        device, _ = PushDevice.objects.update_or_create(token=token, defaults=defaults)
+        device_id = defaults['device_id']
+        with transaction.atomic():
+            if device_id:
+                PushDevice.objects.select_for_update().filter(
+                    device_id=device_id,
+                    environment=push_environment,
+                    is_active=True,
+                ).exclude(token=token).update(is_active=False)
+            device, _ = PushDevice.objects.update_or_create(token=token, defaults=defaults)
         return Response({
             "status": "success",
             "message": "Push device registered",
