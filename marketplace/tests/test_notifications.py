@@ -8,7 +8,8 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 # pyre-ignore[missing-module]
 from marketplace.models import (
-    Notification, NotificationPreference, NotificationCampaign, PushDevice,
+    Notification, NotificationEventClaim, NotificationPreference,
+    NotificationCampaign, PushDevice, PushDelivery,
 )
 # pyre-ignore[missing-module]
 from marketplace.services.notification_service import NotificationService
@@ -23,6 +24,7 @@ from laundries.models.laundry import Laundry
 # pyre-ignore[missing-module]
 from django.utils import timezone
 from django.test import override_settings
+from django.conf import settings
 from unittest.mock import patch
 from datetime import timedelta
 
@@ -35,8 +37,7 @@ class NotificationTests(APITestCase):
         self.laundry = Laundry.objects.create(name="Test Laundry", owner=self.owner, address="Test Address", latitude=5.6, longitude=-0.1, phone_number="0123456789")
         self.client.force_authenticate(user=self.user)
 
-    @patch('marketplace.tasks.create_notification.delay')
-    def test_order_creation_triggers_owner_notification(self, mock_task):
+    def test_order_creation_triggers_one_owner_notification(self):
         """Creating an order should trigger a notification to the laundry owner."""
         Order.objects.create(
             user=self.user,
@@ -45,7 +46,12 @@ class NotificationTests(APITestCase):
             pickup_date=timezone.now(),
             address="Test Address"
         )
-        mock_task.assert_called()
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.owner, category='ORDER_CREATED',
+            ).count(),
+            1,
+        )
 
     def test_mark_as_read(self):
         notification = Notification.objects.create(
@@ -66,6 +72,21 @@ class NotificationTests(APITestCase):
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(Notification.objects.filter(user=self.user, is_read=False).count(), 0)
+
+    def test_notification_feed_is_bounded_and_newest_first(self):
+        Notification.objects.filter(user=self.user).delete()
+        created = [
+            Notification.objects.create(
+                user=self.user, title=f'notification-{index}', body='body',
+            )
+            for index in range(120)
+        ]
+        response = self.client.get(reverse('notification-list'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 120)
+        self.assertEqual(len(response.data['results']), 50)
+        self.assertEqual(response.data['results'][0]['id'], str(created[-1].id))
+        self.assertIsNotNone(response.data['next'])
 
 
 @override_settings(EXPO_PUSH_ENABLED=True)
@@ -221,6 +242,66 @@ class ExpoTransportTests(APITestCase):
         self.assertEqual(len(mock_post.call_args_list[1].kwargs['json']), 50)
 
     @patch('marketplace.tasks.requests.post')
+    def test_fixture_loads_through_1000_stay_within_expo_limits(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            'data': [{'status': 'ok', 'id': 'fixture-ticket'}] * 100,
+        }
+        from marketplace.tasks import deliver_push
+
+        for token_count, expected_requests in ((10, 1), (100, 1), (500, 5), (1000, 10)):
+            with self.subTest(token_count=token_count):
+                mock_post.reset_mock()
+                tokens = [f'ExponentPushToken[LOAD{i:04d}]' for i in range(token_count)]
+                self.assertEqual(deliver_push('t', 'b', {}, tokens), token_count)
+                self.assertEqual(mock_post.call_count, expected_requests)
+                self.assertEqual(
+                    sum(len(call.kwargs['json']) for call in mock_post.call_args_list),
+                    token_count,
+                )
+                self.assertTrue(
+                    all(len(call.kwargs['json']) <= 100 for call in mock_post.call_args_list),
+                )
+
+    @patch('marketplace.tasks.requests.post')
+    def test_ticket_rate_limit_is_retryable(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            'data': [{
+                'status': 'error',
+                'message': 'Rate exceeded',
+                'details': {'error': 'MessageRateExceeded'},
+            }],
+        }
+        from marketplace.tasks import deliver_push
+        import requests
+
+        with self.assertRaises(requests.RequestException):
+            deliver_push('title', 'body', {}, ['ExpoPushToken[rate-limited]'])
+
+    @patch('marketplace.services.notification_service.NotificationService.system_alert')
+    @patch('marketplace.tasks.requests.post')
+    def test_ticket_credential_error_creates_admin_alert(self, mock_post, mock_alert):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            'data': [{
+                'status': 'error',
+                'message': 'Credentials rejected',
+                'details': {'error': 'InvalidCredentials'},
+            }],
+        }
+        from marketplace.tasks import deliver_push
+
+        self.assertEqual(
+            deliver_push('title', 'body', {}, ['ExpoPushToken[credential-error]']),
+            0,
+        )
+        mock_alert.assert_called_once()
+
+    @patch('marketplace.tasks.requests.post')
     def test_rejected_send_raises_so_celery_retries(self, mock_post):
         import requests as requests_lib
 
@@ -238,10 +319,10 @@ class ExpoTransportTests(APITestCase):
 
 @override_settings(EXPO_PUSH_ENABLED=True)
 class BrokerOutageDeliveryTests(APITestCase):
-    """Push must still reach the device when Celery has no broker.
+    """Broker outages must preserve the durable row without blocking HTTP.
 
-    Deployments without Redis were creating the in-app notification row and
-    silently dropping the push, so the phone never buzzed.
+    The durable PENDING row is recovered by the periodic dispatcher when the
+    broker returns; Expo is never called from a customer request.
     """
 
     def setUp(self):
@@ -250,9 +331,8 @@ class BrokerOutageDeliveryTests(APITestCase):
         PushDevice.objects.create(
             user=self.user, token="ExponentPushToken[BROKER]", platform='android')
 
-    @patch('marketplace.tasks.send_real_push.apply')
     @patch('marketplace.tasks.send_real_push.delay')
-    def test_push_runs_inline_when_broker_is_down(self, mock_delay, mock_apply):
+    def test_push_stays_pending_when_broker_is_down(self, mock_delay):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError("broker unreachable")
 
@@ -264,12 +344,13 @@ class BrokerOutageDeliveryTests(APITestCase):
 
         self.assertIsNotNone(notification)
         mock_delay.assert_called_once()
-        # Falls back to running the task in-process rather than dropping it.
-        mock_apply.assert_called_once()
+        notification.refresh_from_db()
+        self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
+        self.assertIsNone(notification.push_last_queued_at)
 
     @patch('marketplace.tasks.requests.post')
     @patch('marketplace.tasks.send_real_push.delay')
-    def test_inline_fallback_actually_hits_expo(self, mock_delay, mock_post):
+    def test_broker_outage_never_calls_expo_in_request_path(self, mock_delay, mock_post):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError("broker unreachable")
         mock_post.return_value.status_code = 200
@@ -282,13 +363,9 @@ class BrokerOutageDeliveryTests(APITestCase):
                 category='ORDER', type=Notification.Type.ORDER,
             )
 
-        mock_post.assert_called_once()
-        payload = mock_post.call_args.kwargs['json']
-        self.assertEqual(payload[0]['to'], "ExponentPushToken[BROKER]")
-        self.assertEqual(payload[0]['title'], "Order picked up")
-
+        mock_post.assert_not_called()
         notification.refresh_from_db()
-        self.assertEqual(notification.push_status, Notification.PushStatus.SENT)
+        self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
 
 
 @override_settings(EXPO_PUSH_ENABLED=True)
@@ -716,8 +793,8 @@ class PushDeferredUntilCommitTests(APITestCase):
     """Pushes must not escape a transaction that later rolls back.
 
     A push is not undoable: sending it mid-transaction can notify a customer
-    about an event that never happened, and — via the inline fallback — holds
-    row locks for the length of an HTTPS call to Expo.
+    about an event that never happened. Queue publication also waits until
+    commit so workers never race an uncommitted row.
     """
 
     def setUp(self):
@@ -846,4 +923,279 @@ class PushBadgeCountTests(APITestCase):
         # 2 existing + the one just created.
         self.assertEqual(message['badge'], 3)
         self.assertEqual(message['channelId'], 'orders_v2')
+
+
+class PushDeviceLifecycleTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='device@example.com', phone='233700000090', password='pw', role='CUSTOMER')
+        self.other = User.objects.create_user(
+            email='device2@example.com', phone='233700000091', password='pw', role='CUSTOMER')
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('notification-push-device')
+
+    def register(self, token, device_id='install-1'):
+        return self.client.post(self.url, {
+            'token': token,
+            'device_id': device_id,
+            'platform': 'android',
+            'app_version': '1.2.3',
+        }, format='json')
+
+    def test_token_rotation_retires_only_the_previous_install_token(self):
+        old = 'ExpoPushToken[old-install-token]'
+        new = 'ExpoPushToken[new-install-token]'
+        other = PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[other-device-token]',
+            device_id='install-2',
+            platform='android',
+        )
+        self.assertEqual(self.register(old).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.register(new).status_code, status.HTTP_200_OK)
+        self.assertFalse(PushDevice.objects.get(token=old).is_active)
+        self.assertTrue(PushDevice.objects.get(token=new).is_active)
+        other.refresh_from_db()
+        self.assertTrue(other.is_active)
+
+    def test_logout_deactivates_only_the_matching_device(self):
+        first = PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[first-device-token]',
+            device_id='install-1',
+            platform='ios',
+        )
+        second = PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[second-device-token]',
+            device_id='install-2',
+            platform='ios',
+        )
+        response = self.client.delete(self.url, {
+            'token': first.token,
+            'device_id': first.device_id,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertFalse(first.is_active)
+        self.assertTrue(second.is_active)
+
+    def test_native_registration_rejects_a_non_expo_token(self):
+        response = self.register('not-a-push-token')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reused_token_is_reassigned_to_the_current_account(self):
+        token = 'ExpoPushToken[reassigned-token]'
+        PushDevice.objects.create(
+            user=self.other, token=token, device_id='install-1', platform='android',
+            environment=settings.PUSH_ENVIRONMENT,
+        )
+        self.assertEqual(self.register(token).status_code, status.HTTP_200_OK)
+        self.assertEqual(PushDevice.objects.get(token=token).user, self.user)
+
+    def test_rebuilt_app_moves_a_globally_unique_token_to_current_environment(self):
+        token = 'ExpoPushToken[cross-environment-reassignment]'
+        PushDevice.objects.create(
+            user=self.other,
+            token=token,
+            device_id='old-install',
+            platform='android',
+            environment=PushDevice.Environment.PRODUCTION,
+        )
+
+        self.assertEqual(self.register(token, 'new-install').status_code, status.HTTP_200_OK)
+        device = PushDevice.objects.get(token=token)
+        self.assertEqual(device.user, self.user)
+        self.assertEqual(device.environment, settings.PUSH_ENVIRONMENT)
+        self.assertEqual(device.device_id, 'new-install')
+        self.assertEqual(PushDevice.objects.filter(token=token).count(), 1)
+
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class PushReceiptLifecycleTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='receipt@example.com', phone='233700000092', password='pw', role='CUSTOMER')
+        self.device = PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[receipt-device-token]',
+            device_id='receipt-install',
+            platform='android',
+        )
+        self.notification = Notification.objects.create(
+            user=self.user,
+            title='Order ready',
+            body='Your laundry is ready',
+            push_status=Notification.PushStatus.SENT,
+        )
+        self.delivery = PushDelivery.objects.create(
+            notification=self.notification,
+            device=self.device,
+            ticket_id='ticket-1',
+            status=PushDelivery.Status.TICKET_OK,
+        )
+
+    @patch('marketplace.tasks.fetch_push_receipts')
+    def test_ok_receipt_marks_notification_delivered(self, mock_receipts):
+        mock_receipts.return_value = {'ticket-1': {'status': 'ok'}}
+        from marketplace.tasks import process_push_receipts
+        self.assertEqual(process_push_receipts.run(str(self.notification.id)), 1)
+        self.delivery.refresh_from_db()
+        self.notification.refresh_from_db()
+        self.assertEqual(self.delivery.status, PushDelivery.Status.RECEIPT_OK)
+        self.assertEqual(self.notification.push_status, Notification.PushStatus.DELIVERED)
+        self.assertIsNotNone(self.notification.delivered_at)
+
+    @patch('marketplace.tasks.fetch_push_receipts')
+    def test_device_not_registered_receipt_retires_token(self, mock_receipts):
+        mock_receipts.return_value = {
+            'ticket-1': {
+                'status': 'error',
+                'message': 'Device is not registered',
+                'details': {'error': 'DeviceNotRegistered'},
+            },
+        }
+        from marketplace.tasks import process_push_receipts
+        self.assertEqual(process_push_receipts.run(str(self.notification.id)), 1)
+        self.delivery.refresh_from_db()
+        self.notification.refresh_from_db()
+        self.device.refresh_from_db()
+        self.assertEqual(self.delivery.status, PushDelivery.Status.RECEIPT_ERROR)
+        self.assertEqual(self.notification.push_status, Notification.PushStatus.FAILED)
+        self.assertFalse(self.device.is_active)
+
+    @patch('marketplace.tasks.requests.post')
+    def test_retry_does_not_send_a_second_push_for_an_accepted_ticket(self, mock_post):
+        from marketplace.tasks import send_real_push
+        self.assertEqual(send_real_push.run(str(self.notification.id)), 1)
+        mock_post.assert_not_called()
+
+    @patch('marketplace.tasks.requests.post')
+    def test_send_ticket_is_persisted_per_device(self, mock_post):
+        self.delivery.delete()
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            'data': [{'status': 'ok', 'id': 'ticket-new'}],
+        }
+        from marketplace.tasks import deliver_push
+        sent = deliver_push(
+            'Order ready',
+            'Your laundry is ready',
+            {},
+            [self.device.token],
+            notification=self.notification,
+        )
+        self.assertEqual(sent, 1)
+        persisted = PushDelivery.objects.get(ticket_id='ticket-new')
+        self.assertEqual(persisted.device, self.device)
+        self.assertEqual(persisted.status, PushDelivery.Status.TICKET_OK)
+
+    @patch('marketplace.tasks.fetch_push_receipts')
+    def test_rate_limit_receipt_returns_notification_to_pending(self, mock_receipts):
+        mock_receipts.return_value = {
+            'ticket-1': {
+                'status': 'error',
+                'message': 'Rate exceeded',
+                'details': {'error': 'MessageRateExceeded'},
+            },
+        }
+        from marketplace.tasks import process_push_receipts
+
+        self.assertEqual(process_push_receipts.run(str(self.notification.id)), 1)
+        self.delivery.refresh_from_db()
+        self.notification.refresh_from_db()
+        self.assertEqual(self.delivery.retry_count, 1)
+        self.assertEqual(self.notification.push_status, Notification.PushStatus.PENDING)
+        self.assertIsNone(self.notification.push_last_queued_at)
+
+
+@override_settings(EXPO_PUSH_ENABLED=True, PUSH_ENVIRONMENT='staging')
+class PushRecoveryAndIsolationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='recovery@example.com', phone='233700000099', password='pw',
+            role='CUSTOMER',
+        )
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_pending_dispatcher_recovers_unqueued_rows(self, mock_delay):
+        notification = Notification.objects.create(
+            user=self.user,
+            title='Pending push',
+            body='Durable outbox row',
+            push_status=Notification.PushStatus.PENDING,
+        )
+        from marketplace.tasks import dispatch_pending_pushes
+
+        self.assertEqual(dispatch_pending_pushes.run(), 1)
+        mock_delay.assert_called_once_with(str(notification.id))
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.push_last_queued_at)
+
+    @patch('marketplace.tasks.requests.post')
+    def test_sender_uses_only_current_environment_tokens(self, mock_post):
+        PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[staging-device]',
+            environment=PushDevice.Environment.STAGING,
+            platform=PushDevice.Platform.ANDROID,
+        )
+        PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[production-device]',
+            environment=PushDevice.Environment.PRODUCTION,
+            platform=PushDevice.Platform.ANDROID,
+        )
+        notification = Notification.objects.create(
+            user=self.user, title='Environment test', body='Only staging',
+            push_status=Notification.PushStatus.PENDING,
+        )
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {
+            'data': [{'status': 'ok', 'id': 'staging-ticket'}],
+        }
+        from marketplace.tasks import send_real_push
+
+        self.assertEqual(send_real_push.run(str(notification.id)), 1)
+        payload = mock_post.call_args.kwargs['json']
+        self.assertEqual([message['to'] for message in payload], [
+            'ExpoPushToken[staging-device]',
+        ])
+
+    def test_deduplication_survives_read_state_changes(self):
+        first = NotificationService.notify_user(
+            self.user, title='Order update', body='Ready',
+            dedup_key='order:read-safe', push=False,
+        )
+        first.mark_as_read()
+        second = NotificationService.notify_user(
+            self.user, title='Order update', body='Ready',
+            dedup_key='order:read-safe', push=False,
+        )
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.user, dedup_key='order:read-safe',
+            ).count(),
+            1,
+        )
+        self.assertEqual(NotificationEventClaim.objects.filter(
+            user=self.user, dedup_key='order:read-safe',
+        ).count(), 1)
+
+    def test_registration_rejects_cross_environment_build(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(reverse('notification-push-device'), {
+            'token': 'ExpoPushToken[wrong-environment]',
+            'device_id': 'install-cross-env',
+            'platform': 'android',
+            'environment': 'production',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(PushDevice.objects.filter(
+            token='ExpoPushToken[wrong-environment]',
+        ).exists())
 

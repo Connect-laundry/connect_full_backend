@@ -7,13 +7,14 @@ queues the existing Expo push task. Admin notifications are surfaced via the
 admin bell/polling API rather than push.
 """
 import logging
+import hashlib
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from marketplace.models import Notification, NotificationPreference
+from marketplace.models import Notification, NotificationEventClaim, NotificationPreference
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -21,10 +22,42 @@ User = get_user_model()
 
 class NotificationService:
     @staticmethod
+    def _claim_key(audience, dedup_key, user=None):
+        identity = str(getattr(user, 'id', 'admin')) if user is not None else 'admin'
+        value = f'{audience}:{identity}:{dedup_key}'.encode('utf-8')
+        return hashlib.sha256(value).hexdigest()
+
+    @classmethod
+    def _create_with_claim(cls, *, audience, dedup_key, user=None, **values):
+        if not dedup_key:
+            return Notification.objects.create(
+                audience=audience, user=user, dedup_key='', **values,
+            ), True
+
+        claim_key = cls._claim_key(audience, dedup_key, user)
+        with transaction.atomic():
+            claim, claimed = NotificationEventClaim.objects.get_or_create(
+                key=claim_key,
+                defaults={
+                    'audience': audience,
+                    'user': user,
+                    'dedup_key': dedup_key,
+                },
+            )
+            if not claimed and claim.notification_id:
+                return claim.notification, False
+            notification = Notification.objects.create(
+                audience=audience, user=user, dedup_key=dedup_key, **values,
+            )
+            claim.notification = notification
+            claim.save(update_fields=['notification'])
+            return notification, True
+
+    @staticmethod
     def _dedup_exists(audience, dedup_key, user=None):
         if not dedup_key:
             return None
-        qs = Notification.objects.filter(audience=audience, dedup_key=dedup_key, is_read=False)
+        qs = Notification.objects.filter(audience=audience, dedup_key=dedup_key)
         if user is not None:
             qs = qs.filter(user=user)
         return qs.first()
@@ -92,9 +125,10 @@ class NotificationService:
             and cls._push_permitted(user, type=type, category=category, priority=priority)
         )
 
-        notification = Notification.objects.create(
-            user=user,
+        notification, created = cls._create_with_claim(
             audience=Notification.Audience.USER,
+            user=user,
+            dedup_key=dedup_key,
             title=title,
             body=body,
             type=type,
@@ -102,7 +136,6 @@ class NotificationService:
             priority=priority,
             action_url=action_url,
             related_order=related_order,
-            dedup_key=dedup_key,
             campaign=campaign,
             promo_code=promo_code,
             push_status=(
@@ -111,6 +144,8 @@ class NotificationService:
                 else Notification.PushStatus.NONE
             ),
         )
+        if not created:
+            return notification
 
         if push_allowed:
             cls._queue_push(notification.id)
@@ -135,9 +170,10 @@ class NotificationService:
         if existing:
             return existing
 
-        return Notification.objects.create(
-            user=None,
+        notification, _ = cls._create_with_claim(
             audience=Notification.Audience.ADMIN,
+            user=None,
+            dedup_key=dedup_key,
             title=title,
             body=body,
             type=type,
@@ -145,8 +181,8 @@ class NotificationService:
             priority=priority,
             action_url=action_url,
             related_order=related_order,
-            dedup_key=dedup_key,
         )
+        return notification
 
     @classmethod
     def system_alert(cls, title, body, *, category='SYSTEM_ALERT', priority=None,
@@ -167,10 +203,9 @@ class NotificationService:
 
         Deferred via ``on_commit`` for two reasons:
 
-        * The inline fallback (used when the Celery broker is down) makes a
-          blocking HTTPS call to Expo. Running that inside a transaction can
-          hold row locks — e.g. the ``select_for_update`` in the Paystack
-          webhook — for the length of a network round trip.
+        * A broker outage must never turn an order, payment, login, or account
+          request into a blocking Expo call. The PENDING row is recovered by
+          the minute-level dispatcher after the broker returns.
         * A push is not undoable. If the transaction later rolls back, a
           notification for an event that never happened has already landed on
           the customer's phone.
@@ -183,8 +218,15 @@ class NotificationService:
         from utils.tasks import safe_task_delay
 
         def _dispatch():
-            if not safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
-                logger.error(
+            queued = safe_task_delay(
+                send_real_push, str(notification_id), fallback_sync=False,
+            )
+            if queued:
+                Notification.objects.filter(pk=notification_id).update(
+                    push_last_queued_at=timezone.now(),
+                )
+            else:
+                logger.warning(
                     "Failed to deliver push notification",
                     extra={"notification_id": str(notification_id)},
                 )

@@ -71,6 +71,8 @@ services:
         value: "True"
       - key: EXPO_ACCESS_TOKEN
         sync: false
+      - key: PUSH_ENVIRONMENT
+        value: production
       - key: WEATHER_PROMO_ENABLED
         value: "True"
       - key: WEATHER_PROMO_PROVIDER
@@ -102,7 +104,7 @@ services:
     name: connect-laundry-worker
     runtime: docker
     dockerfilePath: ./Dockerfile
-    command: celery -A config worker --loglevel=info
+    command: celery -A config worker --loglevel=info -Q notifications,celery,campaigns
     plan: starter
     envVars:
       - key: DATABASE_URL
@@ -144,6 +146,8 @@ services:
         value: "True"
       - key: EXPO_ACCESS_TOKEN
         sync: false
+      - key: PUSH_ENVIRONMENT
+        value: production
       - key: SENTRY_DSN
         sync: false
       - key: CLERK_APPLICATION_ID
@@ -207,6 +211,8 @@ services:
         value: "True"
       - key: EXPO_ACCESS_TOKEN
         sync: false
+      - key: PUSH_ENVIRONMENT
+        value: production
       - key: WEATHER_PROMO_ENABLED
         value: "True"
       - key: WEATHER_PROMO_PROVIDER

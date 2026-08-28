@@ -552,7 +552,7 @@ class PaymentVerifyView(APIView):
                         type=Notification.Type.ORDER,
                         category="PAYMENT_SUCCESS",
                         related_order=order,
-                        dedup_key=f"pay_success_{payment.id}"
+                        dedup_key=f"payment_success_user:{payment.id}"
                     )
             
             return Response({
@@ -701,7 +701,7 @@ class PaymentRefundSerializer(serializers.Serializer):
     """Body for POST /payments/refund/{reference}/."""
     amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, allow_null=True,
-        help_text='Partial refund amount in GHS. Omit for a full refund.',
+        help_text='Full payment amount in GHS. Omit to refund the full payment.',
     )
     reason = serializers.CharField(required=False, allow_blank=True, max_length=200)
 
@@ -710,7 +710,7 @@ class PaymentRefundView(APIView):
     """
     POST /api/v1/payments/refund/{reference}/
 
-    Staff-only. Starts a refund with Paystack; the payment moves to
+    Staff-only. Starts a full refund with Paystack; the payment moves to
     REFUND_PENDING and reaches REFUNDED when the `refund.processed` webhook
     lands. Refunds are money-moving and irreversible, so this is never
     exposed to customers or laundry owners.

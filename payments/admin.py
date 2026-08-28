@@ -185,7 +185,7 @@ class PaymentAdmin(ModelAdmin):
                                     type=Notification.Type.ORDER,
                                     category="PAYMENT_SUCCESS",
                                     related_order=order,
-                                    dedup_key=f"reconcile_success_{locked_payment.id}"
+                                    dedup_key=f"payment_success_user:{locked_payment.id}"
                                 )
                                 reconciled_count += 1
                             else:

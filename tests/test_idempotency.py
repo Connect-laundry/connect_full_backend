@@ -12,6 +12,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.test import RequestFactory
+from unittest.mock import patch
 
 from config.middleware.idempotency import IdempotencyMiddleware
 from marketplace.models import IdempotencyRecord
@@ -29,6 +30,21 @@ def _post(key='key-1', body=None, path='/api/v1/payments/initialize/'):
 
 @pytest.mark.django_db
 class TestIdempotencyMiddleware:
+    def test_claim_storage_failure_fails_closed_without_running_the_view(self):
+        calls = []
+
+        def view(request):
+            calls.append(1)
+            return JsonResponse({'order': 'created'}, status=201)
+
+        middleware = IdempotencyMiddleware(view)
+        with patch.object(middleware, '_claim', side_effect=RuntimeError('database unavailable')):
+            response = middleware(_post())
+
+        assert response.status_code == 503
+        assert response['Retry-After'] == '3'
+        assert calls == []
+
     def test_first_request_passes_through_and_is_recorded(self):
         calls = []
 

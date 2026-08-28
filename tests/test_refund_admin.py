@@ -118,16 +118,16 @@ class TestRefundAdminAction:
         assert mock_refund.call_args.kwargs['amount'] is None
 
     @patch('payments.services.refund.PaystackService.refund_transaction')
-    def test_partial_refund_passes_the_amount_through(self, mock_refund):
+    def test_partial_refund_is_rejected_until_partial_accounting_is_modeled(self, mock_refund):
         mock_refund.return_value = {'status': True, 'data': {'id': 1}}
         _, _, payment = self._paid_payment('ORD-ADMIN-REFUND-PARTIAL')
         client = self._staff_client()
 
         client.post(self._url(payment), {'amount': '5.00', 'reason': 'Partial'})
 
-        assert mock_refund.call_args.kwargs['amount'] == Decimal('5.00')
+        mock_refund.assert_not_called()
         payment.refresh_from_db()
-        assert payment.status == Payment.Status.REFUND_PENDING
+        assert payment.status == Payment.Status.SUCCESS
 
     @patch('payments.services.refund.PaystackService.refund_transaction')
     def test_non_numeric_amount_is_rejected(self, mock_refund):

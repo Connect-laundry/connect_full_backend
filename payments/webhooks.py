@@ -437,7 +437,7 @@ def paystack_webhook(request):
                     type=Notification.Type.ORDER,
                     category="PAYMENT_SUCCESS",
                     related_order=order,
-                    dedup_key=f"pay_success_webhook_{payment.id}"
+                    dedup_key=f"payment_success_user:{payment.id}"
                 )
 
                 # Tell the laundry the same thing at the same moment. Customer

@@ -29,7 +29,7 @@ User = get_user_model()
 
 class CampaignDispatchResult:
     """Outcome of asking for a campaign to be sent."""
-    QUEUED = 'queued'            # handed to Celery, or delivered inline
+    QUEUED = 'queued'            # handed to Celery
     ALREADY_SENDING = 'sending'  # a send is already in flight
     EMPTY = 'empty'              # the segment currently matches nobody
     UNAVAILABLE = 'unavailable'  # broker down and the audience is too large
@@ -71,10 +71,9 @@ class CampaignService:
         the Campaign Center UI and the Django admin action — so none of them
         can drift on guard rails or on broker-outage behaviour.
 
-        Prefers the Celery worker. If the broker is unreachable, a campaign at
-        or under ``PUSH_INLINE_MAX_RECIPIENTS`` is delivered inline (each push
-        is one short HTTPS call to Expo) rather than being dropped; anything
-        larger stays SCHEDULED for the worker instead of blocking the caller.
+        Delivery always stays asynchronous. If the broker is unreachable the
+        campaign remains SCHEDULED for the minute-level recovery sweep, so an
+        HTTP request is never converted into a bulk database/Expo job.
         """
         # Imported lazily: marketplace.tasks imports models, and utils.tasks is
         # only needed at call time.
@@ -92,10 +91,7 @@ class CampaignService:
         campaign.scheduled_for = timezone.now()
         campaign.save(update_fields=['status', 'scheduled_for'])
 
-        inline_limit = getattr(settings, 'PUSH_INLINE_MAX_RECIPIENTS', 200)
-        queued = safe_task_delay(
-            run_campaign, str(campaign.id), fallback_sync=audience <= inline_limit,
-        )
+        queued = safe_task_delay(run_campaign, str(campaign.id), fallback_sync=False)
         if not queued:
             return CampaignDispatchResult(CampaignDispatchResult.UNAVAILABLE, audience)
 

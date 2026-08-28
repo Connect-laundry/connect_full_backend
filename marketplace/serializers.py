@@ -68,11 +68,23 @@ class PushDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PushDevice
         fields = [
-            'id', 'token', 'device_id', 'platform', 'app_version', 
+            'id', 'token', 'device_id', 'platform', 'app_version', 'environment',
             'is_active', 'last_registered_at', 'web_endpoint', 
             'web_p256dh', 'web_auth'
         ]
-        read_only_fields = ['id', 'is_active', 'last_registered_at']
+        read_only_fields = ['id', 'is_active', 'last_registered_at', 'environment']
+        extra_kwargs = {
+            # Registration is an upsert and may legitimately reassign a token
+            # after logout/account switching; the view handles it atomically.
+            'token': {'validators': []},
+        }
+
+    def validate_token(self, value):
+        platform = self.initial_data.get('platform')
+        if platform in (PushDevice.Platform.IOS, PushDevice.Platform.ANDROID):
+            if not (value.startswith('ExpoPushToken[') or value.startswith('ExponentPushToken[')):
+                raise serializers.ValidationError('A valid Expo push token is required.')
+        return value
 
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):

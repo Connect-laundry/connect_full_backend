@@ -3,19 +3,25 @@ from celery import shared_task
 # pyre-ignore[missing-module]
 import logging
 import requests
+from datetime import timedelta
 from django.conf import settings
 # pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 # pyre-ignore[missing-module]
-from marketplace.models import Notification, PushDevice
+from marketplace.models import Notification, PushDevice, PushDelivery
 # pyre-ignore[missing-module]
 from django.core.exceptions import ObjectDoesNotExist
 from config.redaction import summarize_exception
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def current_push_environment():
+    return getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
 
 @shared_task(
     name="marketplace.tasks.create_notification",
@@ -25,21 +31,21 @@ logger = logging.getLogger(__name__)
     retry_kwargs={'max_retries': 5}
 )
 def create_notification(self, user_id, title, body, notification_type='SYSTEM', related_order_id=None):
-    """
-    Asynchronously creates a notification record in the database.
-    This can be extended to trigger real push notifications (FCM/OneSignal).
-    """
+    """Compatibility task routed through the canonical notification service."""
     try:
         user = User.objects.get(id=user_id)
-        notification = Notification.objects.create(
-            user=user,
+        from marketplace.services.notification_service import NotificationService
+        related_order = None
+        if related_order_id:
+            from ordering.models import Order
+            related_order = Order.objects.filter(pk=related_order_id).first()
+        notification = NotificationService.notify_user(
+            user,
             title=title,
             body=body,
             type=notification_type,
-            related_order_id=related_order_id
+            related_order=related_order,
         )
-        
-        send_real_push.delay(str(notification.id))
         
         logger.info(
             "Notification created",
@@ -60,7 +66,11 @@ def _deactivate_tokens(tokens):
     """Mark push tokens inactive (Expo reported them as unregistered/invalid)."""
     if not tokens:
         return 0
-    updated = PushDevice.objects.filter(token__in=tokens, is_active=True).update(is_active=False)
+    updated = PushDevice.objects.filter(
+        token__in=tokens,
+        environment=current_push_environment(),
+        is_active=True,
+    ).update(is_active=False)
     if updated:
         logger.info("Deactivated stale push tokens", extra={"count": updated})
     return updated
@@ -70,6 +80,7 @@ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 # Expo accepts at most 100 messages per /push/send call.
 EXPO_BATCH_SIZE = 100
+EXPO_RECEIPT_BATCH_SIZE = 1000
 
 
 def expo_push_headers():
@@ -106,7 +117,10 @@ def channel_for(category, notification_type):
     return ANDROID_CHANNEL_DEFAULT
 
 
-def deliver_push(title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAULT, badge=None):
+def deliver_push(
+    title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAULT,
+    badge=None, notification=None,
+):
     """Send Expo push batches and clean up invalid tokens from the tickets.
 
     Returns the number of messages Expo accepted. Tokens Expo reports as
@@ -121,6 +135,16 @@ def deliver_push(title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAUL
     accepted = 0
     dead = []
     ticket_ids = []
+    rate_limited = False
+    credential_failure = False
+    device_by_token = {}
+    if notification is not None:
+        device_by_token = {
+            device.token: device
+            for device in PushDevice.objects.filter(
+                token__in=valid_tokens, environment=current_push_environment(),
+            )
+        }
 
     for start in range(0, len(valid_tokens), EXPO_BATCH_SIZE):
         batch = valid_tokens[start:start + EXPO_BATCH_SIZE]
@@ -178,6 +202,15 @@ def deliver_push(title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAUL
                 continue
             if ticket.get('status') == 'error':
                 code = (ticket.get('details') or {}).get('error')
+                if notification is not None:
+                    PushDelivery.objects.create(
+                        notification=notification,
+                        device=device_by_token.get(token),
+                        status=PushDelivery.Status.TICKET_ERROR,
+                        error_code=code or '',
+                        error_message=ticket.get('message') or '',
+                        receipt_payload=ticket,
+                    )
                 # 'message' is reserved on LogRecord; use a distinct key.
                 logger.warning(
                     "Expo rejected a push message",
@@ -185,12 +218,38 @@ def deliver_push(title, body, data, tokens, *, channel_id=ANDROID_CHANNEL_DEFAUL
                 )
                 if code == 'DeviceNotRegistered':
                     dead.append(token)
+                elif code == 'MessageRateExceeded':
+                    rate_limited = True
+                elif code in {'InvalidCredentials', 'MismatchSenderId'}:
+                    credential_failure = True
                 continue
             accepted += 1
             if ticket.get('id'):
                 ticket_ids.append(ticket['id'])
+                if notification is not None:
+                    PushDelivery.objects.update_or_create(
+                        ticket_id=ticket['id'],
+                        defaults={
+                            'notification': notification,
+                            'device': device_by_token.get(token),
+                            'status': PushDelivery.Status.TICKET_OK,
+                            'error_code': '',
+                            'error_message': '',
+                            'receipt_payload': {},
+                        },
+                    )
 
     _deactivate_tokens(dead)
+    if credential_failure:
+        from marketplace.services.notification_service import NotificationService
+        NotificationService.system_alert(
+            'Push provider credentials rejected',
+            'Expo rejected APNs or FCM credentials. Verify the project credential assignment.',
+            category='PUSH_CREDENTIALS',
+            dedup_key=f'push_invalid_credentials:{timezone.now().date().isoformat()}',
+        )
+    if rate_limited:
+        raise requests.RequestException('Expo ticket rate limited')
     return accepted
 
 
@@ -214,6 +273,133 @@ def fetch_push_receipts(ticket_ids):
 
 
 @shared_task(
+    name='marketplace.tasks.process_push_receipts',
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 5},
+)
+def process_push_receipts(self, notification_id):
+    '''Resolve queued Expo tickets into APNs/FCM receipt outcomes.'''
+    try:
+        notification = Notification.objects.get(id=notification_id)
+    except Notification.DoesNotExist:
+        return 0
+
+    pending = list(
+        PushDelivery.objects.select_related('device').filter(
+            notification=notification,
+            status=PushDelivery.Status.TICKET_OK,
+            ticket_id__isnull=False,
+        )
+    )
+    if not pending:
+        return 0
+
+    receipts = {}
+    ticket_ids = [delivery.ticket_id for delivery in pending]
+    for start in range(0, len(ticket_ids), EXPO_RECEIPT_BATCH_SIZE):
+        batch = ticket_ids[start:start + EXPO_RECEIPT_BATCH_SIZE]
+        receipts.update(fetch_push_receipts(batch))
+
+    now = timezone.now()
+    resolved = 0
+    missing = 0
+    retryable_failure = False
+    invalid_credentials = False
+    for delivery in pending:
+        receipt = receipts.get(delivery.ticket_id)
+        if not isinstance(receipt, dict):
+            missing += 1
+            continue
+        resolved += 1
+        delivery.receipt_payload = receipt
+        delivery.receipt_checked_at = now
+        if receipt.get('status') == 'ok':
+            delivery.status = PushDelivery.Status.RECEIPT_OK
+            delivery.error_code = ''
+            delivery.error_message = ''
+        else:
+            details = receipt.get('details') or {}
+            code = details.get('error') or ''
+            delivery.status = PushDelivery.Status.RECEIPT_ERROR
+            delivery.error_code = code
+            delivery.error_message = receipt.get('message') or ''
+            prior_attempts = PushDelivery.objects.filter(
+                notification=notification, error_code=code,
+            ).exclude(pk=delivery.pk).count()
+            delivery.retry_count = prior_attempts + 1
+            if (
+                code == 'MessageRateExceeded'
+                and delivery.retry_count <= getattr(settings, 'PUSH_MAX_RECEIPT_RETRIES', 3)
+            ):
+                retryable_failure = True
+            if code == 'InvalidCredentials':
+                invalid_credentials = True
+            if code == 'DeviceNotRegistered' and delivery.device_id:
+                PushDevice.objects.filter(
+                    pk=delivery.device_id,
+                    environment=current_push_environment(),
+                ).update(is_active=False)
+        delivery.save(update_fields=[
+            'status', 'error_code', 'error_message', 'receipt_payload',
+            'receipt_checked_at', 'retry_count', 'updated_at',
+        ])
+
+    states = PushDelivery.objects.filter(notification=notification)
+    if states.filter(status=PushDelivery.Status.RECEIPT_OK).exists():
+        Notification.objects.filter(pk=notification.pk).update(
+            push_status=Notification.PushStatus.DELIVERED,
+            delivered_at=now,
+        )
+    elif retryable_failure:
+        Notification.objects.filter(pk=notification.pk).update(
+            push_status=Notification.PushStatus.PENDING,
+            push_last_queued_at=None,
+            delivered_at=None,
+        )
+    elif states.exists() and not states.filter(status=PushDelivery.Status.TICKET_OK).exists():
+        Notification.objects.filter(pk=notification.pk).update(
+            push_status=Notification.PushStatus.FAILED,
+            delivered_at=None,
+        )
+
+    if invalid_credentials:
+        from marketplace.services.notification_service import NotificationService
+        NotificationService.system_alert(
+            'Push provider credentials rejected',
+            'Expo reported InvalidCredentials. Verify the APNs or FCM credential assignment.',
+            category='PUSH_CREDENTIALS',
+            dedup_key=f'push_invalid_credentials:{now.date().isoformat()}',
+        )
+
+    if missing:
+        logger.info(
+            'Expo receipts not ready',
+            extra={'notification_id': str(notification.id), 'missing': missing},
+        )
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=900)
+    return resolved
+
+
+def _schedule_push_receipts(notification_id):
+    # Eager mode is used by tests and local development. A delayed eager task
+    # runs immediately, before Expo has had time to produce a receipt.
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+        return False
+    try:
+        process_push_receipts.apply_async(args=[str(notification_id)], countdown=900)
+        return True
+    except Exception as exc:
+        logger.warning(
+            'Could not schedule Expo receipt check',
+            extra={'notification_id': str(notification_id), 'error': summarize_exception(exc)},
+        )
+        return False
+
+
+@shared_task(
     name="marketplace.tasks.send_real_push",
     bind=True,
     autoretry_for=(Exception,),
@@ -229,8 +415,23 @@ def send_real_push(self, notification_id):
         if not getattr(settings, 'EXPO_PUSH_ENABLED', False):
             return 0
 
+        accepted_deliveries = notification.push_deliveries.filter(
+            status__in=[
+                PushDelivery.Status.TICKET_OK,
+                PushDelivery.Status.RECEIPT_OK,
+            ],
+        )
+        if accepted_deliveries.exists():
+            if accepted_deliveries.filter(status=PushDelivery.Status.TICKET_OK).exists():
+                _schedule_push_receipts(notification.id)
+            return accepted_deliveries.count()
+
         tokens = list(
-            PushDevice.objects.filter(user=notification.user, is_active=True)
+            PushDevice.objects.filter(
+                user=notification.user,
+                environment=current_push_environment(),
+                is_active=True,
+            )
             .values_list('token', flat=True)
         )
         data = {
@@ -262,15 +463,24 @@ def send_real_push(self, notification_id):
             tokens,
             channel_id=channel_for(notification.category, notification.type),
             badge=badge,
+            notification=notification,
         )
         if sent:
             notification.push_status = Notification.PushStatus.SENT
-            notification.delivered_at = timezone.now()
+            notification.delivered_at = None
             notification.save(update_fields=['push_status', 'delivered_at'])
+            _schedule_push_receipts(notification.id)
             logger.info(
                 "Push notifications sent",
                 extra={"notification_id": str(notification.id), "count": sent},
             )
+        else:
+            notification.push_status = (
+                Notification.PushStatus.FAILED if tokens
+                else Notification.PushStatus.SKIPPED
+            )
+            notification.delivered_at = None
+            notification.save(update_fields=['push_status', 'delivered_at'])
         return sent
     except Notification.DoesNotExist:
         pass
@@ -416,8 +626,9 @@ def process_scheduled_campaigns():
             campaign.status = NotificationCampaign.Status.FAILED
             campaign.save(update_fields=['status'])
             continue
-        run_campaign.delay(str(campaign.id))
-        queued += 1
+        from utils.tasks import safe_task_delay
+        if safe_task_delay(run_campaign, str(campaign.id), fallback_sync=False):
+            queued += 1
     if queued:
         logger.info("Scheduled campaigns queued", extra={"count": queued})
     return queued
@@ -428,3 +639,35 @@ def enqueue_rainy_day_promo():
 
     campaign = WeatherCampaignService.enqueue_rainy_day_campaign()
     return str(campaign.id) if campaign else None
+
+
+@shared_task(name='marketplace.tasks.dispatch_pending_pushes')
+def dispatch_pending_pushes():
+    '''Recover durable push outbox rows after broker or worker interruption.'''
+    from utils.tasks import safe_task_delay
+
+    if not getattr(settings, 'EXPO_PUSH_ENABLED', False):
+        return 0
+    stale_before = timezone.now() - timedelta(minutes=5)
+    limit = getattr(settings, 'PUSH_PENDING_DISPATCH_BATCH_SIZE', 500)
+    pending_ids = list(
+        Notification.objects.filter(push_status=Notification.PushStatus.PENDING)
+        .filter(Q(push_last_queued_at__isnull=True) | Q(push_last_queued_at__lt=stale_before))
+        .order_by('created_at')
+        .values_list('id', flat=True)[:limit]
+    )
+    queued = 0
+    for notification_id in pending_ids:
+        if safe_task_delay(send_real_push, str(notification_id), fallback_sync=False):
+            Notification.objects.filter(pk=notification_id).update(
+                push_last_queued_at=timezone.now(),
+            )
+            queued += 1
+        else:
+            break
+    if pending_ids:
+        logger.info(
+            'Pending push recovery sweep',
+            extra={'candidates': len(pending_ids), 'queued': queued},
+        )
+    return queued

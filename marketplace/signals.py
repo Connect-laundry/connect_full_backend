@@ -8,39 +8,15 @@ from ordering.models import Order
 # pyre-ignore[missing-module]
 from ordering.services.order_state_machine import order_status_changed
 # pyre-ignore[missing-module]
-from marketplace.tasks import create_notification
-
 logger = logging.getLogger(__name__)
-
-
-def _safe_delay(task, **kwargs):
-    """Dispatch a Celery task without ever raising (sync fallback on broker
-    outage) — see utils.tasks.safe_task_delay."""
-    from utils.tasks import safe_task_delay
-    safe_task_delay(task, fallback_sync=True, **kwargs)
-
-
-@receiver(post_save, sender=Order)
-def notify_on_order_creation(sender, instance, created, **kwargs):
-    """Notify the laundry owner when a new order is placed."""
-    if created:
-        owner = instance.laundry.owner
-        _safe_delay(
-            create_notification,
-            user_id=str(owner.id),
-            title="New Laundry Order",
-            body=f"You have a new order {instance.order_no} from {instance.user.get_full_name()}.",
-            notification_type='ORDER',
-            related_order_id=str(instance.id)
-        )
 
 
 # NOTE: Customer order-lifecycle notifications are handled exclusively by
 # ordering/signals.py::trigger_order_notifications (via NotificationService,
 # which deduplicates and applies push preferences). A second customer handler
 # previously lived here and produced DUPLICATE notifications on every status
-# change — it has been removed. This module retains only the laundry-owner
-# notification (on order creation) and the admin-audience triggers below.
+# change — it has been removed. This module retains only the admin-audience
+# triggers below.
 
 
 # ---------------------------------------------------------------------------

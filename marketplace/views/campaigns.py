@@ -13,9 +13,10 @@ from rest_framework.response import Response
 from django.db.models import Sum
 # pyre-ignore[missing-module]
 from django.utils import timezone
+from django.conf import settings
 import logging
 
-from marketplace.models import Notification, NotificationCampaign
+from marketplace.models import Notification, NotificationCampaign, PushDelivery, PushDevice
 from marketplace.serializers import NotificationCampaignSerializer
 from marketplace.services.campaign_service import CampaignService
 from marketplace.services.audit import record_audit
@@ -165,15 +166,52 @@ class CampaignViewSet(viewsets.ModelViewSet):
         def rate(n, d):
             return round((n / d) * 100, 2) if d else 0.0
 
+        push_environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
+        oldest_pending = Notification.objects.filter(
+            push_status=Notification.PushStatus.PENDING,
+        ).order_by('created_at').values_list('created_at', flat=True).first()
+        receipt_ok = PushDelivery.objects.filter(
+            status=PushDelivery.Status.RECEIPT_OK,
+        ).count()
+        receipt_error = PushDelivery.objects.filter(
+            status=PushDelivery.Status.RECEIPT_ERROR,
+        ).count()
+
         return Response({"status": "success", "data": {
             "campaigns_total": NotificationCampaign.objects.count(),
             "campaigns_sent": NotificationCampaign.objects.filter(
                 status=NotificationCampaign.Status.SENT).count(),
             "notifications_total": Notification.objects.count(),
             "push_sent": Notification.objects.filter(
-                push_status=Notification.PushStatus.SENT).count(),
+                push_status__in=[
+                    Notification.PushStatus.SENT,
+                    Notification.PushStatus.DELIVERED,
+                ]).count(),
             "push_failed": Notification.objects.filter(
                 push_status=Notification.PushStatus.FAILED).count(),
+            'push_delivered': Notification.objects.filter(
+                push_status=Notification.PushStatus.DELIVERED).count(),
+            'push_pending': Notification.objects.filter(
+                push_status=Notification.PushStatus.PENDING).count(),
+            'push_queue_oldest_age_seconds': (
+                max(0, int((timezone.now() - oldest_pending).total_seconds()))
+                if oldest_pending else 0
+            ),
+            'push_environment': push_environment,
+            'push_devices_active': PushDevice.objects.filter(
+                environment=push_environment, is_active=True).count(),
+            'push_devices_inactive': PushDevice.objects.filter(
+                environment=push_environment, is_active=False).count(),
+            'push_tickets_accepted': PushDelivery.objects.exclude(ticket_id__isnull=True).count(),
+            'push_tickets_error': PushDelivery.objects.filter(
+                status=PushDelivery.Status.TICKET_ERROR).count(),
+            'push_receipts_ok': PushDelivery.objects.filter(
+                status=PushDelivery.Status.RECEIPT_OK).count(),
+            'push_receipts_error': PushDelivery.objects.filter(
+                status=PushDelivery.Status.RECEIPT_ERROR).count(),
+            'push_receipt_success_rate': rate(receipt_ok, receipt_ok + receipt_error),
+            'push_retry_attempts': PushDelivery.objects.aggregate(
+                total=Sum('retry_count'))['total'] or 0,
             "recipients": recipients,
             "delivered": delivered,
             "failed": failed,
