@@ -1200,7 +1200,6 @@ class PushRecoveryAndIsolationTests(APITestCase):
             token='ExpoPushToken[wrong-environment]',
         ).exists())
 
-
 @override_settings(EXPO_PUSH_ENABLED=True)
 class AuthNotificationEventTests(APITestCase):
     def setUp(self):
