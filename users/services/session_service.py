@@ -156,6 +156,17 @@ def revoke_session(session: DeviceSession, *, reason: str):
         refresh_token.save(update_fields=['revoked_at', 'revoked_reason'])
         _blacklist_jti(refresh_token.jti)
 
+    if reason in {'logout', 'logout_all', 'session_revoked', 'account_deleted'}:
+        try:
+            from marketplace.models import PushDevice
+            PushDevice.objects.filter(
+                user=session.user,
+                device_id=session.device_id,
+                is_active=True,
+            ).update(is_active=False)
+        except Exception:
+            pass
+
 
 def revoke_all_sessions_for_user(user: User, *, reason: str):
     sessions = DeviceSession.objects.filter(user=user, revoked_at__isnull=True)

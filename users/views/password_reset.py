@@ -12,6 +12,7 @@ from config.throttling import (
     ResetPasswordIPThrottle,
 )
 from users.services.session_service import revoke_all_sessions_for_user
+from marketplace.services.customer_events import notify_customer_event
 
 class ForgotPasswordView(views.APIView):
     """
@@ -82,6 +83,11 @@ class ResetPasswordView(views.APIView):
         token_record.used_at = timezone.now()
         token_record.save(update_fields=['used_at'])
         revoke_all_sessions_for_user(user, reason='password_reset')
+        notify_customer_event(
+            user,
+            'PASSWORD_CHANGED',
+            dedup_key=f'password_changed:{token_record.id}',
+        )
 
         return response.Response({
             "message": "Password successfully reset."

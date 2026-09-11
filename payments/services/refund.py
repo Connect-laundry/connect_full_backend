@@ -12,9 +12,8 @@ import logging
 
 from django.db import transaction
 
-from marketplace.models import Notification
 from marketplace.services.audit import record_audit
-from marketplace.services.notification_service import NotificationService
+from marketplace.services.customer_events import notify_customer_event
 from ordering.models import Order
 
 from ..models import Payment
@@ -101,6 +100,13 @@ def refund_payment(payment, *, amount=None, reason='', actor=None, request=None)
                 rejected.transition_to(Payment.Status.SUCCESS)
         raise RefundError(message)
 
+    notify_customer_event(
+        payment.user,
+        'REFUND_INITIATED',
+        payment=payment,
+        dedup_key=f'refund_initiated_{payment.pk}',
+    )
+
     record_audit(
         action='PAYMENT_REFUND_REQUESTED',
         actor=actor,
@@ -159,12 +165,10 @@ def mark_refund_settled(payment, *, request=None):
             metadata={'amount': str(locked.amount), 'order_id': str(order.id)},
         )
 
-        NotificationService.notify_user(
-            user=locked.user,
-            title='Refund Processed',
-            body=f'Your refund of GHS {locked.amount} for order {order.order_no} has been processed.',
-            type=Notification.Type.ORDER,
-            category='PAYMENT_REFUNDED',
+        notify_customer_event(
+            locked.user,
+            'REFUND_COMPLETED',
+            payment=locked,
             related_order=order,
             dedup_key=f'refund_settled_{locked.id}',
         )

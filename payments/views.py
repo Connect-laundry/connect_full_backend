@@ -20,8 +20,7 @@ from ordering.models import Order
 from config.throttling import PaymentCreateThrottle
 from marketplace.services.audit import record_audit
 from ordering.services.order_state_machine import OrderStateMachine
-from marketplace.services.notification_service import NotificationService
-from marketplace.models import Notification
+from marketplace.services.customer_events import notify_customer_event
 from laundries.models.laundry import Laundry
 
 logger = logging.getLogger(__name__)
@@ -268,6 +267,12 @@ class PaymentInitializeView(APIView):
                 and existing_payment.payment_method == payment_method
                 and existing_payment.paystack_reference
             ):
+                notify_customer_event(
+                    request.user,
+                    'PAYMENT_PENDING',
+                    payment=existing_payment,
+                    dedup_key=f'payment_pending:{existing_payment.id}',
+                )
                 record_audit(
                     action="PAYMENT_INITIALIZED_REUSED",
                     actor=request.user,
@@ -357,6 +362,12 @@ class PaymentInitializeView(APIView):
                     "data": {},
                 }, status=status.HTTP_409_CONFLICT)
 
+            notify_customer_event(
+                request.user,
+                'PAYMENT_PENDING',
+                payment=payment,
+                dedup_key=f'payment_pending:{payment.id}',
+            )
             record_audit(
                 action="PAYMENT_INITIALIZED",
                 actor=request.user,
@@ -489,14 +500,12 @@ class PaymentVerifyView(APIView):
                             metadata={"reason": validation_error, "amount": str(payment.amount)}
                         )
                         
-                        NotificationService.notify_user(
-                            user=payment.user,
-                            title="Payment Failed",
-                            body=f"Your payment attempt for order {payment.order.order_no} failed: {validation_error}.",
-                            type=Notification.Type.ORDER,
-                            category="PAYMENT_FAILED",
-                            related_order=payment.order,
-                            dedup_key=f"pay_failed_{payment.id}"
+                        notify_customer_event(
+                            payment.user,
+                            'PAYMENT_FAILED',
+                            payment=payment,
+                            body=f"Your payment for order {payment.order.order_no} was not completed: {validation_error}.",
+                            dedup_key=f"pay_failed_{payment.id}",
                         )
                         
                         return Response({
@@ -545,14 +554,12 @@ class PaymentVerifyView(APIView):
                         metadata={"amount": str(payment.amount), "order_id": str(order.id)}
                     )
                     
-                    NotificationService.notify_user(
-                        user=payment.user,
-                        title="Payment Successful",
-                        body=f"Your payment of GHS {payment.amount} for order {order.order_no} was successful.",
-                        type=Notification.Type.ORDER,
-                        category="PAYMENT_SUCCESS",
+                    notify_customer_event(
+                        payment.user,
+                        'PAYMENT_SUCCESS',
+                        payment=payment,
                         related_order=order,
-                        dedup_key=f"payment_success_user:{payment.id}"
+                        dedup_key=f"payment_success_user:{payment.id}",
                     )
             
             return Response({

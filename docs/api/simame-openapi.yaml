@@ -3206,20 +3206,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/LaundryWeightPricing'
           description: ''
-  /api/v1/laundries/diagnosis/:
-    get:
-      operationId: api_v1_laundries_diagnosis_retrieve
-      tags:
-      - api
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DiagnosisResponse'
-          description: ''
   /api/v1/laundries/favorites/:
     get:
       operationId: api_v1_laundries_favorites_list
@@ -4726,7 +4712,7 @@ paths:
       description: |-
         POST /api/v1/payments/refund/{reference}/
 
-        Staff-only. Starts a refund with Paystack; the payment moves to
+        Staff-only. Starts a full refund with Paystack; the payment moves to
         REFUND_PENDING and reaches REFUNDED when the `refund.processed` webhook
         lands. Refunds are money-moving and irreversible, so this is never
         exposed to customers or laundry owners.
@@ -5294,6 +5280,19 @@ paths:
     get:
       operationId: api_v1_support_notifications_list
       description: API endpoint for checking and managing user notifications.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
       tags:
       - api
       security:
@@ -5303,9 +5302,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
+                $ref: '#/components/schemas/PaginatedNotificationList'
           description: ''
   /api/v1/support/notifications/{id}/:
     get:
@@ -5404,6 +5401,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notification'
           description: ''
+  /api/v1/support/notifications/auth-event/:
+    post:
+      operationId: api_v1_support_notifications_auth_event_create
+      description: Record friendly auth notifications after the app session is usable.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
   /api/v1/support/notifications/mark-all-read/:
     post:
       operationId: api_v1_support_notifications_mark_all_read_create
@@ -5474,7 +5498,7 @@ paths:
   /api/v1/support/notifications/push-device/:
     post:
       operationId: api_v1_support_notifications_push_device_create
-      description: Register, refresh, or deactivate the user's Expo push token.
+      description: API endpoint for checking and managing user notifications.
       tags:
       - api
       requestBody:
@@ -5500,7 +5524,7 @@ paths:
           description: ''
     delete:
       operationId: api_v1_support_notifications_push_device_destroy
-      description: Register, refresh, or deactivate the user's Expo push token.
+      description: API endpoint for checking and managing user notifications.
       tags:
       - api
       security:
@@ -6573,37 +6597,6 @@ components:
       - id
       - ip_address
       - last_used_at
-    DiagnosisData:
-      type: object
-      properties:
-        db_connection: {}
-        postgis:
-          type: boolean
-        debug_mode:
-          type: boolean
-        pending_migrations_count:
-          type: integer
-      required:
-      - db_connection
-      - debug_mode
-      - pending_migrations_count
-      - postgis
-    DiagnosisResponse:
-      type: object
-      properties:
-        status:
-          type: string
-        diagnosis_version:
-          type: string
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/DiagnosisData'
-      required:
-      - data
-      - diagnosis_version
-      - message
-      - status
     DiscountTypeEnum:
       enum:
       - PERCENTAGE
@@ -6612,6 +6605,14 @@ components:
       description: |-
         * `PERCENTAGE` - Percentage
         * `FIXED` - Fixed Amount
+    EnvironmentEnum:
+      enum:
+      - staging
+      - production
+      type: string
+      description: |-
+        * `staging` - Staging
+        * `production` - Production
     FAQItem:
       type: object
       properties:
@@ -8944,6 +8945,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LaundryList'
+    PaginatedNotificationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
     PatchedAddressRequest:
       type: object
       properties:
@@ -9489,7 +9513,7 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           nullable: true
-          description: Partial refund amount in GHS. Omit for a full refund.
+          description: Full payment amount in GHS. Omit to refund the full payment.
         reason:
           type: string
           maxLength: 200
@@ -9902,6 +9926,10 @@ components:
         app_version:
           type: string
           maxLength: 50
+        environment:
+          allOf:
+          - $ref: '#/components/schemas/EnvironmentEnum'
+          readOnly: true
         is_active:
           type: boolean
           readOnly: true
@@ -9918,6 +9946,7 @@ components:
           type: string
           maxLength: 255
       required:
+      - environment
       - id
       - is_active
       - last_registered_at
@@ -9939,6 +9968,7 @@ components:
       - NONE
       - PENDING
       - SENT
+      - DELIVERED
       - SKIPPED
       - FAILED
       type: string
@@ -9946,6 +9976,7 @@ components:
         * `NONE` - No push
         * `PENDING` - Queued
         * `SENT` - Sent to Expo
+        * `DELIVERED` - Delivered
         * `SKIPPED` - Skipped
         * `FAILED` - Failed
     ReceiptCustomer:
@@ -10113,7 +10144,7 @@ components:
           maxLength: 150
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
@@ -10144,21 +10175,13 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/RegisterRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - email
       - password
       - password_confirm
       - phone
-    RegisterRoleEnum:
-      enum:
-      - CUSTOMER
-      - OWNER
-      type: string
-      description: |-
-        * `CUSTOMER` - CUSTOMER
-        * `OWNER` - OWNER
     ResetPassword:
       type: object
       properties:
@@ -10233,6 +10256,14 @@ components:
           type: string
       required:
       - detail
+    Role9e8Enum:
+      enum:
+      - CUSTOMER
+      - OWNER
+      type: string
+      description: |-
+        * `CUSTOMER` - CUSTOMER
+        * `OWNER` - OWNER
     RoundingStrategyEnum:
       enum:
       - NONE
@@ -10318,7 +10349,7 @@ components:
       properties:
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
     SocialLoginRequest:
       type: object
@@ -10329,18 +10360,10 @@ components:
           minLength: 1
         role:
           allOf:
-          - $ref: '#/components/schemas/SocialLoginRoleEnum'
+          - $ref: '#/components/schemas/Role9e8Enum'
           default: CUSTOMER
       required:
       - clerk_token
-    SocialLoginRoleEnum:
-      enum:
-      - OWNER
-      - CUSTOMER
-      type: string
-      description: |-
-        * `OWNER` - OWNER
-        * `CUSTOMER` - CUSTOMER
     SocialSession:
       type: object
       properties:

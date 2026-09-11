@@ -629,8 +629,7 @@
 </div>{# /ic-layout #}
 
 {# ── Chart rendering ──────────────────────────────────────────────────── #}
-<script src="{% static 'insights/chart.umd.min.js' %}"
-        onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';s.onload=function(){window.__renderInsightsCharts&&window.__renderInsightsCharts();};document.head.appendChild(s);"></script>
+<script src="{% static 'insights/chart.umd.min.js' %}"></script>
 <script id="insights-data" type="application/json">{{ charts_json|safe }}</script>
 <script>
 window.__renderInsightsCharts = function () {

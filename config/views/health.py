@@ -85,7 +85,7 @@ def health_check(request):
 
     # 3. Check Celery Broker
     try:
-        if os.getenv('CELERY_BROKER_URL'):
+        if settings.CELERY_BROKER_URL:
             with celery_app.broker_connection() as conn:
                 conn.ensure_connection(max_retries=1)
                 components_status['celery'] = "up"
@@ -124,3 +124,4 @@ def health_check(request):
     response = JsonResponse(response_payload, status=status_code)
     response["Cache-Control"] = "no-store"
     return response
+

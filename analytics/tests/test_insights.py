@@ -95,6 +95,7 @@ class InsightsPageTests(APITestCase):
         self.assertIn('ovRev', html)
         # Chart.js is self-hosted (no hard dependency on an external CDN).
         self.assertIn('insights/chart.umd.min.js', html)
+        self.assertNotIn('cdn.jsdelivr.net', html)
 
     def test_nav_uses_svg_icons_no_emoji(self):
         """Design-system check: the left nav must use the inline SVG icon

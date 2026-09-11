@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from rest_framework import viewsets, permissions, decorators, status
+from rest_framework import viewsets, permissions, decorators, serializers, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
@@ -12,6 +12,7 @@ from django.db import transaction
 from django.conf import settings
 # pyre-ignore[missing-module]
 from marketplace.models import Notification, PushDevice, NotificationPreference
+from marketplace.services.customer_events import CUSTOMER_EVENT_TEMPLATES, notify_customer_event
 # pyre-ignore[missing-module]
 from ..serializers import (
     NotificationSerializer, PushDeviceSerializer, NotificationPreferenceSerializer,
@@ -212,3 +213,54 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             "message": "Push device registered",
             "data": PushDeviceSerializer(device).data,
         }, status=status.HTTP_200_OK)
+
+    @decorators.action(detail=False, methods=['post'], url_path='auth-event')
+    def auth_event(self, request):
+        """Record friendly auth notifications after the app session is usable."""
+        class AuthEventSerializer(serializers.Serializer):
+            event = serializers.ChoiceField(choices=[
+                ('SIGNUP_SUCCESS', 'SIGNUP_SUCCESS'),
+                ('LOGIN_SUCCESS', 'LOGIN_SUCCESS'),
+                ('NEW_DEVICE_LOGIN', 'NEW_DEVICE_LOGIN'),
+                ('PASSWORD_CHANGED', 'PASSWORD_CHANGED'),
+            ])
+
+        serializer = AuthEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = serializer.validated_data['event']
+        if event not in CUSTOMER_EVENT_TEMPLATES:
+            return Response(
+                {"status": "error", "message": "Unsupported notification event."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        device_id = (request.META.get('HTTP_X_DEVICE_ID') or 'unknown-device')[:128]
+        idempotency_key = (
+            request.META.get('HTTP_X_IDEMPOTENCY_KEY')
+            or request.META.get('HTTP_X_REQUEST_ID')
+            or str(request.user.id)
+        )[:128]
+        notification = notify_customer_event(
+            request.user,
+            event,
+            dedup_key=f'auth:{event}:{device_id}:{idempotency_key}',
+        )
+
+        if event == 'LOGIN_SUCCESS':
+            new_device_key = f'auth:NEW_DEVICE_LOGIN:{device_id}'
+            if not Notification.objects.filter(
+                user=request.user,
+                audience=Notification.Audience.USER,
+                dedup_key=new_device_key,
+            ).exists():
+                notify_customer_event(
+                    request.user,
+                    'NEW_DEVICE_LOGIN',
+                    dedup_key=new_device_key,
+                )
+
+        return Response({
+            "status": "success",
+            "message": "Notification recorded",
+            "data": {"id": str(notification.id), "event": event},
+        }, status=status.HTTP_201_CREATED)

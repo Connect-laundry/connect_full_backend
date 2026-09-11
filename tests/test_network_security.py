@@ -48,6 +48,27 @@ class TestNetworkSecurity:
                 assert 'status' in payload
                 assert 'components' in payload
 
+    def test_health_uses_configured_celery_broker_from_settings(self):
+        class DummyBrokerConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def ensure_connection(self, max_retries=1):
+                self.max_retries = max_retries
+
+        with mock.patch.dict(os.environ, {'INTERNAL_HEALTH_TOKEN': 'health-secret'}, clear=False):
+            with override_settings(ROOT_URLCONF='config.urls', CELERY_BROKER_URL='redis://redis.internal:6379/1'):
+                with mock.patch('config.views.health.celery_app.broker_connection', return_value=DummyBrokerConnection()) as broker_connection:
+                    client = APIClient()
+                    response = client.get('/health/', HTTP_X_HEALTH_TOKEN='health-secret')
+
+        broker_connection.assert_called_once()
+        payload = response.json()
+        assert response.status_code == status.HTTP_200_OK
+        assert payload['components']['celery'] == 'up'
     def test_request_id_is_echoed_back_to_clients(self):
         with override_settings(ROOT_URLCONF='config.urls'):
             client = APIClient()
@@ -115,3 +136,4 @@ class TestNetworkSecurity:
             response = middleware.process_response(request, JsonResponse({'ok': True}))
 
         assert response['Content-Security-Policy'] == "default-src 'none'; frame-ancestors 'none'"
+

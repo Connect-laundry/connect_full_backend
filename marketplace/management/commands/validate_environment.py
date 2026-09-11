@@ -90,6 +90,19 @@ class Command(BaseCommand):
                 cursor.execute('SELECT 1')
             return PASS, 'connection OK.'
         except Exception as exc:
+            detail = str(exc)
+            if (
+                'tenant/user' in detail
+                and '(ENOTFOUND)' in detail
+                and 'pooler.supabase.com' in detail
+            ):
+                return FAIL, (
+                    'Supabase shared pooler could not find this tenant/user. '
+                    'Replace DATABASE_URL with the exact Session pooler string copied '
+                    'from the active Supabase project Connect dialog; do not compose '
+                    'the aws-N-region host manually, and verify the username includes '
+                    'the active project ref, for example postgres.<project-ref>.'
+                )
             return FAIL, f'cannot connect: {exc}'
 
     def check_cloudinary(self):
@@ -232,3 +245,4 @@ class Command(BaseCommand):
         if provider == 'mapbox' and not settings.MAPBOX_ACCESS_TOKEN:
             return FAIL, 'GEOCODING_PROVIDER=mapbox but MAPBOX_ACCESS_TOKEN missing.'
         return PASS, f'{provider} configured.'
+

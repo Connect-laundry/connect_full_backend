@@ -25,6 +25,7 @@ from laundries.models.laundry import Laundry
 from django.utils import timezone
 from django.test import override_settings
 from django.conf import settings
+from users.models import Address, DeviceSession
 from unittest.mock import patch
 from datetime import timedelta
 
@@ -1199,3 +1200,129 @@ class PushRecoveryAndIsolationTests(APITestCase):
             token='ExpoPushToken[wrong-environment]',
         ).exists())
 
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class AuthNotificationEventTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='authpush@example.com', phone='233700000120', password='pw', role='CUSTOMER')
+        self.client.force_authenticate(user=self.user)
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_signup_event_creates_customer_notification_and_queues_push(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('notification-auth-event'),
+                {'event': 'SIGNUP_SUCCESS'},
+                format='json',
+                HTTP_X_DEVICE_ID='install-signup',
+                HTTP_X_IDEMPOTENCY_KEY='signup-once',
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notification = Notification.objects.get(user=self.user, category='SIGNUP_SUCCESS')
+        self.assertEqual(notification.title, 'Welcome to Simame')
+        self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
+        mock_delay.assert_called_once_with(str(notification.id))
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_login_event_is_deduped_and_marks_first_device_sign_in(self, mock_delay):
+        for _ in range(2):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('notification-auth-event'),
+                    {'event': 'LOGIN_SUCCESS'},
+                    format='json',
+                    HTTP_X_DEVICE_ID='install-login',
+                    HTTP_X_IDEMPOTENCY_KEY='login-once',
+                )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(Notification.objects.filter(user=self.user, category='LOGIN_SUCCESS').count(), 1)
+        self.assertEqual(Notification.objects.filter(user=self.user, category='NEW_DEVICE_LOGIN').count(), 1)
+        self.assertEqual(mock_delay.call_count, 2)
+
+
+class SessionPushDeviceCleanupTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='cleanup@example.com', phone='233700000121', password='pw', role='CUSTOMER')
+        self.session = DeviceSession.objects.create(
+            user=self.user,
+            device_id='install-cleanup',
+            platform='android',
+            app_version='1.0.0',
+            user_agent='pytest',
+            ip_address='127.0.0.1',
+        )
+        self.device = PushDevice.objects.create(
+            user=self.user,
+            token='ExpoPushToken[cleanup-token]',
+            device_id='install-cleanup',
+            platform=PushDevice.Platform.ANDROID,
+        )
+
+    def test_password_reset_keeps_security_push_device_active(self):
+        from users.services.session_service import revoke_session
+
+        revoke_session(self.session, reason='password_reset')
+        self.device.refresh_from_db()
+        self.assertTrue(self.device.is_active)
+
+    def test_logout_deactivates_matching_push_device(self):
+        from users.services.session_service import revoke_session
+
+        revoke_session(self.session, reason='logout')
+        self.device.refresh_from_db()
+        self.assertFalse(self.device.is_active)
+
+
+@override_settings(EXPO_PUSH_ENABLED=True)
+class CustomerActivityNotificationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='activity@example.com', phone='233700000122', password='pw', role='CUSTOMER')
+        self.client.force_authenticate(user=self.user)
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_profile_updates_create_customer_notifications_without_accidental_dedup(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(reverse('auth_me'), {'first_name': 'Ama'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(reverse('auth_me'), {'last_name': 'Mensah'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        notifications = Notification.objects.filter(
+            user=self.user,
+            category='PROFILE_UPDATED',
+        )
+        self.assertEqual(notifications.count(), 2)
+        self.assertEqual(mock_delay.call_count, 2)
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_address_crud_creates_customer_activity_notifications(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(reverse('address-list'), {
+                'label': 'Home',
+                'address_line1': '12 Ring Road',
+                'city': 'Accra',
+            }, format='json')
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        address = Address.objects.get(user=self.user)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            update_response = self.client.patch(
+                reverse('address-detail', kwargs={'id': address.id}),
+                {'address_line1': '14 Ring Road'},
+                format='json',
+            )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            delete_response = self.client.delete(reverse('address-detail', kwargs={'id': address.id}))
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.assertTrue(Notification.objects.filter(user=self.user, category='ADDRESS_SAVED').exists())
+        self.assertTrue(Notification.objects.filter(user=self.user, category='ADDRESS_UPDATED').exists())
+        self.assertTrue(Notification.objects.filter(user=self.user, category='ADDRESS_REMOVED').exists())
+        self.assertEqual(mock_delay.call_count, 3)

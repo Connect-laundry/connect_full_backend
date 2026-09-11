@@ -9,8 +9,7 @@ from config.celery_utils import hardened_task
 from payments.models import Payment
 from payments.services.paystack import PaystackService
 from ordering.services.order_state_machine import OrderStateMachine
-from marketplace.services.notification_service import NotificationService
-from marketplace.models import Notification
+from marketplace.services.customer_events import notify_customer_event
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +76,12 @@ def reconcile_pending_payments(self):
                             OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=None)
                             
                             # Trigger push notification
-                            NotificationService.notify_user(
-                                user=locked_payment.user,
-                                title="Payment Reconciled Successfully",
-                                body=f"Your payment of GHS {locked_payment.amount} for order {order.order_no} has been verified.",
-                                type=Notification.Type.ORDER,
-                                category="PAYMENT_SUCCESS",
+                            notify_customer_event(
+                                locked_payment.user,
+                                'PAYMENT_SUCCESS',
+                                payment=locked_payment,
                                 related_order=order,
-                                dedup_key=f"payment_success_user:{locked_payment.id}"
+                                dedup_key=f"payment_success_user:{locked_payment.id}",
                             )
                             reconciled_count += 1
                         else:
@@ -100,14 +97,12 @@ def reconcile_pending_payments(self):
                         locked_payment.save(update_fields=['status', 'updated_at'])
                         
                         # Notify user of failure
-                        NotificationService.notify_user(
-                            user=locked_payment.user,
-                            title="Payment Attempt Failed",
-                            body=f"Your payment attempt for order {locked_payment.order.order_no} was declined or abandoned.",
-                            type=Notification.Type.ORDER,
-                            category="PAYMENT_FAILED",
+                        notify_customer_event(
+                            locked_payment.user,
+                            'PAYMENT_FAILED',
+                            payment=locked_payment,
                             related_order=locked_payment.order,
-                            dedup_key=f"reconcile_fail_{locked_payment.id}"
+                            dedup_key=f"reconcile_fail_{locked_payment.id}",
                         )
                 else:
                     # If Paystack cannot find reference and transaction is older than 2 hours, mark EXPIRED
