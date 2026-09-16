@@ -23,15 +23,17 @@ class CustomerEventTemplate:
 
 CUSTOMER_EVENT_TEMPLATES = {
     'SIGNUP_SUCCESS': CustomerEventTemplate(
-        title='Welcome to Simame',
-        body='Your account is ready. Laundry just got easier.',
+        title='✨ Welcome to Simame!',
+        body='Your account is ready! Fresh, hassle-free laundry is just a tap away.',
         category='SIGNUP_SUCCESS',
+        priority=Notification.Priority.URGENT,
         action_url='/notifications',
     ),
     'LOGIN_SUCCESS': CustomerEventTemplate(
-        title='Welcome back',
-        body="You're signed in to Simame.",
+        title='👋 Welcome back!',
+        body="Great to see you again! Check out laundry services and special offers near you.",
         category='LOGIN_SUCCESS',
+        priority=Notification.Priority.URGENT,
         action_url='/notifications',
     ),
     'NEW_DEVICE_LOGIN': CustomerEventTemplate(
