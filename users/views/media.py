@@ -7,7 +7,9 @@ from rest_framework.parsers import MultiPartParser, FormParser
 # pyre-ignore[missing-module]
 from django.conf import settings
 from drf_spectacular.utils import extend_schema
+# pyrefly: ignore [missing-import]
 from laundries.utils.validators import validate_file_upload
+# pyrefly: ignore [missing-import]
 from utils.media import MediaStorageError, save_to_storage
 import uuid
 import os

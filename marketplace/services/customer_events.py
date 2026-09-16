@@ -106,6 +106,41 @@ CUSTOMER_EVENT_TEMPLATES = {
         category='PROFILE_UPDATED',
         action_url='/settings/account',
     ),
+    # -----------------------------------------------------------------------
+    # Post-delivery & engagement events
+    # -----------------------------------------------------------------------
+    'REVIEW_REQUEST': CustomerEventTemplate(
+        title='How was your laundry? ⭐',
+        body='Your order was delivered! Rate your experience and help others find the best laundries.',
+        category='REVIEW_REQUEST',
+        type=Notification.Type.ORDER,
+        priority=Notification.Priority.NORMAL,
+        action_url='/orders',
+    ),
+    'NEW_LAUNDRY_NEARBY': CustomerEventTemplate(
+        title='New laundry just joined Simame! 🎉',
+        body='A brand-new laundry is now available in your area. Check it out!',
+        category='NEW_LAUNDRY_NEARBY',
+        type=Notification.Type.PROMO,
+        priority=Notification.Priority.NORMAL,
+        action_url='/maps',
+    ),
+    'DAILY_NUDGE': CustomerEventTemplate(
+        title='Fresh laundry, fresh start 🌅',
+        body='Good morning! Schedule a laundry pickup and start your day right.',
+        category='DAILY_NUDGE',
+        type=Notification.Type.PROMO,
+        priority=Notification.Priority.NORMAL,
+        action_url='/home',
+    ),
+    'NEW_LAUNDRY_DIGEST': CustomerEventTemplate(
+        title='New laundries joined Simame this week! 🧺',
+        body='More options, more choices. Discover the newest laundries near you.',
+        category='NEW_LAUNDRY_DIGEST',
+        type=Notification.Type.PROMO,
+        priority=Notification.Priority.NORMAL,
+        action_url='/maps',
+    ),
 }
 
 

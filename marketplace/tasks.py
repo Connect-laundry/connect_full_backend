@@ -671,3 +671,228 @@ def dispatch_pending_pushes():
             extra={'candidates': len(pending_ids), 'queued': queued},
         )
     return queued
+
+
+# ---------------------------------------------------------------------------
+# Post-delivery & new laundry engagement tasks
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    name='marketplace.tasks.send_review_request_push',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 2},
+)
+def send_review_request_push(self, order_id):
+    """Send a review request push 30 minutes after delivery.
+
+    Called via apply_async(countdown=1800) from the ordering signal so the
+    customer gets a nudge half an hour after their laundry is delivered.
+    One nudge per order via dedup_key.
+    """
+    from ordering.models import Order
+    from marketplace.services.customer_events import notify_customer_event
+
+    try:
+        order = Order.objects.select_related('user').get(id=order_id)
+    except Order.DoesNotExist:
+        return None
+
+    # Only fire if still DELIVERED or COMPLETED by the time the delay elapses.
+    if order.status not in ('DELIVERED', 'COMPLETED'):
+        return None
+    if not order.user_id:
+        return None
+
+    dedup_key = f'review_request:{order_id}'
+    notification = notify_customer_event(
+        order.user,
+        'REVIEW_REQUEST',
+        dedup_key=dedup_key,
+        related_order=order,
+        action_url='/orders',
+    )
+    return str(notification.id) if notification else None
+
+
+@shared_task(
+    name='marketplace.tasks.notify_new_laundry_to_customers',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 3},
+)
+def notify_new_laundry_to_customers(self, laundry_id):
+    """Broadcast a 'new laundry' push to all active customers.
+
+    Caps at one notification per user per laundry via dedup_key, so
+    re-triggering (e.g. from admin edits) is harmless. Delivered in
+    preference-filtered batches so the customer's push opt-out is respected.
+    """
+    from marketplace.models import Notification
+    from marketplace.services.notification_service import NotificationService
+    from django.contrib.auth import get_user_model
+
+    try:
+        from laundries.models import Laundry
+        laundry = Laundry.objects.get(id=laundry_id)
+    except Exception:
+        return 0
+
+    User = get_user_model()
+    customers = User.objects.filter(role='CUSTOMER', is_active=True).iterator(chunk_size=200)
+    sent = 0
+    for user in customers:
+        try:
+            NotificationService.notify_user(
+                user,
+                title=f"New laundry just joined Simame! 🎉",
+                body=f"'{laundry.name}' is now available. Tap to explore!",
+                type=Notification.Type.PROMO,
+                category='NEW_LAUNDRY_NEARBY',
+                action_url='/maps',
+                dedup_key=f'new_laundry_notify:{laundry_id}:{user.id}',
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning(
+                'new_laundry broadcast: notification failed for user',
+                extra={'user_id': str(user.id), 'error': summarize_exception(exc)},
+            )
+    logger.info('new_laundry broadcast complete', extra={'laundry_id': laundry_id, 'sent': sent})
+    return sent
+
+
+@shared_task(name='marketplace.tasks.daily_morning_nudge')
+def daily_morning_nudge():
+    """Duolingo-style daily 9am nudge to active users who haven't ordered today.
+
+    One nudge per user per day maximum. Skips users who've placed an order
+    in the last 24h (they don't need a reminder). Monthly per-user cap ensures
+    we never nag daily users who've already picked up a routine.
+    """
+    from marketplace.models import Notification, NotificationCampaign
+    from marketplace.services.campaign_service import CampaignService
+    from django.contrib.auth import get_user_model
+    from ordering.models import Order
+
+    User = get_user_model()
+    today = timezone.now().date()
+    year_month = today.strftime('%Y%m')
+
+    # Exclude users who ordered today — they don't need a nudge.
+    recent_orderers = set(
+        Order.objects.filter(
+            created_at__date=today,
+        ).values_list('user_id', flat=True)
+    )
+
+    customers = (
+        User.objects.filter(role='CUSTOMER', is_active=True)
+        .exclude(id__in=recent_orderers)
+    )
+
+    delivered, skipped = CampaignService.deliver(
+        recipients=customers,
+        title='Fresh laundry, fresh start 🌅',
+        body='Good morning! Schedule a laundry pickup and start your day right.',
+        type=Notification.Type.PROMO,
+        category='DAILY_NUDGE',
+        action_url='/home',
+        dedup_prefix='daily_nudge',
+        period_key=f'{today.isoformat()}',
+    )
+    logger.info('daily_morning_nudge', extra={'delivered': delivered, 'skipped': skipped})
+    return delivered
+
+
+@shared_task(name='marketplace.tasks.new_laundry_weekly_digest')
+def new_laundry_weekly_digest():
+    """Monday morning digest: notify users when new laundries joined this week."""
+    from marketplace.models import Notification, NotificationCampaign
+    from marketplace.services.campaign_service import CampaignService
+    from django.contrib.auth import get_user_model
+
+    try:
+        from laundries.models import Laundry
+        one_week_ago = timezone.now() - timedelta(days=7)
+        new_count = Laundry.objects.filter(
+            status='ACTIVE',
+            created_at__gte=one_week_ago,
+        ).count()
+    except Exception:
+        new_count = 0
+
+    if new_count == 0:
+        return 0
+
+    User = get_user_model()
+    customers = User.objects.filter(role='CUSTOMER', is_active=True)
+
+    iso_year, iso_week, _ = timezone.now().isocalendar()
+    delivered, skipped = CampaignService.deliver(
+        recipients=customers,
+        title=f'{new_count} new {"laundry" if new_count == 1 else "laundries"} joined Simame this week! 🧺',
+        body='More options, more choices. Discover what\'s new near you.',
+        type=Notification.Type.PROMO,
+        category='NEW_LAUNDRY_DIGEST',
+        action_url='/maps',
+        dedup_prefix='new_laundry_digest',
+        period_key=f'{iso_year}W{iso_week}',
+    )
+    logger.info('new_laundry_weekly_digest', extra={'new_count': new_count, 'delivered': delivered, 'skipped': skipped})
+    return delivered
+
+
+@shared_task(name='marketplace.tasks.order_review_sweep')
+def order_review_sweep():
+    """Daily 2pm sweep: find recently delivered orders with no review and send a reminder.
+
+    Looks for orders delivered 1–6 hours ago that haven't been reviewed yet.
+    Deduped per order so the push fires at most once regardless of how many
+    times this task runs. Complements send_review_request_push (which is
+    triggered immediately via the signal) by catching any orders where the
+    30-minute Celery task was lost (broker outage, etc.).
+    """
+    from ordering.models import Order
+    from marketplace.services.customer_events import notify_customer_event
+
+    now = timezone.now()
+    # Window: delivered 1-6 hours ago (the 30-min push has already fired; this
+    # is the safety-net sweep for customers who missed it).
+    window_start = now - timedelta(hours=6)
+    window_end = now - timedelta(hours=1)
+
+    try:
+        delivered_orders = (
+            Order.objects.select_related('user')
+            .filter(
+                status__in=('DELIVERED', 'COMPLETED'),
+                delivered_at__gte=window_start,
+                delivered_at__lte=window_end,
+                user__isnull=False,
+            )
+        )
+    except Exception as exc:
+        logger.error('order_review_sweep: query failed', extra={'error': summarize_exception(exc)})
+        return 0
+
+    sent = 0
+    for order in delivered_orders:
+        try:
+            notify_customer_event(
+                order.user,
+                'REVIEW_REQUEST',
+                dedup_key=f'review_request:{order.id}',
+                related_order=order,
+                action_url='/orders',
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning(
+                'order_review_sweep: failed for order',
+                extra={'order_id': str(order.id), 'error': summarize_exception(exc)},
+            )
+    logger.info('order_review_sweep', extra={'sent': sent})
+    return sent

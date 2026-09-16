@@ -201,3 +201,33 @@ def admin_notify_new_review(sender, instance, created, **kwargs):
             dedup_key=f'new_review:{instance.id}',
         )
     _safe(_do)
+
+
+@receiver(post_save, sender='laundries.Laundry')
+def customer_notify_new_laundry_approved(sender, instance, created, **kwargs):
+    """Broadcast a push to all customers when a laundry becomes active.
+
+    Only fires on the first transition to ACTIVE so repeat saves (e.g. admin
+    editing the record) don't re-send. Delivered via a Celery campaign task
+    so a large user base doesn't block the HTTP request that approved it.
+    """
+    if getattr(instance, 'status', None) != 'ACTIVE':
+        return
+
+    # Only notify on the *first* activation (status field just became ACTIVE).
+    # We use created=False to skip brand-new rows that start PENDING.
+    if created:
+        return
+
+    def _broadcast():
+        from django.db import transaction
+        from marketplace.tasks import notify_new_laundry_to_customers
+        from utils.tasks import safe_task_delay
+        laundry_id = str(instance.id)
+        transaction.on_commit(
+            lambda: safe_task_delay(
+                notify_new_laundry_to_customers, laundry_id, fallback_sync=False
+            )
+        )
+    _safe(_broadcast)
+

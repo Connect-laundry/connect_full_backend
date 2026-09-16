@@ -959,7 +959,23 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(day_of_month='1', hour=8, minute=0),
         'kwargs': {'period': 'monthly'},
     },
+    # ---------------------------------------------------------------------------
+    # Duolingo-style daily engagement — new tasks
+    # ---------------------------------------------------------------------------
+    # Daily 9am nudge to users who haven't placed an order today.
+    # Each user is deduped daily so repeat beat ticks are safe.
+    'daily-morning-nudge': {
+        'task': 'marketplace.tasks.daily_morning_nudge',
+        'schedule': crontab(hour=9, minute=0),
+    },
+    # Monday 9am: tell users how many new laundries joined this week.
+    'new-laundry-weekly-digest': {
+        'task': 'marketplace.tasks.new_laundry_weekly_digest',
+        'schedule': crontab(day_of_week='mon', hour=9, minute=0),
+    },
+    # Daily review prompt for recently completed orders.
+    'order-review-sweep': {
+        'task': 'marketplace.tasks.order_review_sweep',
+        'schedule': crontab(hour=14, minute=0),
+    },
 }
-
-
-

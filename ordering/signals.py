@@ -124,3 +124,43 @@ def notify_order_created(sender, instance, created, **kwargs):
             extra={'order_id': str(instance.id), 'error': str(exc)},
         )
 
+
+@receiver(order_status_changed)
+def schedule_review_request(sender, order, from_status, to_status, **kwargs):
+    """Schedule a review-request push 30 minutes after delivery.
+
+    Fires only on the DELIVERED transition so the customer gets one polite
+    nudge to rate their experience. The dedup_key prevents double-sends if
+    the signal fires more than once. Best-effort: never blocks the transition.
+    """
+    if to_status != 'DELIVERED':
+        return
+    if not order.user_id:
+        return
+
+    try:
+        from marketplace.tasks import send_review_request_push
+        from django.db import transaction
+        order_id = str(order.id)
+
+        def _dispatch():
+            try:
+                send_review_request_push.apply_async(
+                    args=[order_id],
+                    countdown=1800,  # 30 minutes
+                )
+            except Exception as _exc:
+                logger.warning(
+                    "Failed to schedule review request push via Celery; "
+                    "the pending outbox will pick it up on next sweep.",
+                    extra={'order_id': order_id, 'error': str(_exc)},
+                )
+
+        transaction.on_commit(_dispatch)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "Failed to schedule review request push",
+            extra={'order_id': str(order.id), 'error': str(exc)},
+        )
+
+

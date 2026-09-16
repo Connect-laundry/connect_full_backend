@@ -148,6 +148,8 @@ services:
         sync: false
       - key: PUSH_ENVIRONMENT
         value: production
+      - key: INACTIVITY_REACTIVATION_ENABLED
+        value: "True"
       - key: SENTRY_DSN
         sync: false
       - key: CLERK_APPLICATION_ID
@@ -213,6 +215,8 @@ services:
         sync: false
       - key: PUSH_ENVIRONMENT
         value: production
+      - key: INACTIVITY_REACTIVATION_ENABLED
+        value: "True"
       - key: WEATHER_PROMO_ENABLED
         value: "True"
       - key: WEATHER_PROMO_PROVIDER
