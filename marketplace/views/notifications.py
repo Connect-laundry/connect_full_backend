@@ -148,7 +148,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['post', 'delete'], url_path='push-device')
     def push_device(self, request):
-        push_environment = request.data.get('environment') or getattr(settings, 'PUSH_ENVIRONMENT', 'production')
+        # The server is the authority on its own environment. A build that
+        # claims another one is misconfigured and must not be registered here.
+        push_environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
+        claimed_environment = request.data.get('environment')
+        if claimed_environment and claimed_environment != push_environment:
+            logger.warning(
+                "Rejected cross-environment push registration",
+                extra={"claimed": claimed_environment, "server": push_environment},
+            )
+            return Response(
+                {'environment': 'This app build targets a different push environment.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         """Register, refresh, or deactivate the user's Expo push token."""
         if request.method == 'DELETE':
             token = request.data.get('token')

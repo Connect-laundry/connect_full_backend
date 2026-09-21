@@ -318,12 +318,19 @@ class ExpoTransportTests(APITestCase):
             deliver_push("t", "b", {}, ["ExponentPushToken[AAAA]"])
 
 
+def _expo_ok(mock_post, ticket='t-1'):
+    mock_post.return_value.status_code = 200
+    mock_post.return_value.raise_for_status = lambda: None
+    mock_post.return_value.json = lambda: {"data": [{"status": "ok", "id": ticket}]}
+
+
 @override_settings(EXPO_PUSH_ENABLED=True)
 class BrokerOutageDeliveryTests(APITestCase):
-    """Broker outages must preserve the durable row without blocking HTTP.
+    """PATH B: Redis/Celery down must still produce a real push.
 
-    The durable PENDING row is recovered by the periodic dispatcher when the
-    broker returns; Expo is never called from a customer request.
+    Production runs without a broker, so a push that only waits for Celery
+    never reaches a phone. The business operation must still succeed, the
+    in-app row must survive, and each notification is sent exactly once.
     """
 
     def setUp(self):
@@ -332,31 +339,12 @@ class BrokerOutageDeliveryTests(APITestCase):
         PushDevice.objects.create(
             user=self.user, token="ExponentPushToken[BROKER]", platform='android')
 
-    @patch('marketplace.tasks.send_real_push.delay')
-    def test_push_stays_pending_when_broker_is_down(self, mock_delay):
-        from kombu.exceptions import OperationalError
-        mock_delay.side_effect = OperationalError("broker unreachable")
-
-        with self.captureOnCommitCallbacks(execute=True):
-            notification = NotificationService.notify_user(
-                self.user, title="t", body="b", category='ORDER',
-                type=Notification.Type.ORDER,
-            )
-
-        self.assertIsNotNone(notification)
-        mock_delay.assert_called_once()
-        notification.refresh_from_db()
-        self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
-        self.assertIsNone(notification.push_last_queued_at)
-
     @patch('marketplace.tasks.requests.post')
     @patch('marketplace.tasks.send_real_push.delay')
-    def test_broker_outage_never_calls_expo_in_request_path(self, mock_delay, mock_post):
+    def test_broker_outage_still_delivers_directly(self, mock_delay, mock_post):
         from kombu.exceptions import OperationalError
         mock_delay.side_effect = OperationalError("broker unreachable")
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.raise_for_status = lambda: None
-        mock_post.return_value.json = lambda: {"data": [{"status": "ok", "id": "t-1"}]}
+        _expo_ok(mock_post)
 
         with self.captureOnCommitCallbacks(execute=True):
             notification = NotificationService.notify_user(
@@ -364,9 +352,133 @@ class BrokerOutageDeliveryTests(APITestCase):
                 category='ORDER', type=Notification.Type.ORDER,
             )
 
+        mock_delay.assert_called_once()
+        self.assertEqual(mock_post.call_count, 1)
+        notification.refresh_from_db()
+        self.assertEqual(notification.push_status, Notification.PushStatus.SENT)
+        self.assertEqual(notification.push_deliveries.filter(status=PushDelivery.Status.TICKET_OK).count(), 1)
+
+    @patch('marketplace.tasks.requests.post')
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_healthy_broker_hands_off_without_a_direct_send(self, mock_delay, mock_post):
+        with self.captureOnCommitCallbacks(execute=True):
+            notification = NotificationService.notify_user(
+                self.user, title="t", body="b", category='ORDER', type=Notification.Type.ORDER)
+        mock_delay.assert_called_once_with(str(notification.id))
         mock_post.assert_not_called()
         notification.refresh_from_db()
+        self.assertIsNotNone(notification.push_last_queued_at)
+
+    @override_settings(PUSH_DISPATCH_IN_THREAD=True)
+    @patch('marketplace.tasks.requests.post')
+    def test_expo_is_never_called_on_the_request_thread(self, mock_post):
+        import threading
+        started = []
+
+        class RecordingThread:
+            def __init__(self, target=None, daemon=None, **kwargs):
+                self.daemon = daemon
+                started.append(self)
+
+            def start(self):
+                pass
+
+        with patch.object(threading, 'Thread', RecordingThread):
+            with self.captureOnCommitCallbacks(execute=True):
+                NotificationService.notify_user(
+                    self.user, title="t", body="b", category='ORDER', type=Notification.Type.ORDER)
+
+        mock_post.assert_not_called()
+        self.assertEqual(len(started), 1)
+        # Non-daemon: a worker restart must not kill a send mid-flight.
+        self.assertIs(started[0].daemon, False)
+
+    @patch('marketplace.tasks.requests.post')
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_sweep_and_post_commit_sender_never_double_send(self, mock_delay, mock_post):
+        from kombu.exceptions import OperationalError
+        from marketplace.tasks import dispatch_pending_pushes
+        mock_delay.side_effect = OperationalError("broker unreachable")
+        _expo_ok(mock_post)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            NotificationService.notify_user(
+                self.user, title="once", body="b", category='ORDER', type=Notification.Type.ORDER)
+        # A beat tick right after (healthy Redis path) must not resend it.
+        dispatch_pending_pushes.run()
+        dispatch_pending_pushes.run()
+        self.assertEqual(mock_post.call_count, 1)
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_sweep_skips_a_row_the_post_commit_sender_is_still_sending(self, mock_delay):
+        from marketplace.tasks import claim_push, dispatch_pending_pushes
+        notification = Notification.objects.create(
+            user=self.user, title='in flight', body='b', push_status=Notification.PushStatus.PENDING)
+        self.assertTrue(claim_push(notification.id))  # post-commit sender owns it
+        self.assertEqual(dispatch_pending_pushes.run(), 0)
+        mock_delay.assert_not_called()
+
+    def test_claim_is_exclusive_until_it_expires(self):
+        from marketplace.tasks import claim_push, PUSH_CLAIM_TTL
+        notification = Notification.objects.create(
+            user=self.user, title='c', body='b', push_status=Notification.PushStatus.PENDING)
+        self.assertTrue(claim_push(notification.id))
+        self.assertFalse(claim_push(notification.id))
+        Notification.objects.filter(pk=notification.pk).update(
+            push_last_queued_at=timezone.now() - PUSH_CLAIM_TTL - timedelta(seconds=1))
+        self.assertTrue(claim_push(notification.id))
+        Notification.objects.filter(pk=notification.pk).update(push_status=Notification.PushStatus.SENT)
+        self.assertFalse(claim_push(notification.id))
+
+    @patch('marketplace.tasks.requests.post')
+    def test_direct_send_retries_a_bounded_number_of_times(self, mock_post):
+        import requests as http
+        from marketplace.tasks import send_push_directly
+        mock_post.side_effect = http.ConnectionError("expo unreachable")
+        notification = Notification.objects.create(
+            user=self.user, title='r', body='b', push_status=Notification.PushStatus.PENDING)
+        sleeps = []
+        self.assertEqual(send_push_directly(notification.id, sleep=sleeps.append), 0)
+        self.assertEqual(mock_post.call_count, 3)
+        self.assertEqual(sleeps, [2, 5])
+        notification.refresh_from_db()
+        # Still recoverable by the sweep once infrastructure returns.
         self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
+
+    @patch('marketplace.tasks.requests.post')
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_push_failure_never_rolls_back_the_business_transaction(self, mock_delay, mock_post):
+        from django.db import transaction
+        from kombu.exceptions import OperationalError
+        mock_delay.side_effect = OperationalError("broker unreachable")
+        mock_post.side_effect = RuntimeError("unexpected SDK failure")
+        with self.captureOnCommitCallbacks(execute=True):
+            with transaction.atomic():
+                notification = NotificationService.notify_user(
+                    self.user, title="kept", body="b", category='ORDER', type=Notification.Type.ORDER)
+        self.assertTrue(Notification.objects.filter(pk=notification.pk, title="kept").exists())
+
+    @patch('marketplace.tasks.requests.post')
+    def test_device_not_registered_ticket_deactivates_token_on_direct_path(self, mock_post):
+        from marketplace.tasks import send_push_directly
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json = lambda: {"data": [{
+            "status": "error", "message": "gone", "details": {"error": "DeviceNotRegistered"}}]}
+        notification = Notification.objects.create(
+            user=self.user, title='d', body='b', push_status=Notification.PushStatus.PENDING)
+        send_push_directly(notification.id, sleep=lambda _s: None)
+        self.assertFalse(PushDevice.objects.get(token="ExponentPushToken[BROKER]").is_active)
+
+    @patch('marketplace.tasks.requests.post')
+    def test_production_device_never_receives_a_staging_push(self, mock_post):
+        # Test settings run as the staging backend.
+        PushDevice.objects.filter(user=self.user).update(environment=PushDevice.Environment.PRODUCTION)
+        from marketplace.tasks import send_real_push
+        notification = Notification.objects.create(
+            user=self.user, title='iso', body='b', push_status=Notification.PushStatus.PENDING)
+        self.assertEqual(send_real_push.run(str(notification.id)), 0)
+        mock_post.assert_not_called()
 
 
 @override_settings(EXPO_PUSH_ENABLED=True)
@@ -1219,7 +1331,7 @@ class AuthNotificationEventTests(APITestCase):
             )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         notification = Notification.objects.get(user=self.user, category='SIGNUP_SUCCESS')
-        self.assertEqual(notification.title, 'Welcome to Simame')
+        self.assertEqual(notification.title, '\u2728 Welcome to Simame!')
         self.assertEqual(notification.push_status, Notification.PushStatus.PENDING)
         mock_delay.assert_called_once_with(str(notification.id))
 

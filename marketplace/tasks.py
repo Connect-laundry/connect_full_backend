@@ -1,3 +1,4 @@
+import time
 # pyre-ignore[missing-module]
 from celery import shared_task
 # pyre-ignore[missing-module]
@@ -400,6 +401,61 @@ def _schedule_push_receipts(notification_id):
         return False
 
 
+PUSH_CLAIM_TTL = timedelta(minutes=5)
+DIRECT_SEND_BACKOFF_SECONDS = (2, 5)
+
+
+def claim_push(notification_id):
+    """Atomically take ownership of a PENDING push for ``PUSH_CLAIM_TTL``.
+
+    The post-commit sender and the periodic ``dispatch_pending_pushes`` sweep
+    can both see the same PENDING row. Only the caller whose conditional
+    UPDATE matches may send, so a customer never gets the same alert twice.
+    An unfinished claim expires, letting the sweep recover the row.
+    """
+    now = timezone.now()
+    return bool(
+        Notification.objects.filter(pk=notification_id, push_status=Notification.PushStatus.PENDING)
+        .filter(Q(push_last_queued_at__isnull=True) | Q(push_last_queued_at__lt=now - PUSH_CLAIM_TTL))
+        .update(push_last_queued_at=now)
+    )
+
+
+def send_push_directly(notification_id, *, sleep=time.sleep):
+    """Deliver without Celery (broker down). Bounded: 3 attempts, 2s/5s backoff.
+
+    Worst case ~40 s of a background thread (10 s Expo timeout per attempt).
+    On exhaustion the row stays PENDING, so the sweep can retry it once a
+    broker is available; the business transaction is never affected.
+    """
+    attempts = len(DIRECT_SEND_BACKOFF_SECONDS) + 1
+    for attempt in range(attempts):
+        try:
+            return send_real_push.run(str(notification_id))
+        except requests.RequestException as exc:
+            if attempt == attempts - 1:
+                logger.error(
+                    "Direct push delivery exhausted retries",
+                    extra={"notification_id": str(notification_id), "error": summarize_exception(exc)},
+                )
+                return 0
+            sleep(DIRECT_SEND_BACKOFF_SECONDS[attempt])
+    return 0
+
+
+def dispatch_claimed_push(notification_id):
+    """Send a claimed push: Celery when the broker is up, directly otherwise."""
+    try:
+        send_real_push.delay(str(notification_id))
+        return True
+    except Exception as exc:
+        logger.warning(
+            "Celery broker unavailable; delivering push directly",
+            extra={"notification_id": str(notification_id), "error": summarize_exception(exc)},
+        )
+    return send_push_directly(notification_id) > 0
+
+
 @shared_task(
     name="marketplace.tasks.send_real_push",
     bind=True,
@@ -431,10 +487,11 @@ def send_real_push(self, notification_id):
             user=notification.user,
             is_active=True,
         )
-        env = current_push_environment()
-        tokens = list(tokens_qs.filter(environment=env).values_list('token', flat=True))
-        if not tokens:
-            tokens = list(tokens_qs.values_list('token', flat=True))
+        # Strict isolation: a staging device must never receive a production
+        # push (or vice versa). Devices are re-tagged on every app launch.
+        tokens = list(
+            tokens_qs.filter(environment=current_push_environment()).values_list('token', flat=True)
+        )
         data = {
             "notificationId": str(notification.id),
             "type": notification.type,
@@ -659,13 +716,11 @@ def dispatch_pending_pushes():
     )
     queued = 0
     for notification_id in pending_ids:
-        if safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
-            Notification.objects.filter(pk=notification_id).update(
-                push_last_queued_at=timezone.now(),
-            )
-            queued += 1
-        else:
-            break
+        # Another sender (the post-commit thread) may own this row right now.
+        if not claim_push(notification_id):
+            continue
+        dispatch_claimed_push(notification_id)
+        queued += 1
     if pending_ids:
         logger.info(
             'Pending push recovery sweep',

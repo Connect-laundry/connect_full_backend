@@ -213,26 +213,33 @@ class NotificationService:
         Outside an atomic block ``on_commit`` runs the callback immediately,
         so non-transactional callers are unaffected.
         """
-        from marketplace.tasks import send_real_push
+        from marketplace.tasks import claim_push, dispatch_claimed_push
         import threading
         from django.db import connection
 
         def _dispatch():
             try:
-                send_real_push.apply(args=[str(notification_id)])
-                Notification.objects.filter(pk=notification_id).update(
-                    push_last_queued_at=timezone.now(),
-                )
+                if claim_push(notification_id):
+                    dispatch_claimed_push(notification_id)
             except Exception as e:
                 logger.warning(
-                    "Direct push delivery failed",
+                    "Push dispatch failed",
                     extra={"notification_id": str(notification_id), "error": str(e)},
                 )
+
+        def _dispatch_in_thread():
+            try:
+                _dispatch()
             finally:
                 connection.close()
 
         def _on_commit():
-            threading.Thread(target=_dispatch, daemon=False).start()
+            # Off the request thread: Expo latency must never delay a checkout
+            # or login response. Tests run it inline on the test connection.
+            if getattr(settings, 'PUSH_DISPATCH_IN_THREAD', True):
+                threading.Thread(target=_dispatch_in_thread, daemon=False).start()
+            else:
+                _dispatch()
 
         if transaction.get_connection().in_atomic_block:
             transaction.on_commit(_on_commit)
