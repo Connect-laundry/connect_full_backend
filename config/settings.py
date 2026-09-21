@@ -985,6 +985,18 @@ CELERY_BEAT_SCHEDULE = {
 # ---------------------------------------------------------------------------
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'True').lower() in ('true', '1', 't', 'yes')
 PUSH_ENVIRONMENT = os.getenv('PUSH_ENVIRONMENT', 'production' if not DEBUG else 'staging')
+
+# ---------------------------------------------------------------------------
+# Client IP resolution behind Render's proxies (see config/client_ip.py)
+# ---------------------------------------------------------------------------
+CLIENT_IP_HEADER = os.getenv('CLIENT_IP_HEADER', '').strip()
+try:
+    TRUSTED_PROXY_COUNT = max(0, int(os.getenv('TRUSTED_PROXY_COUNT', '0')))
+except ValueError:
+    TRUSTED_PROXY_COUNT = 0
+IP_DIAGNOSTICS_ENABLED = os.getenv(
+    'IP_DIAGNOSTICS_ENABLED', 'true' if PUSH_ENVIRONMENT == 'staging' else 'false',
+).lower() in ('true', '1', 'yes')
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', '500'))
 

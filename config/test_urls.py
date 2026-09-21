@@ -3,6 +3,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView, TemplateView
 from django.conf import settings
 from marketplace.views.legal import PublicLegalHtmlView
+from config.views.request_diagnostics import request_ip_diagnostics
 from config.admin_analytics import analytics_dashboard_view, analytics_export_view
 from config.insights import insights_view
 from marketplace.campaign_center import (
@@ -18,6 +19,7 @@ from marketplace.campaign_center import (
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
+    path('health/request-ip/', request_ip_diagnostics, name='request_ip_diagnostics'),
     path('legal/<slug:slug>/', PublicLegalHtmlView.as_view(), name='public_legal_page'),
     path('admin/insights/', insights_view, name='insights-home'),
     path('admin/insights/<str:section>/', insights_view, name='insights-section'),
