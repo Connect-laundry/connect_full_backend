@@ -22,6 +22,10 @@ from decimal import Decimal
 import logging
 import hashlib
 from django.core.cache import cache
+from django.db.models import F
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,25 @@ class BookingViewSet(viewsets.GenericViewSet):
         if not laundry_id:
             return Response({"error": "laundry_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        slots = BookingSlot.objects.filter(laundry_id=laundry_id, is_available=True)
+        try:
+            UUID(str(laundry_id))
+        except (ValueError, TypeError, AttributeError):
+            raise ValidationError({"laundry_id": "Choose a valid laundry."})
+        slots = BookingSlot.objects.filter(
+            laundry_id=laundry_id, is_available=True,
+            laundry__is_active=True, laundry__status='APPROVED', laundry__vacation_mode=False,
+            start_time__gt=timezone.now(), end_time__gt=F('start_time'),
+            current_bookings__lt=F('max_bookings'),
+        )
+        requested_date = request.query_params.get('date')
+        if requested_date:
+            try:
+                day = parse_date(requested_date)
+            except ValueError:
+                day = None
+            if day is None:
+                raise ValidationError({"date": "Use a valid date in YYYY-MM-DD format."})
+            slots = slots.filter(start_time__date=day)
         serializer = BookingSlotSerializer(slots, many=True)
         return Response({
             "status": "success",

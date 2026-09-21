@@ -195,6 +195,8 @@ CELERY_TASK_EAGER_PROPAGATES = True
 EXPO_PUSH_ENABLED = False
 EXPO_ACCESS_TOKEN = ''
 PUSH_ENVIRONMENT = 'staging'
+# Run post-commit push dispatch on the test DB connection, not a thread.
+PUSH_DISPATCH_IN_THREAD = False
 PUSH_PENDING_DISPATCH_BATCH_SIZE = 500
 PUSH_MAX_RECEIPT_RETRIES = 3
 
