@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from config.throttling import COUPON_THROTTLES, BurstUserThrottle, SustainedUserThrottle
+from config.throttling import COUPON_THROTTLES, GeneralThrottle
 from rest_framework import mixins, viewsets, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
@@ -418,7 +418,7 @@ class CouponViewSet(viewsets.GenericViewSet):
     @action(
         detail=False, methods=['post'], url_path='validate',
         # Stops promo-code guessing: per user, on top of the general budget.
-        throttle_classes=[BurstUserThrottle, SustainedUserThrottle, *COUPON_THROTTLES],
+        throttle_classes=[GeneralThrottle, *COUPON_THROTTLES],
     )
     def validate(self, request):
         serializer = CouponValidationSerializer(data=request.data)

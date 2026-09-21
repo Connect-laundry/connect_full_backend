@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from config.throttling import BurstUserThrottle, ReferralApplyThrottle
+from config.throttling import GeneralThrottle, ReferralApplyThrottle
 from rest_framework import views, permissions, status, serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
 # pyre-ignore[missing-module]
@@ -14,7 +14,7 @@ class ReferralApplySerializer(serializers.Serializer):
 
 class ReferralApplyView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
-    throttle_classes = [BurstUserThrottle, ReferralApplyThrottle]
+    throttle_classes = [GeneralThrottle, ReferralApplyThrottle]
     serializer_class = ReferralApplySerializer
     
     @extend_schema(request=ReferralApplySerializer)

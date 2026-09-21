@@ -58,13 +58,14 @@ try {
   const target = accounts[0]?.email ?? `qa.nat+${stamp}-x@simame-qa.test`;
   let dup;
   const dupCodes = [];
-  for (let n = 0; n < 6; n++) {
+  // The address already signed up once above; 10/hour per email in total.
+  for (let n = 0; n < 10; n++) {
     dup = await call('POST', '/auth/register/', { body: {
       email: target, password, password_confirm: password, first_name: 'QA', last_name: 'Dup', phone: '233500000999' } });
     dupCodes.push(dup.status);
   }
   record('repeated sign-up on one email gets a human 429', dup.status === 429 &&
-    /^We're receiving many sign-ups right now/.test(dup.json?.message ?? '') && Number(dup.retryAfter) > 0,
+    /^Too many sign-up attempts for this email/.test(dup.json?.message ?? '') && Number(dup.retryAfter) > 0,
     `codes ${dupCodes.join(',')}; "${dup.json?.message}"; Retry-After ${dup.retryAfter}`);
 
   // 3. Normal customers continue: login + refresh work.

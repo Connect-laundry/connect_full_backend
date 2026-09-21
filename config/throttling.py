@@ -19,7 +19,7 @@ import logging
 import time
 
 # pyre-ignore[missing-module]
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import BaseThrottle, SimpleRateThrottle
 
 from config.client_ip import get_client_ip
 from config.rate_parsing import parse_rate
@@ -63,6 +63,24 @@ class SimameThrottle(SimpleRateThrottle):
             scopes.append(self.scope)
             request._throttled_scopes = scopes
         return allowed
+
+    # -- two-phase evaluation for LayeredThrottle ---------------------------
+    def peek(self, request, view):
+        """SimpleRateThrottle.allow_request without recording the hit."""
+        if self.rate is None:
+            return True
+        self.key = self.get_cache_key(request, view)
+        if self.key is None:
+            return True
+        self.history = self.cache.get(self.key, [])
+        self.now = self.timer()
+        while self.history and self.history[-1] <= self.now - self.duration:
+            self.history.pop()
+        return len(self.history) < self.num_requests
+
+    def commit(self):
+        if getattr(self, 'key', None) is not None and self.rate is not None:
+            self.throttle_success()
 
     @staticmethod
     def _hash(value):
@@ -110,12 +128,19 @@ class _AuthAwareThrottle(SimameThrottle):
         # Rates are resolved per request once we know who is calling.
         pass
 
-    def allow_request(self, request, view):
+    def _resolve_scope(self, request):
         authenticated = bool(request.user and request.user.is_authenticated)
         self.scope = self.user_scope if authenticated else self.anon_scope
         self.rate = self.get_rate()
         self.num_requests, self.duration = self.parse_rate(self.rate)
+
+    def allow_request(self, request, view):
+        self._resolve_scope(request)
         return super().allow_request(request, view)
+
+    def peek(self, request, view):
+        self._resolve_scope(request)
+        return super().peek(request, view)
 
     def get_cache_key(self, request, view):
         if request.user and request.user.is_authenticated:
@@ -133,6 +158,45 @@ class BurstUserThrottle(_AuthAwareThrottle):
 class SustainedUserThrottle(_AuthAwareThrottle):
     user_scope = 'sustained_user'
     anon_scope = 'sustained_anon'
+
+
+class LayeredThrottle(BaseThrottle):
+    """All layers must allow a request, and only an *accepted* request counts.
+
+    DRF evaluates every throttle and each passing one records the hit, even
+    when another layer rejects the request. A 5-minute flood that the burst
+    layer rejects would still fill the hourly and daily windows and lock
+    every customer sharing that IP out for hours. Here each layer is checked
+    first; hits are recorded in all layers only if every layer allows.
+    """
+
+    layers = ()
+
+    def allow_request(self, request, view):
+        self._failed = []
+        try:
+            active = [layer() for layer in self.layers]
+            self._failed = [layer for layer in active if not layer.peek(request, view)]
+            if self._failed:
+                scopes = getattr(request, '_throttled_scopes', [])
+                scopes.extend(layer.scope for layer in self._failed)
+                request._throttled_scopes = scopes
+                return False
+            for layer in active:
+                layer.commit()
+            return True
+        except Exception as exc:  # store outage: never block auth
+            _report_degraded(getattr(self, 'scope', type(self).__name__), exc)
+            return True
+
+    def wait(self):
+        waits = [layer.wait() for layer in self._failed]
+        waits = [w for w in waits if w is not None]
+        return max(waits) if waits else None
+
+
+def layered(name, *layer_classes):
+    return type(name, (LayeredThrottle,), {'layers': tuple(layer_classes), 'scope': name})
 
 
 def _normalized_account_value(request):
@@ -177,9 +241,10 @@ class RegisterAccountThrottle(AccountScopedThrottle):
     scope = 'signup_account'
 
 
-REGISTER_THROTTLES = [
+REGISTER_THROTTLES = [layered(
+    'RegisterThrottle',
     RegisterIPBurstThrottle, RegisterIPHourlyThrottle, RegisterIPDailyThrottle, RegisterAccountThrottle,
-]
+)]
 
 
 class LoginIPBurstThrottle(IPThrottle):
@@ -198,9 +263,10 @@ class LoginAccountHourlyThrottle(AccountScopedThrottle):
     scope = 'login_account_hourly'
 
 
-LOGIN_THROTTLES = [
+LOGIN_THROTTLES = [layered(
+    'LoginThrottle',
     LoginIPBurstThrottle, LoginIPHourlyThrottle, LoginAccountBurstThrottle, LoginAccountHourlyThrottle,
-]
+)]
 
 
 class SocialLoginIPBurstThrottle(IPThrottle):
@@ -212,7 +278,7 @@ class SocialLoginIPHourlyThrottle(IPThrottle):
     scope = 'social_ip_hourly'
 
 
-SOCIAL_LOGIN_THROTTLES = [SocialLoginIPBurstThrottle, SocialLoginIPHourlyThrottle]
+SOCIAL_LOGIN_THROTTLES = [layered('SocialLoginThrottle', SocialLoginIPBurstThrottle, SocialLoginIPHourlyThrottle)]
 
 
 class RefreshTokenThrottle(SimameThrottle):
@@ -230,7 +296,7 @@ class RefreshIPThrottle(IPThrottle):
     scope = 'refresh_ip'
 
 
-REFRESH_THROTTLES = [RefreshTokenThrottle, RefreshIPThrottle]
+REFRESH_THROTTLES = [layered('RefreshThrottle', RefreshTokenThrottle, RefreshIPThrottle)]
 
 
 class PasswordResetIPThrottle(IPThrottle):
@@ -245,9 +311,10 @@ class PasswordResetAccountDailyThrottle(AccountScopedThrottle):
     scope = 'password_reset_account_daily'
 
 
-PASSWORD_RESET_THROTTLES = [
+PASSWORD_RESET_THROTTLES = [layered(
+    'PasswordResetThrottle',
     PasswordResetIPThrottle, PasswordResetAccountThrottle, PasswordResetAccountDailyThrottle,
-]
+)]
 
 
 class ResetPasswordIPThrottle(IPThrottle):
@@ -263,7 +330,7 @@ class ResetPasswordTokenThrottle(SimameThrottle):
         return self.cache_format % {'scope': self.scope, 'ident': ident}
 
 
-RESET_PASSWORD_THROTTLES = [ResetPasswordIPThrottle, ResetPasswordTokenThrottle]
+RESET_PASSWORD_THROTTLES = [layered('ResetPasswordThrottle', ResetPasswordIPThrottle, ResetPasswordTokenThrottle)]
 
 
 # -- Marketplace / commerce ---------------------------------------------------
@@ -293,7 +360,7 @@ class CouponValidateDailyThrottle(UserThrottle):
     scope = 'coupon_validate_daily'
 
 
-COUPON_THROTTLES = [CouponValidateThrottle, CouponValidateDailyThrottle]
+COUPON_THROTTLES = [layered('CouponThrottle', CouponValidateThrottle, CouponValidateDailyThrottle)]
 
 
 class ReferralApplyThrottle(UserThrottle):
@@ -317,3 +384,7 @@ class NotifTrackThrottle(UserThrottle):
 LoginIPThrottle = LoginIPBurstThrottle
 LoginAccountThrottle = LoginAccountBurstThrottle
 RegisterIPThrottle = RegisterIPBurstThrottle
+
+
+# General API budget as one layered throttle (burst + sustained).
+GeneralThrottle = layered('GeneralThrottle', BurstUserThrottle, SustainedUserThrottle)

@@ -398,8 +398,8 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'config.throttling.BurstUserThrottle',
-        'config.throttling.SustainedUserThrottle',
+        # Burst + sustained evaluated together; rejected requests don't count.
+        'config.throttling.GeneralThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': THROTTLE_RATES,
 }

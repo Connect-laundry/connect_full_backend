@@ -113,6 +113,15 @@ class TestSharedNetworkSignup:
         clock.now += 301
         assert _signup(client, **SAME_IP).status_code == status.HTTP_201_CREATED
 
+    def test_rejected_flood_does_not_burn_the_hourly_and_daily_budget(self, client, clock):
+        # A bot fires 400 requests in seconds. Only the first 60 are accepted;
+        # the rest are rejected and must not count toward the hourly/daily
+        # windows, or every neighbour on the IP stays locked out for hours.
+        for _ in range(400):
+            _signup(client, **SAME_IP)
+        clock.now += 301  # the burst window has passed
+        assert _signup(client, **SAME_IP).status_code == status.HTTP_201_CREATED
+
     def test_429_is_human_and_machine_readable(self, client):
         for _ in range(60):
             _signup(client, **SAME_IP)
