@@ -14,10 +14,9 @@ logger = logging.getLogger(__name__)
 def _client_ip(request):
     if request is None:
         return None
-    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR') or None
+    from config.client_ip import get_client_ip
+    ip = get_client_ip(request)
+    return None if ip == 'unknown' else ip
 
 
 def record_audit(

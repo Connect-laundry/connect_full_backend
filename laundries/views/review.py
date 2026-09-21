@@ -1,4 +1,5 @@
 # pyre-ignore[missing-module]
+from config.throttling import BurstUserThrottle, ReviewThrottle, SustainedUserThrottle
 from rest_framework import generics, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
@@ -14,7 +15,8 @@ from ..models.review import Review
 class ReviewCreateView(generics.CreateAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
-    throttle_scope = 'review'
+    # throttle_scope alone was a no-op: ScopedRateThrottle is not installed.
+    throttle_classes = [BurstUserThrottle, SustainedUserThrottle, ReviewThrottle]
 
     def perform_create(self, serializer):
         laundry = get_object_or_404(Laundry, id=self.kwargs.get('laundry_id'))

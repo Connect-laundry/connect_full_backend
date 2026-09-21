@@ -1,4 +1,5 @@
 # pyre-ignore[missing-module]
+from config.throttling import BurstUserThrottle, ReferralApplyThrottle
 from rest_framework import views, permissions, status, serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
 # pyre-ignore[missing-module]
@@ -13,6 +14,7 @@ class ReferralApplySerializer(serializers.Serializer):
 
 class ReferralApplyView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [BurstUserThrottle, ReferralApplyThrottle]
     serializer_class = ReferralApplySerializer
     
     @extend_schema(request=ReferralApplySerializer)
@@ -38,21 +40,29 @@ class ReferralApplyView(views.APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
                 
-            # Prevent self-referral
-            if referrer == request.user:
+            # Prevent self-referral and referral loops (A->B then B->A).
+            if referrer == request.user or referrer.referred_by_id == request.user.id:
                 return Response(
-                    {"status": "error", "message": "You cannot refer yourself."},
+                    {"status": "error", "message": "This referral code can't be used on your account."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Apply referral
             with transaction.atomic():
-                request.user.referred_by = referrer
-                request.user.save()
-                
+                # Lock our row so two concurrent applies cannot both succeed.
+                locked = User.objects.select_for_update().get(pk=request.user.pk)
+                if locked.referred_by_id:
+                    return Response(
+                        {"status": "error", "message": "You have already been referred."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                locked.referred_by = referrer
+                locked.save(update_fields=['referred_by'])
+
+            # Never echo the referrer's name or email: combined with code
+            # guessing it would let anyone harvest other customers' identities.
             return Response({
                 "status": "success",
-                "message": f"Referral code applied. You were referred by {referrer.get_full_name() or referrer.email}."
+                "message": "Referral code applied."
             })
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

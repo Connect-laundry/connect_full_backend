@@ -1,7 +1,7 @@
 import os
 
 from django.conf import settings # type: ignore
-from django.core.checks import Error, Tags, register # type: ignore
+from django.core.checks import Error, Tags, Warning, register # type: ignore
 
 
 @register(Tags.security, deploy=True)
@@ -48,3 +48,32 @@ def clerk_production_configuration_check(app_configs, **kwargs):
         )
 
     return errors
+
+
+@register(Tags.security)
+def throttle_storage_check(app_configs, **kwargs):
+    """Say plainly when rate-limit counters are not shared between workers."""
+    backend = settings.CACHES.get('default', {}).get('BACKEND', '')
+    if 'locmem' in backend.lower() and not getattr(settings, 'DEBUG', False):
+        return [Warning(
+            'Rate-limit counters use per-process memory (no Redis): each worker '
+            'counts separately, so effective limits are roughly workers x the '
+            'configured rate and reset on restart.',
+            hint='Set REDIS_URL for exact, shared limits.',
+            id='users.W_THROTTLE_LOCAL_MEMORY',
+        )]
+    return []
+
+
+@register(Tags.security)
+def client_ip_configuration_check(app_configs, **kwargs):
+    if getattr(settings, 'DEBUG', False):
+        return []
+    if not getattr(settings, 'CLIENT_IP_HEADER', '') and getattr(settings, 'TRUSTED_PROXY_COUNT', 0) == 0:
+        return [Warning(
+            'Client IP falls back to REMOTE_ADDR, which is the proxy on Render: '
+            'every customer would share one IP rate-limit bucket.',
+            hint='Set CLIENT_IP_HEADER=HTTP_TRUE_CLIENT_IP or TRUSTED_PROXY_COUNT=3.',
+            id='users.W_CLIENT_IP_PROXY',
+        )]
+    return []

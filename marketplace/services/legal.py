@@ -129,8 +129,9 @@ def record_legal_acceptance(page, *, user, request=None, platform='', app_versio
     ip_address = None
     user_agent = ''
     if request is not None:
-        xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
-        ip_address = xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR')
+        from config.client_ip import get_client_ip
+        resolved = get_client_ip(request)
+        ip_address = None if resolved == 'unknown' else resolved
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
     acceptance, _created = UserLegalAcceptance.objects.get_or_create(

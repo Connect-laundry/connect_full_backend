@@ -456,6 +456,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"coupon_code": "Coupon has reached its usage limit."}
                     )
+                # Re-check the per-customer limit under the coupon lock: the
+                # earlier is_valid() check is unlocked, so two orders placed at
+                # the same moment could both redeem a one-per-customer code.
+                if CouponUsage.objects.filter(user=user, coupon=locked_coupon).count() >= locked_coupon.user_limit:
+                    raise serializers.ValidationError(
+                        {"coupon_code": "You have reached your usage limit for this coupon."}
+                    )
                 CouponUsage.objects.create(user=user, coupon=locked_coupon, order=order)
                 Coupon.objects.filter(pk=locked_coupon.pk).update(
                     current_usage=F('current_usage') + 1

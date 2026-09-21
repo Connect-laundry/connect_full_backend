@@ -1,4 +1,5 @@
 from rest_framework import permissions, status
+from config.throttling import SOCIAL_LOGIN_THROTTLES
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
@@ -24,6 +25,9 @@ def _auth_payload(user, tokens):
 
 class SocialLoginView(APIView):
     permission_classes = [permissions.AllowAny]
+    # Previously fell under the default per-IP budget shared by every
+    # signed-out customer on a campus/carrier IP.
+    throttle_classes = SOCIAL_LOGIN_THROTTLES
     serializer_class = SocialLoginSerializer
 
     @extend_schema(request=SocialLoginSerializer)

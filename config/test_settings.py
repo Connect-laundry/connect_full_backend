@@ -17,7 +17,20 @@ os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
 
 from pathlib import Path
 
-from .settings import BASE_DIR
+from .settings import BASE_DIR, THROTTLE_RATES as _PRODUCTION_THROTTLE_RATES
+
+# Production limits, except the general API budget, so unrelated tests that
+# make many calls are not throttled. Throttle tests override scopes explicitly.
+TEST_THROTTLE_RATES = {
+    **_PRODUCTION_THROTTLE_RATES,
+    'burst_user': '6000/m',
+    'sustained_user': '100000/d',
+    'burst_anon': '6000/m',
+    'sustained_anon': '100000/d',
+    'review': '500/h',
+    'admin_search': '1000/m',
+    'notif_track': '6000/m',
+}
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 AUTH_USER_MODEL = 'users.User'
@@ -133,25 +146,7 @@ REST_FRAMEWORK = {
         'config.throttling.BurstUserThrottle',
         'config.throttling.SustainedUserThrottle',
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'burst_user': '6000/minute',
-        'sustained_user': '10000/day',
-        'review': '500/hour',
-        'feedback': '3/hour',
-        'legal_public': '1000/hour',
-        'anon': '1000/day',
-        'auth_login_ip': '10/minute',
-        'auth_login_account': '5/minute',
-        'auth_register_ip': '5/minute',
-        'auth_register_account': '300/hour',
-        'auth_refresh_ip': '2000/minute',
-        'password_reset_ip': '3/hour',
-        'password_reset_account': '3/hour',
-        'reset_password_ip': '3/hour',
-        'payment_create': '10/minute',
-        'admin_search': '1000/minute',
-        'notif_track': '6000/minute',
-    }
+    'DEFAULT_THROTTLE_RATES': TEST_THROTTLE_RATES,
 }
 
 TAX_RATE = 0.07
@@ -240,3 +235,14 @@ try:
 except Exception:
     pass
 
+
+# Tests address the app directly (REMOTE_ADDR), without Render's proxies, and
+# use local-memory cache. The warnings exist for real deployments.
+CLIENT_IP_HEADER = ''
+TRUSTED_PROXY_COUNT = 0
+IP_DIAGNOSTICS_ENABLED = False
+SILENCED_SYSTEM_CHECKS = [
+    *globals().get('SILENCED_SYSTEM_CHECKS', []),
+    'users.W_CLIENT_IP_PROXY',
+    'users.W_THROTTLE_LOCAL_MEMORY',
+]
