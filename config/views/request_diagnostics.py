@@ -7,6 +7,8 @@ throttles; too many makes every customer behind one edge proxy share a bucket.
 Returns only the caller's own request metadata. Disabled unless
 IP_DIAGNOSTICS_ENABLED is true, which defaults to true only on staging.
 """
+import os
+
 from django.conf import settings
 from django.http import Http404, JsonResponse
 
@@ -34,4 +36,8 @@ def request_ip_diagnostics(request):
         'resolved_client_ip': get_client_ip(request),
         'trusted_proxy_count': getattr(settings, 'TRUSTED_PROXY_COUNT', None),
         'client_ip_header': getattr(settings, 'CLIENT_IP_HEADER', ''),
+        # Effective limits and where counters live, to verify env overrides.
+        'throttle_rates': settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+        'throttle_storage': settings.CACHES.get('default', {}).get('BACKEND', ''),
+        'worker_pid': os.getpid(),
     })
