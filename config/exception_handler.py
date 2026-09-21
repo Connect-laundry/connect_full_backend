@@ -1,3 +1,4 @@
+import math
 # pyre-ignore[missing-module]
 from rest_framework.views import exception_handler
 # pyre-ignore[missing-module]
@@ -14,6 +15,32 @@ from config.resilience import RETRY_AFTER_SECONDS
 
 logger = logging.getLogger(__name__)
 
+
+
+def _human_wait(seconds):
+    if seconds <= 90:
+        return f"{seconds} second{'s' if seconds != 1 else ''}"
+    minutes = int(math.ceil(seconds / 60))
+    return f"about {minutes} minute{'s' if minutes != 1 else ''}"
+
+
+def throttled_message(path, retry_after, scopes=()):
+    """Customer-facing 429 copy. Never mentions HTTP codes or rate limits."""
+    wait = _human_wait(retry_after)
+    scopes = set(scopes or ())
+    if scopes and scopes <= {'signup_account'}:
+        return f"Too many sign-up attempts for this email. Please try again in {wait}."
+    if scopes and scopes <= {'login_account_burst', 'login_account_hourly'}:
+        return f"Too many sign-in attempts for this account. Please try again in {wait}."
+    if path.endswith('/auth/register/'):
+        return f"We're receiving many sign-ups right now. Please try again in {wait}."
+    if path.endswith('/auth/login/') or path.endswith('/auth/social-login/'):
+        return f"Too many sign-in attempts. Please try again in {wait}."
+    if path.endswith('/auth/forgot-password/'):
+        return f"You can request another reset email in {wait}."
+    if '/coupons/' in path or '/referral/' in path:
+        return f"Too many code attempts. Please try again in {wait}."
+    return f"Too many attempts. Please wait a moment and try again in {wait}."
 
 def _sanitize_message(value):
     if isinstance(value, str):
@@ -62,10 +89,15 @@ def custom_exception_handler(exc, context):
 
     if response is not None:
         if isinstance(exc, Throttled):
+            retry_after = max(1, int(math.ceil(exc.wait or 1)))
             custom_data = {
                 "status": "error",
-                "message": f"Too many requests. Please try again in {exc.wait} seconds.",
-                "data": {}
+                "message": throttled_message(
+                    getattr(request, 'path', ''), retry_after,
+                    getattr(getattr(request, '_request', request), '_throttled_scopes', None)
+                    or getattr(request, '_throttled_scopes', ()),
+                ),
+                "data": {"retry_after": retry_after},
             }
             if request_id:
                 custom_data["request_id"] = request_id

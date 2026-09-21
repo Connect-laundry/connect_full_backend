@@ -6,14 +6,15 @@ from rest_framework import permissions, status
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
-from config.throttling import RefreshIPThrottle
+from config.throttling import REFRESH_THROTTLES
 from users.serializers.session import RefreshTokenRequestSerializer
 from users.services.session_service import rotate_refresh_token
 
 
 class CustomTokenRefreshView(APIView):
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [RefreshIPThrottle]
+    # Per refresh token: carrier-NAT customers all refresh every 10 minutes.
+    throttle_classes = REFRESH_THROTTLES
     serializer_class = RefreshTokenRequestSerializer
 
     @extend_schema(request=RefreshTokenRequestSerializer)

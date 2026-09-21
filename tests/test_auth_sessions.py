@@ -148,8 +148,11 @@ class TestAuthSessions:
 
     def test_login_is_throttled_per_account(self, client):
         _create_user()
+        from django.conf import settings as dj_settings
+        from config.rate_parsing import parse_rate
+        allowed, _window = parse_rate(dj_settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['login_account_burst'])
 
-        for _ in range(5):
+        for _ in range(allowed):
             response = client.post(
                 reverse('auth_login'),
                 {'email': 'customer@example.com', 'password': 'WrongPass123!'},

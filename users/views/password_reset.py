@@ -6,11 +6,7 @@ from ..models import User, PasswordResetToken
 from ..serializers.password_reset import ForgotPasswordSerializer, ResetPasswordSerializer
 from ..tasks import send_password_reset_email
 from utils.tasks import safe_task_delay
-from config.throttling import (
-    PasswordResetAccountThrottle,
-    PasswordResetIPThrottle,
-    ResetPasswordIPThrottle,
-)
+from config.throttling import PASSWORD_RESET_THROTTLES, RESET_PASSWORD_THROTTLES
 from users.services.session_service import revoke_all_sessions_for_user
 from marketplace.services.customer_events import notify_customer_event
 
@@ -19,7 +15,7 @@ class ForgotPasswordView(views.APIView):
     Endpoint to request a password reset email.
     """
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [PasswordResetIPThrottle, PasswordResetAccountThrottle]
+    throttle_classes = PASSWORD_RESET_THROTTLES
     serializer_class = ForgotPasswordSerializer
 
     @extend_schema(request=ForgotPasswordSerializer)
@@ -48,7 +44,7 @@ class ResetPasswordView(views.APIView):
     Endpoint to reset the password using the token.
     """
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [ResetPasswordIPThrottle]
+    throttle_classes = RESET_PASSWORD_THROTTLES
     serializer_class = ResetPasswordSerializer
 
     @extend_schema(request=ResetPasswordSerializer)

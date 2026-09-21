@@ -11,11 +11,11 @@ from drf_spectacular.utils import extend_schema
 from ..serializers.login import LoginSerializer
 # pyre-ignore[missing-module]
 from ..services.auth_service import AuthService
-from config.throttling import LoginAccountThrottle, LoginIPThrottle
+from config.throttling import LOGIN_THROTTLES
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [LoginIPThrottle, LoginAccountThrottle]
+    throttle_classes = LOGIN_THROTTLES
     serializer_class = LoginSerializer
 
     @extend_schema(request=LoginSerializer)

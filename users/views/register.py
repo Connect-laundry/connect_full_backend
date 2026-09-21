@@ -14,11 +14,12 @@ from ..serializers.register import RegisterSerializer
 # pyre-ignore[missing-module]
 from ..services.auth_service import AuthService
 # pyre-ignore[missing-module]
-from config.throttling import RegisterAccountThrottle, RegisterIPThrottle
+from config.throttling import REGISTER_THROTTLES
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [RegisterIPThrottle, RegisterAccountThrottle]
+    # Generous per IP (campus/NAT), tight per email. See config/throttling.py.
+    throttle_classes = REGISTER_THROTTLES
     serializer_class = RegisterSerializer
 
     @extend_schema(request=RegisterSerializer)

@@ -1,4 +1,5 @@
 # pyre-ignore[missing-module]
+from config.throttling import COUPON_THROTTLES, GeneralThrottle
 from rest_framework import mixins, viewsets, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
@@ -69,7 +70,6 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""
     permission_classes = [permissions.IsAuthenticated]
-    throttle_scope = 'burst_user'
     serializer_class = OrderCreateSerializer
 
     @action(detail=False, methods=['get'])
@@ -315,7 +315,6 @@ class OrderViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
     """Viewset for managing and tracking orders."""
     queryset = Order.objects.none()
     permission_classes = [permissions.IsAuthenticated]
-    throttle_scope = 'burst_user'
 
     def get_queryset(self):
         # OrderDetailSerializer reads laundry.name, payment.transaction_reference
@@ -416,7 +415,11 @@ class CouponViewSet(viewsets.GenericViewSet):
     def get_queryset(self):
         return Coupon.objects.filter(is_active=True)
 
-    @action(detail=False, methods=['post'], url_path='validate')
+    @action(
+        detail=False, methods=['post'], url_path='validate',
+        # Stops promo-code guessing: per user, on top of the general budget.
+        throttle_classes=[GeneralThrottle, *COUPON_THROTTLES],
+    )
     def validate(self, request):
         serializer = CouponValidationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

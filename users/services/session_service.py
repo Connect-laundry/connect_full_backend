@@ -52,10 +52,10 @@ def get_request_session_id(request):
 
 
 def get_client_ip(request):
-    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if forwarded_for:
-        return forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+    # The leftmost X-Forwarded-For entry is client-controlled; use the
+    # proxy-aware resolver so session records show the real address.
+    from config.client_ip import get_client_ip as resolve_client_ip
+    return resolve_client_ip(request)
 
 
 def get_device_context(request):

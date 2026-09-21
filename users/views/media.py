@@ -1,4 +1,5 @@
 # pyre-ignore[missing-module]
+from config.throttling import GeneralThrottle, MediaUploadThrottle
 from rest_framework import views, permissions, status, serializers
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
@@ -38,7 +39,7 @@ class MediaUploadSerializer(serializers.Serializer):
 class MediaUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-    throttle_scope = 'burst_user'
+    throttle_classes = [GeneralThrottle, MediaUploadThrottle]
     serializer_class = MediaUploadSerializer
 
     @extend_schema(request=MediaUploadSerializer)

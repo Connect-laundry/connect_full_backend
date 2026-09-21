@@ -309,6 +309,78 @@ elif not DEBUG:
         "deploys — set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET."
     )
 
+# ---------------------------------------------------------------------------
+# Rate limits. Shared-network friendly: see config/throttling.py and
+# SIMAME_RATE_LIMIT_AND_LAUNCH_GUARD_AUDIT_2026-09-21.md. Every value can be
+# overridden with the env var named in THROTTLE_RATE_ENV without a deploy.
+# Formats: "30/5m", "150/h", "600/d", "10/minute".
+# ---------------------------------------------------------------------------
+THROTTLE_RATE_DEFAULTS = {
+    # General API. Signed-out traffic is per IP, so it must fit a campus/NAT.
+    'burst_user': ('THROTTLE_BURST_USER', '120/m'),
+    'sustained_user': ('THROTTLE_SUSTAINED_USER', '5000/d'),
+    'burst_anon': ('THROTTLE_BURST_ANON', '300/m'),
+    'sustained_anon': ('THROTTLE_SUSTAINED_ANON', '20000/d'),
+    # Sign-up: generous per IP, tight per email.
+    'signup_ip_burst': ('SIGNUP_IP_BURST_RATE', '60/5m'),
+    'signup_ip_hourly': ('SIGNUP_IP_HOURLY_RATE', '300/h'),
+    'signup_ip_daily': ('SIGNUP_IP_DAILY_RATE', '1000/d'),
+    # Counts validation retries too, so allow a person to fix form errors.
+    'signup_account': ('SIGNUP_ACCOUNT_RATE', '10/h'),
+    # Email/password login: account-level limits do the real work.
+    'login_ip_burst': ('LOGIN_IP_BURST_RATE', '60/m'),
+    'login_ip_hourly': ('LOGIN_IP_HOURLY_RATE', '600/h'),
+    'login_account_burst': ('LOGIN_ACCOUNT_BURST_RATE', '10/5m'),
+    'login_account_hourly': ('LOGIN_ACCOUNT_HOURLY_RATE', '30/h'),
+    # Google/Apple: needs a valid Clerk session, which Clerk rate-limits.
+    'social_ip_burst': ('SOCIAL_LOGIN_IP_BURST_RATE', '60/m'),
+    'social_ip_hourly': ('SOCIAL_LOGIN_IP_HOURLY_RATE', '1000/h'),
+    # Token refresh: per token, not per shared IP.
+    'refresh_token': ('REFRESH_TOKEN_RATE', '10/m'),
+    'refresh_ip': ('REFRESH_IP_RATE', '600/m'),
+    # Password reset emails: tight per address, loose per IP.
+    'password_reset_account': ('PASSWORD_RESET_RATE', '3/h'),
+    'password_reset_account_daily': ('PASSWORD_RESET_DAILY_RATE', '6/d'),
+    'password_reset_ip': ('PASSWORD_RESET_IP_RATE', '30/h'),
+    'reset_password_ip': ('RESET_PASSWORD_IP_RATE', '60/h'),
+    'reset_password_token': ('RESET_PASSWORD_TOKEN_RATE', '10/h'),
+    # Commerce and abuse-prone actions (per user).
+    'payment_create': ('PAYMENT_INIT_RATE', '20/h'),
+    'coupon_validate': ('COUPON_VALIDATE_RATE', '10/10m'),
+    'coupon_validate_daily': ('COUPON_VALIDATE_DAILY_RATE', '50/d'),
+    'referral_apply': ('REFERRAL_APPLY_RATE', '5/h'),
+    'media_upload': ('UPLOAD_RATE', '20/h'),
+    'review': ('THROTTLE_REVIEW', '5/h'),
+    'feedback': ('THROTTLE_FEEDBACK', '3/h'),
+    'legal_public': ('THROTTLE_LEGAL_PUBLIC', '300/h'),
+    'admin_search': ('THROTTLE_ADMIN_SEARCH', '120/m'),
+    'notif_track': ('THROTTLE_NOTIF_TRACK', '120/m'),
+}
+
+
+def _resolve_throttle_rates():
+    import logging as _logging
+    from config.rate_parsing import parse_rate
+    rates, invalid = {}, []
+    for scope, (env_name, default) in THROTTLE_RATE_DEFAULTS.items():
+        value = os.getenv(env_name, default).strip()
+        try:
+            parse_rate(value)
+        except ValueError:
+            invalid.append(env_name)
+            value = default
+        rates[scope] = value
+    if invalid:
+        # A typo in an optional limit must never take the API down.
+        _logging.getLogger('config.throttling').warning(
+            'Invalid throttle rate env vars ignored; defaults used', extra={'vars': invalid},
+        )
+    return rates
+
+
+THROTTLE_RATES = _resolve_throttle_rates()
+THROTTLE_RATE_ENV = {scope: env for scope, (env, _default) in THROTTLE_RATE_DEFAULTS.items()}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'users.auth.authentication.ClerkOrJWTAuthentication',
@@ -326,29 +398,10 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'config.throttling.BurstUserThrottle',
-        'config.throttling.SustainedUserThrottle',
+        # Burst + sustained evaluated together; rejected requests don't count.
+        'config.throttling.GeneralThrottle',
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'burst_user': os.getenv('THROTTLE_BURST_USER', '60/minute'),
-        'sustained_user': os.getenv('THROTTLE_SUSTAINED_USER', '1000/day'),
-        'review': os.getenv('THROTTLE_REVIEW', '5/hour'),
-        'feedback': os.getenv('THROTTLE_FEEDBACK', '3/hour'),
-        'legal_public': os.getenv('THROTTLE_LEGAL_PUBLIC', '300/hour'),
-        'anon': os.getenv('THROTTLE_ANON', '100/day'),
-        'auth_login_ip': os.getenv('THROTTLE_AUTH_LOGIN_IP', '10/minute'),
-        'auth_login_account': os.getenv('THROTTLE_AUTH_LOGIN_ACCOUNT', '5/minute'),
-        'auth_register_ip': os.getenv('THROTTLE_AUTH_REGISTER_IP', '10/hour'),
-        'auth_register_account': os.getenv('THROTTLE_AUTH_REGISTER_ACCOUNT', '3/hour'),
-        'auth_refresh_ip': os.getenv('THROTTLE_AUTH_REFRESH_IP', '20/minute'),
-        'password_reset_ip': os.getenv('THROTTLE_PASSWORD_RESET_IP', '5/hour'),
-        'password_reset_account': os.getenv('THROTTLE_PASSWORD_RESET_ACCOUNT', '3/hour'),
-        'reset_password_ip': os.getenv('THROTTLE_RESET_PASSWORD_IP', '10/hour'),
-        'payment_create': '10000/hour' if DEBUG else os.getenv('THROTTLE_PAYMENT_CREATE', '10/hour'),
-        'admin_search': os.getenv('THROTTLE_ADMIN_SEARCH', '120/minute'),
-        # Notification open/click tracking — generous but bounds abuse.
-        'notif_track': os.getenv('THROTTLE_NOTIF_TRACK', '120/minute'),
-    },
+    'DEFAULT_THROTTLE_RATES': THROTTLE_RATES,
 }
 
 CLERK_APPLICATION_ID = os.getenv('CLERK_APPLICATION_ID', '')
@@ -437,6 +490,10 @@ if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.
             },
         }
     }
+    # Fail-open must stay visible: log every swallowed Redis error (Sentry
+    # picks these up) so a silent outage cannot quietly disable rate limits.
+    DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+    DJANGO_REDIS_LOGGER = 'config.throttling'
 else:
     CACHES = {
         'default': {
@@ -985,6 +1042,21 @@ CELERY_BEAT_SCHEDULE = {
 # ---------------------------------------------------------------------------
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'True').lower() in ('true', '1', 't', 'yes')
 PUSH_ENVIRONMENT = os.getenv('PUSH_ENVIRONMENT', 'production' if not DEBUG else 'staging')
+
+# ---------------------------------------------------------------------------
+# Client IP resolution behind Render's proxies (see config/client_ip.py)
+# ---------------------------------------------------------------------------
+# Measured on Render staging 2026-09-21 (/health/request-ip/): Cloudflare sets
+# True-Client-IP (client-supplied values are overwritten) and
+# X-Forwarded-For is "client, cloudflare-edge, render-internal".
+CLIENT_IP_HEADER = os.getenv('CLIENT_IP_HEADER', 'HTTP_TRUE_CLIENT_IP').strip()
+try:
+    TRUSTED_PROXY_COUNT = max(0, int(os.getenv('TRUSTED_PROXY_COUNT', '3')))
+except ValueError:
+    TRUSTED_PROXY_COUNT = 3
+IP_DIAGNOSTICS_ENABLED = os.getenv(
+    'IP_DIAGNOSTICS_ENABLED', 'true' if PUSH_ENVIRONMENT == 'staging' else 'false',
+).lower() in ('true', '1', 'yes')
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', '500'))
 

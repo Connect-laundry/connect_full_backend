@@ -15,6 +15,34 @@ logger = logging.getLogger(__name__)
 RETENTION = timedelta(hours=24)
 
 
+
+def _idempotency_owner(request):
+    """Who owns an idempotency key.
+
+    JWT authentication runs inside DRF, after this middleware, so
+    ``request.user`` is anonymous here for every API call. Keying on the raw
+    X-Forwarded-For chain meant a retry after the phone switched from Wi-Fi to
+    mobile data (new chain) was not recognised, and could place a second order.
+    Resolve the user from the signed access token instead; it survives token
+    refresh and network changes.
+    """
+    user = getattr(request, 'user', None)
+    if user is not None and user.is_authenticated:
+        return str(user.id)
+    header = request.META.get('HTTP_AUTHORIZATION', '')
+    if header.startswith('Bearer '):
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            token = AccessToken(header[len('Bearer '):].strip())
+            user_id = token.get('user_id')
+            if user_id:
+                return str(user_id)
+        except Exception:
+            # Invalid/expired token: DRF will reject the request anyway.
+            pass
+    from config.client_ip import get_client_ip
+    return f"anon:{get_client_ip(request)}"
+
 class IdempotencyMiddleware:
     """Prevent duplicate POSTs carrying an ``X-Idempotency-Key``.
 
@@ -42,8 +70,7 @@ class IdempotencyMiddleware:
         # is ready.
         from marketplace.models import IdempotencyRecord
 
-        client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown'))
-        user_id = request.user.id if request.user.is_authenticated else f"anon:{client_ip}"
+        user_id = _idempotency_owner(request)
         request_hash = hashlib.sha256(request.body or b"").hexdigest()
         fingerprint = hashlib.sha256(
             f"{request.method}:{request.path}:{request_hash}".encode("utf-8")
