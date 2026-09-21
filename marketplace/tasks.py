@@ -165,6 +165,7 @@ def deliver_push(
                 # iOS 15+: without this, Focus modes and the scheduled
                 # Notification Summary can hold the alert back silently.
                 "interruptionLevel": "active",
+                "_displayInForeground": True,
                 # Keep it deliverable for a day if the device is offline.
                 "ttl": 86400,
                 **({"badge": badge} if isinstance(badge, int) else {}),
@@ -426,14 +427,14 @@ def send_real_push(self, notification_id):
                 _schedule_push_receipts(notification.id)
             return accepted_deliveries.count()
 
-        tokens = list(
-            PushDevice.objects.filter(
-                user=notification.user,
-                environment=current_push_environment(),
-                is_active=True,
-            )
-            .values_list('token', flat=True)
+        tokens_qs = PushDevice.objects.filter(
+            user=notification.user,
+            is_active=True,
         )
+        env = current_push_environment()
+        tokens = list(tokens_qs.filter(environment=env).values_list('token', flat=True))
+        if not tokens:
+            tokens = list(tokens_qs.values_list('token', flat=True))
         data = {
             "notificationId": str(notification.id),
             "type": notification.type,
@@ -658,7 +659,7 @@ def dispatch_pending_pushes():
     )
     queued = 0
     for notification_id in pending_ids:
-        if safe_task_delay(send_real_push, str(notification_id), fallback_sync=False):
+        if safe_task_delay(send_real_push, str(notification_id), fallback_sync=True):
             Notification.objects.filter(pk=notification_id).update(
                 push_last_queued_at=timezone.now(),
             )

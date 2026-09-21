@@ -213,23 +213,29 @@ class NotificationService:
         Outside an atomic block ``on_commit`` runs the callback immediately,
         so non-transactional callers are unaffected.
         """
-        # Imported lazily to avoid circular imports at app load.
         from marketplace.tasks import send_real_push
-        from utils.tasks import safe_task_delay
+        import threading
+        from django.db import connection
 
         def _dispatch():
-            queued = safe_task_delay(
-                send_real_push, str(notification_id), fallback_sync=False,
-            )
-            if queued:
+            try:
+                send_real_push.apply(args=[str(notification_id)])
                 Notification.objects.filter(pk=notification_id).update(
                     push_last_queued_at=timezone.now(),
                 )
-            else:
+            except Exception as e:
                 logger.warning(
-                    "Failed to deliver push notification",
-                    extra={"notification_id": str(notification_id)},
+                    "Direct push delivery failed",
+                    extra={"notification_id": str(notification_id), "error": str(e)},
                 )
+            finally:
+                connection.close()
 
-        transaction.on_commit(_dispatch)
+        def _on_commit():
+            threading.Thread(target=_dispatch, daemon=False).start()
+
+        if transaction.get_connection().in_atomic_block:
+            transaction.on_commit(_on_commit)
+        else:
+            _on_commit()
 

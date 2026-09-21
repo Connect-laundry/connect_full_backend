@@ -979,3 +979,12 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=14, minute=0),
     },
 }
+
+# ---------------------------------------------------------------------------
+# Push Notification Settings
+# ---------------------------------------------------------------------------
+EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'True').lower() in ('true', '1', 't', 'yes')
+PUSH_ENVIRONMENT = os.getenv('PUSH_ENVIRONMENT', 'production' if not DEBUG else 'staging')
+EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
+PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', '500'))
+

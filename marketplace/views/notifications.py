@@ -148,13 +148,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @decorators.action(detail=False, methods=['post', 'delete'], url_path='push-device')
     def push_device(self, request):
-        push_environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
-        claimed_environment = request.data.get('environment')
-        if claimed_environment and claimed_environment != push_environment:
-            return Response(
-                {'environment': 'This app build targets a different push environment.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        push_environment = request.data.get('environment') or getattr(settings, 'PUSH_ENVIRONMENT', 'production')
         """Register, refresh, or deactivate the user's Expo push token."""
         if request.method == 'DELETE':
             token = request.data.get('token')

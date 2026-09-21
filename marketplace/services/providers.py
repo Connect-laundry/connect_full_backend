@@ -67,7 +67,7 @@ class PushProvider:
     def send(self, *, notification_id):
         from marketplace.tasks import send_real_push
         from utils.tasks import safe_task_delay
-        return safe_task_delay(send_real_push, str(notification_id))
+        return safe_task_delay(send_real_push, str(notification_id), fallback_sync=True)
 
 
 _SMS_BACKENDS = {
