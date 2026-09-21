@@ -53,10 +53,16 @@ class SimameThrottle(SimpleRateThrottle):
 
     def allow_request(self, request, view):
         try:
-            return super().allow_request(request, view)
+            allowed = super().allow_request(request, view)
         except Exception as exc:  # cache/Redis outage must not break auth
             _report_degraded(self.scope, exc)
             return True
+        if not allowed:
+            # Lets the 429 handler explain *which* limit applied.
+            scopes = getattr(request, '_throttled_scopes', [])
+            scopes.append(self.scope)
+            request._throttled_scopes = scopes
+        return allowed
 
     @staticmethod
     def _hash(value):

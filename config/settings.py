@@ -325,7 +325,8 @@ THROTTLE_RATE_DEFAULTS = {
     'signup_ip_burst': ('SIGNUP_IP_BURST_RATE', '60/5m'),
     'signup_ip_hourly': ('SIGNUP_IP_HOURLY_RATE', '300/h'),
     'signup_ip_daily': ('SIGNUP_IP_DAILY_RATE', '1000/d'),
-    'signup_account': ('SIGNUP_ACCOUNT_RATE', '5/h'),
+    # Counts validation retries too, so allow a person to fix form errors.
+    'signup_account': ('SIGNUP_ACCOUNT_RATE', '10/h'),
     # Email/password login: account-level limits do the real work.
     'login_ip_burst': ('LOGIN_IP_BURST_RATE', '60/m'),
     'login_ip_hourly': ('LOGIN_IP_HOURLY_RATE', '600/h'),

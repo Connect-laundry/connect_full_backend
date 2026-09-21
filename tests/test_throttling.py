@@ -89,11 +89,18 @@ class TestSharedNetworkSignup:
     def test_scenario_e_many_ips_targeting_one_email_are_limited_per_email(self, client):
         codes = [
             _signup(client, email='victim@example.com', REMOTE_ADDR=f'102.176.0.{i}').status_code
-            for i in range(1, 8)
+            for i in range(1, 13)
         ]
-        # 5 attempts/hour per address, whatever IP they come from.
+        # 10 attempts/hour per address, whatever IP they come from.
         assert status.HTTP_429_TOO_MANY_REQUESTS in codes
-        assert codes.index(status.HTTP_429_TOO_MANY_REQUESTS) == 5
+        assert codes.index(status.HTTP_429_TOO_MANY_REQUESTS) == 10
+
+    def test_per_email_429_explains_the_email_limit(self, client):
+        for i in range(10):
+            _signup(client, email='retry@example.com', REMOTE_ADDR=f'102.176.1.{i + 1}')
+        response = _signup(client, email='retry@example.com', REMOTE_ADDR='102.176.1.99')
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.json()['message'].startswith('Too many sign-up attempts for this email')
 
     def test_scenario_f_attacker_on_shared_ip_only_delays_neighbours_briefly(self, client, clock):
         for _ in range(60):

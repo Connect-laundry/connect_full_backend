@@ -24,9 +24,14 @@ def _human_wait(seconds):
     return f"about {minutes} minute{'s' if minutes != 1 else ''}"
 
 
-def throttled_message(path, retry_after):
+def throttled_message(path, retry_after, scopes=()):
     """Customer-facing 429 copy. Never mentions HTTP codes or rate limits."""
     wait = _human_wait(retry_after)
+    scopes = set(scopes or ())
+    if scopes and scopes <= {'signup_account'}:
+        return f"Too many sign-up attempts for this email. Please try again in {wait}."
+    if scopes and scopes <= {'login_account_burst', 'login_account_hourly'}:
+        return f"Too many sign-in attempts for this account. Please try again in {wait}."
     if path.endswith('/auth/register/'):
         return f"We're receiving many sign-ups right now. Please try again in {wait}."
     if path.endswith('/auth/login/') or path.endswith('/auth/social-login/'):
@@ -87,7 +92,11 @@ def custom_exception_handler(exc, context):
             retry_after = max(1, int(math.ceil(exc.wait or 1)))
             custom_data = {
                 "status": "error",
-                "message": throttled_message(getattr(request, 'path', ''), retry_after),
+                "message": throttled_message(
+                    getattr(request, 'path', ''), retry_after,
+                    getattr(getattr(request, '_request', request), '_throttled_scopes', None)
+                    or getattr(request, '_throttled_scopes', ()),
+                ),
                 "data": {"retry_after": retry_after},
             }
             if request_id:
