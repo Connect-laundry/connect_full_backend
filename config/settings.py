@@ -545,7 +545,16 @@ CELERY_TASK_ROUTES = {
 
 
 # Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Render blocks outbound SMTP on some plans, so an HTTPS provider wins whenever
+# its key is set: BREVO_API_KEY (the sender only needs to be verified in Brevo,
+# a Gmail address works) or RESEND_API_KEY (needs a verified domain).
+BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND') or (
+    'config.email_backends.BrevoEmailBackend' if BREVO_API_KEY
+    else 'config.email_backends.ResendEmailBackend' if RESEND_API_KEY
+    else 'django.core.mail.backends.smtp.EmailBackend'
+)
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
