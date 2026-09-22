@@ -31,6 +31,7 @@ TEST_THROTTLE_RATES = {
     'admin_search': '1000/m',
     'notif_track': '6000/m',
     'test_push': '5/h',
+    'places': '60/m',
 }
 
 SECRET_KEY = os.environ.get('SECRET_KEY')

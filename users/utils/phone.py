@@ -13,9 +13,10 @@ import re
 
 GHANA_CALLING_CODE = '233'
 
-# Ghana mobile national numbers are 9 digits and start with 2 or 5
-# (02x / 05x prefixes once the trunk 0 is dropped).
-_GHANA_NATIONAL_RE = re.compile(r'^[25]\d{8}$')
+# Ghana national numbers are 9 digits after the trunk 0: mobile 02x/05x
+# (MTN 24/25/53/54/55/59, Telecel 20/50, AirtelTigo 26/27/56/57) and fixed
+# lines 03x.
+_GHANA_NATIONAL_RE = re.compile(r'^[235]\d{8}$')
 
 
 class PhoneValidationError(ValueError):
@@ -44,11 +45,15 @@ def normalize_phone(raw, default_calling_code=GHANA_CALLING_CODE):
         digits = cleaned[1:]
         if not digits.isdigit():
             raise PhoneValidationError('Phone number contains invalid characters.')
+        if digits.startswith('0'):
+            # "+0245738120": a local number with a stray plus (seen in
+            # production data). No country code starts with 0.
+            digits = default_calling_code + digits[1:]
         e164 = '+' + digits
     else:
         if not cleaned.isdigit():
             raise PhoneValidationError('Phone number contains invalid characters.')
-        if cleaned.startswith(default_calling_code):
+        if cleaned.startswith(default_calling_code) and len(cleaned) > len(default_calling_code) + 8:
             e164 = '+' + cleaned
         elif cleaned.startswith('0'):
             # National trunk format -> attach the default country code.
@@ -56,8 +61,20 @@ def normalize_phone(raw, default_calling_code=GHANA_CALLING_CODE):
         else:
             e164 = '+' + default_calling_code + cleaned
 
+    # "+233 0245738120": the trunk 0 kept after the country code.
+    if e164.startswith('+' + GHANA_CALLING_CODE + '0') and len(e164) == len(GHANA_CALLING_CODE) + 11:
+        e164 = '+' + GHANA_CALLING_CODE + e164[len(GHANA_CALLING_CODE) + 2:]
     _validate_e164(e164)
     return e164
+
+
+def format_phone_for_display(e164):
+    """'+233245738120' -> '+233 24 573 8120' (other numbers unchanged)."""
+    digits = (e164 or '').lstrip('+')
+    if digits.startswith(GHANA_CALLING_CODE) and len(digits) == len(GHANA_CALLING_CODE) + 9:
+        n = digits[len(GHANA_CALLING_CODE):]
+        return f'+{GHANA_CALLING_CODE} {n[:2]} {n[2:5]} {n[5:]}'
+    return e164 or ''
 
 
 def _validate_e164(e164):

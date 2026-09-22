@@ -17,10 +17,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=True,
         validators=[UniqueValidator(queryset=User.objects.all())]
     )
-    phone = serializers.CharField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
-    )
+    # Normalised to E.164 before the uniqueness check: '0245...', '+233 24...'
+    # and '233245...' are one person, and used to be stored three ways.
+    phone = serializers.CharField(required=True)
     # Only CUSTOMER and OWNER may self-register. ADMIN/DRIVER are provisioned
     # internally and must never be assignable from a public request.
     role = serializers.ChoiceField(
@@ -35,6 +34,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             'email', 'phone', 'first_name', 'last_name',
             'password', 'password_confirm', 'role'
         )
+
+    def validate_phone(self, value):
+        from ..utils.phone import PhoneValidationError, normalize_phone
+        try:
+            e164 = normalize_phone(value)
+        except PhoneValidationError as exc:
+            raise serializers.ValidationError(str(exc))
+        if User.objects.filter(phone=e164).exists():
+            raise serializers.ValidationError('An account with this phone number already exists.')
+        return e164
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

@@ -26,6 +26,7 @@ from django.conf import settings
 from config.views.health import health_check, liveness_check, readiness_check, sentry_check
 from config.views.request_diagnostics import request_ip_diagnostics
 from users.views.password_reset_page import PasswordResetPageView
+from laundries.views.places import PlaceAutocompleteView, PlaceDetailsView
 # pyre-ignore[missing-module]
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from marketplace.views.legal import PublicLegalHtmlView
@@ -49,6 +50,8 @@ urlpatterns = [
     path('health/', health_check, name='health_check'),
     path('health/request-ip/', request_ip_diagnostics, name='request_ip_diagnostics'),
     path('health/sentry-check/', sentry_check, name='sentry_check'),
+    path('api/v1/places/autocomplete/', PlaceAutocompleteView.as_view(), name='places-autocomplete'),
+    path('api/v1/places/details/<str:place_id>/', PlaceDetailsView.as_view(), name='places-details'),
     path('reset-password/', PasswordResetPageView.as_view(), name='password_reset_page'),
     path('api/health/', health_check, name='api_health_check'),
     path('live/', liveness_check, name='liveness_check'),
