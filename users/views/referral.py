@@ -5,6 +5,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
+from django.conf import settings
 from django.db import transaction
 # pyre-ignore[missing-module]
 from ..models import User
@@ -48,8 +49,22 @@ class ReferralApplyView(views.APIView):
                 )
 
             with transaction.atomic():
-                # Lock our row so two concurrent applies cannot both succeed.
-                locked = User.objects.select_for_update().get(pk=request.user.pk)
+                # Lock both endpoints in a consistent order, then re-check.
+                # Otherwise reciprocal concurrent requests can both pass above.
+                participants = {u.pk: u for u in User.objects.select_for_update()
+                                .filter(pk__in=[request.user.pk, referrer.pk]).order_by('pk')}
+                locked = participants[request.user.pk]
+                referrer = participants[referrer.pk]
+                if getattr(settings, 'PROMO_REQUIRE_VERIFIED_EMAIL', False) and not locked.email_verified:
+                    return Response(
+                        {"status": "error", "message": "Verify your email before applying a referral code."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if referrer.pk == locked.pk or referrer.referred_by_id == locked.pk:
+                    return Response(
+                        {"status": "error", "message": "This referral code can't be used on your account."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 if locked.referred_by_id:
                     return Response(
                         {"status": "error", "message": "You have already been referred."},

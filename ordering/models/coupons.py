@@ -82,6 +82,11 @@ class Coupon(models.Model):
             if not laundry_id or not self.applicable_laundries.filter(id=laundry_id).exists():
                 return False, _("This coupon is not valid for this laundry.")
 
+        if (self.first_time_users_only
+                and getattr(settings, 'PROMO_REQUIRE_VERIFIED_EMAIL', False)
+                and not getattr(user, 'email_verified', False)):
+            return False, _("Verify your email before using a first-order promotion.")
+
         if user:
             # Check user usage limit
             usage_count = CouponUsage.objects.filter(user=user, coupon=self).count()

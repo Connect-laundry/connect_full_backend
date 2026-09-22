@@ -246,3 +246,8 @@ SILENCED_SYSTEM_CHECKS = [
     'users.W_CLIENT_IP_PROXY',
     'users.W_THROTTLE_LOCAL_MEMORY',
 ]
+
+# Existing async tests explicitly exercise worker-enabled mode. Direct mode has
+# separate production-like regressions in test_launch_optional_workers.py.
+PUSH_USE_CELERY = True
+CRITICAL_TASKS_USE_CELERY = True

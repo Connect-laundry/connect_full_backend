@@ -77,6 +77,22 @@ def _deactivate_tokens(tokens):
     return updated
 
 
+class PushProviderRejected(Exception):
+    """Expo refused the request itself (bad access token, malformed payload).
+
+    Retrying cannot help, and it is not a network failure: the notification is
+    marked FAILED and admins are alerted instead of the row sitting PENDING.
+    """
+
+    def __init__(self, status_code, detail=''):
+        super().__init__(f'Expo push API rejected the request: HTTP {status_code}')
+        self.status_code = status_code
+        self.detail = detail
+
+
+# 429 and 5xx are transient; every other 4xx is a request/credential problem.
+EXPO_PERMANENT_ERROR_STATUSES = frozenset(range(400, 500)) - {408, 429}
+
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 # Expo accepts at most 100 messages per /push/send call.
@@ -191,6 +207,8 @@ def deliver_push(
                 "Expo push API rejected the request",
                 extra={"status": response.status_code, "detail": detail},
             )
+            if response.status_code in EXPO_PERMANENT_ERROR_STATUSES:
+                raise PushProviderRejected(response.status_code, detail)
             response.raise_for_status()
 
         try:
@@ -386,6 +404,10 @@ def process_push_receipts(self, notification_id):
 
 
 def _schedule_push_receipts(notification_id):
+    # Direct mode must not contact an optional broker even after a successful
+    # send. Receipt recovery must be operated independently in this mode.
+    if not getattr(settings, 'PUSH_USE_CELERY', False):
+        return False
     # Eager mode is used by tests and local development. A delayed eager task
     # runs immediately, before Expo has had time to produce a receipt.
     if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
@@ -399,6 +421,24 @@ def _schedule_push_receipts(notification_id):
             extra={'notification_id': str(notification_id), 'error': summarize_exception(exc)},
         )
         return False
+
+
+def _alert_push_provider_rejected(rejected):
+    from marketplace.services.notification_service import NotificationService
+    if rejected.status_code in (401, 403):
+        title = 'Expo access token rejected'
+        body = (
+            f'Expo returned HTTP {rejected.status_code} for push sends, so no push '
+            'reaches any device. Set a valid EXPO_ACCESS_TOKEN (Expo account > '
+            'Access tokens) on this service and redeploy.'
+        )
+    else:
+        title = 'Expo push request rejected'
+        body = f'Expo returned HTTP {rejected.status_code}: {rejected.detail[:200]}'
+    NotificationService.system_alert(
+        title, body, category='PUSH_CREDENTIALS',
+        dedup_key=f'push_provider_rejected:{rejected.status_code}:{timezone.now().date().isoformat()}',
+    )
 
 
 PUSH_CLAIM_TTL = timedelta(minutes=5)
@@ -444,7 +484,9 @@ def send_push_directly(notification_id, *, sleep=time.sleep):
 
 
 def dispatch_claimed_push(notification_id):
-    """Send a claimed push: Celery when the broker is up, directly otherwise."""
+    """Direct by default; an optional monitored worker can handle dispatch."""
+    if not getattr(settings, 'PUSH_USE_CELERY', False):
+        return send_push_directly(notification_id) > 0
     try:
         send_real_push.delay(str(notification_id))
         return True
@@ -542,6 +584,12 @@ def send_real_push(self, notification_id):
         return sent
     except Notification.DoesNotExist:
         pass
+    except PushProviderRejected as rejected:
+        Notification.objects.filter(pk=notification_id).update(
+            push_status=Notification.PushStatus.FAILED, delivered_at=None,
+        )
+        _alert_push_provider_rejected(rejected)
+        return 0
     except requests.RequestException as e:
         logger.error("Push delivery failed", extra={"error": summarize_exception(e)})
         # On the final attempt, mark the notification failed and roll the

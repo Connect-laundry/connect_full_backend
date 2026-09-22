@@ -199,13 +199,13 @@ class NotificationService:
 
     @staticmethod
     def _queue_push(notification_id):
-        """Hand the push to Celery after the surrounding transaction commits.
+        """Dispatch the push after the surrounding transaction commits.
 
         Deferred via ``on_commit`` for two reasons:
 
         * A broker outage must never turn an order, payment, login, or account
-          request into a blocking Expo call. The PENDING row is recovered by
-          the minute-level dispatcher after the broker returns.
+          request into a blocking Expo call. Direct delivery runs outside the
+          request thread; exhausted attempts remain in the durable outbox.
         * A push is not undoable. If the transaction later rolls back, a
           notification for an event that never happened has already landed on
           the customer's phone.

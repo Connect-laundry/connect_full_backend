@@ -487,6 +487,8 @@ if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.
                 # the API (and throttling, which is cache-backed) serving during
                 # a Redis outage rather than returning 500 on every request.
                 'IGNORE_EXCEPTIONS': True,
+                'SOCKET_CONNECT_TIMEOUT': 1,
+                'SOCKET_TIMEOUT': 1,
             },
         }
     }
@@ -517,6 +519,9 @@ SIMPLE_JWT = {
     'CHECK_REVOKE_TOKEN': True,
     'REVOKE_TOKEN_CLAIM': 'hash_password',
 }
+
+# Synchronous critical-email delivery must have a finite provider wait.
+EMAIL_TIMEOUT = float(os.getenv('EMAIL_TIMEOUT', '10'))
 
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or REDIS_URL or 'redis://localhost:6379/1'
@@ -682,6 +687,14 @@ if PUSH_ENVIRONMENT not in {'staging', 'production'}:
 # toggle on, Expo rejects any /push/send call that has no bearer token, so
 # every notification silently fails to reach the device.
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
+# Direct delivery is the launch default: a live broker may have no consumers.
+# Opt in only when a monitored notifications worker is continuously running.
+PUSH_USE_CELERY = os.getenv('PUSH_USE_CELERY', 'false').lower() == 'true'
+CRITICAL_TASKS_USE_CELERY = os.getenv('CRITICAL_TASKS_USE_CELERY', 'false').lower() == 'true'
+# Owner decision: require a verified email for first-order coupons and
+# referrals. Only Clerk (Google/Apple) sign-ins are verified today, so enabling
+# this without an email-verification step blocks every email/password customer.
+PROMO_REQUIRE_VERIFIED_EMAIL = os.getenv('PROMO_REQUIRE_VERIFIED_EMAIL', 'false').lower() == 'true'
 # Bound each minute-level durable outbox recovery sweep.
 PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', 500))
 PUSH_MAX_RECEIPT_RETRIES = int(os.getenv('PUSH_MAX_RECEIPT_RETRIES', 3))
@@ -1041,7 +1054,6 @@ CELERY_BEAT_SCHEDULE = {
 # Push Notification Settings
 # ---------------------------------------------------------------------------
 EXPO_PUSH_ENABLED = os.getenv('EXPO_PUSH_ENABLED', 'True').lower() in ('true', '1', 't', 'yes')
-PUSH_ENVIRONMENT = os.getenv('PUSH_ENVIRONMENT', 'production' if not DEBUG else 'staging')
 
 # ---------------------------------------------------------------------------
 # Client IP resolution behind Render's proxies (see config/client_ip.py)

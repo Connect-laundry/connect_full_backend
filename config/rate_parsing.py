@@ -13,4 +13,7 @@ def parse_rate(rate):
     if not match:
         raise ValueError(f'Invalid throttle rate {rate!r}; expected e.g. "30/5m" or "100/hour".')
     num, multiplier, unit = match.groups()
-    return int(num), int(multiplier or 1) * _UNIT_SECONDS[unit.lower()]
+    num, multiplier = int(num), int(multiplier or 1)
+    if num <= 0 or multiplier <= 0:
+        raise ValueError('Throttle count and window must be positive.')
+    return num, multiplier * _UNIT_SECONDS[unit.lower()]

@@ -20,7 +20,17 @@ def safe_task_delay(task, *args, fallback_sync=False, **kwargs):
     password-reset email); heavy jobs should return ``False`` and let the
     caller record a controlled failure instead.
     """
+    from django.conf import settings
     task_name = getattr(task, 'name', repr(task))
+    # Critical tasks cannot depend on a broker accepting a job: workers may be
+    # completely stopped. Execute the cheap fallback before touching Celery.
+    if fallback_sync and not getattr(settings, 'CRITICAL_TASKS_USE_CELERY', False):
+        try:
+            task.apply(args=args, kwargs=kwargs, throw=True)
+            return True
+        except Exception as exc:
+            logger.error('Critical task failed', extra={'task': task_name, 'error_type': type(exc).__name__})
+            return False
     try:
         task.delay(*args, **kwargs)
         return True
@@ -32,7 +42,7 @@ def safe_task_delay(task, *args, fallback_sync=False, **kwargs):
 
     if fallback_sync:
         try:
-            task.apply(args=args, kwargs=kwargs)
+            task.apply(args=args, kwargs=kwargs, throw=True)
             logger.info(
                 "Task executed synchronously after broker failure",
                 extra={"task": task_name},
