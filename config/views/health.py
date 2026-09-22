@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 # pyre-ignore[missing-module]
@@ -8,6 +9,7 @@ from django.db import connections
 from django.db.utils import OperationalError
 # pyre-ignore[missing-module]
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 # pyre-ignore[missing-module]
 from django_redis import get_redis_connection
 # pyre-ignore[missing-module]
@@ -83,9 +85,17 @@ def health_check(request):
         health_status['status'] = "degraded"
         logger.error(f"Health Check: Redis is DOWN - {str(e)}")
 
-    # 3. Check Celery Broker
+    # 3. Check Celery Broker. In direct mode nothing depends on it, so a
+    # missing broker is "not_configured", not an error on every health poll.
+    celery_required = (
+        getattr(settings, 'PUSH_USE_CELERY', False)
+        or getattr(settings, 'CRITICAL_TASKS_USE_CELERY', False)
+        or bool(os.getenv('CELERY_BROKER_URL') or os.getenv('REDIS_URL'))
+    )
     try:
-        if settings.CELERY_BROKER_URL:
+        if not celery_required:
+            components_status['celery'] = "not_configured"
+        elif settings.CELERY_BROKER_URL:
             with celery_app.broker_connection() as conn:
                 conn.ensure_connection(max_retries=1)
                 components_status['celery'] = "up"
@@ -125,3 +135,30 @@ def health_check(request):
     response["Cache-Control"] = "no-store"
     return response
 
+
+@csrf_exempt  # server-to-server, authenticated by the health token
+def sentry_check(request):
+    """POST /health/sentry-check/ with X-Health-Token: send one info event.
+
+    Proves which Sentry project/environment/release this deploy reports to.
+    Needs INTERNAL_HEALTH_TOKEN, except on staging (IP_DIAGNOSTICS_ENABLED).
+    404 otherwise; never raises.
+    """
+    internal_token = os.getenv('INTERNAL_HEALTH_TOKEN', '').strip()
+    provided = request.headers.get('X-Health-Token', '').strip()
+    token_ok = bool(internal_token) and hmac.compare_digest(provided, internal_token)
+    # Staging (IP_DIAGNOSTICS_ENABLED) may run it without the token.
+    if request.method != 'POST' or not (token_ok or getattr(settings, 'IP_DIAGNOSTICS_ENABLED', False)):
+        return JsonResponse({'detail': 'Not found.'}, status=404)
+    event_id = None
+    try:
+        import sentry_sdk
+        event_id = sentry_sdk.capture_message('Sentry routing check (controlled, not an error)', level='info')
+    except Exception:  # monitoring must never break a request
+        pass
+    return JsonResponse({
+        'sentry_enabled': bool(event_id),
+        'event_id': event_id,
+        'environment': getattr(settings, 'SENTRY_ENVIRONMENT', None),
+        'release': getattr(settings, 'SENTRY_RELEASE', None),
+    })

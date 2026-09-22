@@ -496,12 +496,22 @@ if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.
     # picks these up) so a silent outage cannot quietly disable rate limits.
     DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
     DJANGO_REDIS_LOGGER = 'config.throttling'
+    CACHES['throttle'] = CACHES['default']
 else:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'connect-auth-cache',
-        }
+        },
+        # No Redis: abuse-sensitive limits (login, sign-up, reset, coupons,
+        # referral) are shared across workers through a Postgres table instead
+        # of counting per process. Created by the users migration 0014.
+        'throttle': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'simame_throttle_cache',
+            'TIMEOUT': 86400,
+            'OPTIONS': {'MAX_ENTRIES': 100000, 'CULL_FREQUENCY': 10},
+        },
     }
 
 from datetime import timedelta
@@ -614,6 +624,15 @@ def _before_send_sentry(event, hint):
 
 
 SENTRY_DSN = os.getenv('SENTRY_DSN')
+# Explicit environment: the SDK default is "production", which tagged every
+# staging error as production. PUSH_ENVIRONMENT is already set per Render service.
+SENTRY_ENVIRONMENT = (
+    os.getenv('SENTRY_ENVIRONMENT')
+    or os.getenv('PUSH_ENVIRONMENT')
+    or ('development' if DEBUG else 'production')
+)
+# Render sets RENDER_GIT_COMMIT on every deploy, so each event names its code.
+SENTRY_RELEASE = os.getenv('SENTRY_RELEASE') or os.getenv('RENDER_GIT_COMMIT') or None
 SENTRY_TRACES_SAMPLE_RATE = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '1.0' if DEBUG else '0.05'))
 if (
     SENTRY_DSN
@@ -630,6 +649,8 @@ if (
         traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
         send_default_pii=False,
         before_send=_before_send_sentry,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE,
     )
 
 # Sentry Issues API (read-only) — powers the Connect Insights → Errors panel.
@@ -702,6 +723,12 @@ EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 # Direct delivery is the launch default: a live broker may have no consumers.
 # Opt in only when a monitored notifications worker is continuously running.
 PUSH_USE_CELERY = os.getenv('PUSH_USE_CELERY', 'false').lower() == 'true'
+# Direct mode has no beat sweep: each worker recovers stale PENDING pushes after
+# a request, at most every PUSH_INPROCESS_SWEEP_SECONDS (marketplace/push_sweep.py).
+PUSH_INPROCESS_SWEEP_ENABLED = os.getenv('PUSH_INPROCESS_SWEEP_ENABLED', 'true').lower() == 'true'
+PUSH_INPROCESS_SWEEP_SECONDS = int(os.getenv('PUSH_INPROCESS_SWEEP_SECONDS', '120'))
+PUSH_INPROCESS_SWEEP_BATCH_SIZE = int(os.getenv('PUSH_INPROCESS_SWEEP_BATCH_SIZE', '25'))
+PUSH_PENDING_MAX_AGE_HOURS = int(os.getenv('PUSH_PENDING_MAX_AGE_HOURS', '6'))
 CRITICAL_TASKS_USE_CELERY = os.getenv('CRITICAL_TASKS_USE_CELERY', 'false').lower() == 'true'
 # Owner decision: require a verified email for first-order coupons and
 # referrals. Only Clerk (Google/Apple) sign-ins are verified today, so enabling

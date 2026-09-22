@@ -23,7 +23,7 @@ from django.views.generic import RedirectView, TemplateView
 # pyre-ignore[missing-module]
 from django.conf import settings
 # pyre-ignore[missing-module]
-from config.views.health import health_check, liveness_check, readiness_check
+from config.views.health import health_check, liveness_check, readiness_check, sentry_check
 from config.views.request_diagnostics import request_ip_diagnostics
 from users.views.password_reset_page import PasswordResetPageView
 # pyre-ignore[missing-module]
@@ -48,6 +48,7 @@ urlpatterns = [
     path('', RedirectView.as_view(url=root_target, permanent=False), name='root'),
     path('health/', health_check, name='health_check'),
     path('health/request-ip/', request_ip_diagnostics, name='request_ip_diagnostics'),
+    path('health/sentry-check/', sentry_check, name='sentry_check'),
     path('reset-password/', PasswordResetPageView.as_view(), name='password_reset_page'),
     path('api/health/', health_check, name='api_health_check'),
     path('live/', liveness_check, name='liveness_check'),
