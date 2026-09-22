@@ -177,7 +177,12 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'connect-test-cache',
-    }
+    },
+    # Same LocMem storage, so tests that clear `cache` reset every counter.
+    'throttle': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'connect-test-cache',
+    },
 }
 
 PASSWORD_HASHERS = [
@@ -251,3 +256,6 @@ SILENCED_SYSTEM_CHECKS = [
 # separate production-like regressions in test_launch_optional_workers.py.
 PUSH_USE_CELERY = True
 CRITICAL_TASKS_USE_CELERY = True
+
+# Recovery sweeps are exercised explicitly in tests/test_push_sweep.py.
+PUSH_INPROCESS_SWEEP_ENABLED = False
