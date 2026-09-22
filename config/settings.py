@@ -355,6 +355,7 @@ THROTTLE_RATE_DEFAULTS = {
     'legal_public': ('THROTTLE_LEGAL_PUBLIC', '300/h'),
     'admin_search': ('THROTTLE_ADMIN_SEARCH', '120/m'),
     'notif_track': ('THROTTLE_NOTIF_TRACK', '120/m'),
+    'test_push': ('THROTTLE_TEST_PUSH', '5/h'),
 }
 
 
@@ -729,6 +730,7 @@ PUSH_INPROCESS_SWEEP_ENABLED = os.getenv('PUSH_INPROCESS_SWEEP_ENABLED', 'true')
 PUSH_INPROCESS_SWEEP_SECONDS = int(os.getenv('PUSH_INPROCESS_SWEEP_SECONDS', '120'))
 PUSH_INPROCESS_SWEEP_BATCH_SIZE = int(os.getenv('PUSH_INPROCESS_SWEEP_BATCH_SIZE', '25'))
 PUSH_PENDING_MAX_AGE_HOURS = int(os.getenv('PUSH_PENDING_MAX_AGE_HOURS', '6'))
+PUSH_RECEIPT_DELAY_SECONDS = int(os.getenv('PUSH_RECEIPT_DELAY_SECONDS', '60'))
 CRITICAL_TASKS_USE_CELERY = os.getenv('CRITICAL_TASKS_USE_CELERY', 'false').lower() == 'true'
 # Owner decision: require a verified email for first-order coupons and
 # referrals. Only Clerk (Google/Apple) sign-ins are verified today, so enabling
