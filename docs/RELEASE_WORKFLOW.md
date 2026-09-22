@@ -7,31 +7,31 @@
 
 1. All work lands on `staging` first. Render deploys it to staging, and the QA scripts in `connect-customer-mobile/scripts/qa/` run against it.
 2. Open or refresh the PR `staging` → `main`. CI must be green: backend-quality (pytest and semgrep), CodeQL and Sourcery.
-3. Merge with **"Create a merge commit"**. **Do not squash or rebase.**
-   - A squash creates a new commit that `staging` never contains. The branches then diverge, and the next PR reports conflicts in every file both sides touched (seen with #180, #181, #183 and #184).
+3. Merge with **"Squash and merge"**. `main` and `staging` enforce linear history ("must not contain merge commits"), so squash is the only allowed method. The repo allows squash only.
 4. After Render deploys, run the production checks:
    - `/live/`, `/health/` and `/readiness/` return 200
    - `/health/request-ip/` returns 404
    - `scripts/qa/password-reset-e2e.mjs production` and `scripts/qa/push-dispatch-proof.mjs production` both pass
 
-## If a squash merge happened anyway
+## Re-align staging after every squash
 
-`main` then holds staging's content under an unrelated commit. Re-align without changing any file:
+A squash puts staging's content on `main` under a new commit. Reset `staging` to it, so the next PR starts clean:
 
 ```bash
 git fetch origin
-git diff --name-only <staging-sha-that-was-merged> origin/main   # must print nothing
+git diff --name-only origin/staging origin/main   # must print nothing
 git checkout staging
-git merge -s ours origin/main -m "Merge main into staging (squash re-alignment)"
-git push origin staging
+git reset --hard origin/main
+git push --force-with-lease origin staging
+git push --force-with-lease origin staging:Staging
 ```
 
-Only use `-s ours` when that diff is empty. Otherwise `main` has real changes, and they must be merged normally.
+Only reset when that diff is empty. Otherwise `staging` has unreleased work: open a PR for it first. Never use `git merge` between the two branches, because merge commits are rejected.
 
 ## Branch names
 
 `staging` and `Staging` both exist on GitHub and currently point at the same commit. Keep them identical (`git push origin staging:Staging`) until you've confirmed which one Render staging deploys from. Then delete the other one.
 
-## Repository setting (recommended)
+## Repository setting
 
-GitHub → Settings → General → Pull Requests: turn off **Allow squash merging** and **Allow rebase merging**, and leave **Allow merge commits** on. This stops accidental squashes of `staging` → `main`.
+GitHub → Settings → General → Pull Requests: **squash merging only**. Merge commits and rebase merging are off, which matches the linear-history rule on `main` and `staging`.
