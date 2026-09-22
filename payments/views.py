@@ -601,6 +601,11 @@ class PaymentStatusView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+RECEIPTABLE_PAYMENT_STATUSES = frozenset({
+    Payment.Status.SUCCESS, Payment.Status.REFUND_PENDING, Payment.Status.REFUNDED,
+})
+
+
 class PaymentReceiptView(APIView):
     """
     GET /api/v1/payments/receipt/{reference}/
@@ -615,6 +620,13 @@ class PaymentReceiptView(APIView):
         if payment.user_id != request.user.id and request.user.role != 'ADMIN' and not request.user.is_staff:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # A receipt records money that was actually taken. Before the payment
+        # settles (or after it failed/expired) there is nothing to receipt.
+        if payment.status not in RECEIPTABLE_PAYMENT_STATUSES:
+            return Response(
+                {"detail": "Your receipt will be available once the payment is confirmed."},
+                status=status.HTTP_409_CONFLICT,
+            )
         data = ReceiptService.compile_receipt_data(payment)
         return Response(data, status=status.HTTP_200_OK)
 
