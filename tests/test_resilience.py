@@ -141,7 +141,7 @@ def test_safe_task_delay_falls_back_to_sync():
     task.name = 'test.task'
     task.delay.side_effect = ConnectionError('broker down')
     assert safe_task_delay(task, 'arg', fallback_sync=True, kw=1) is True
-    task.apply.assert_called_once_with(args=('arg',), kwargs={'kw': 1})
+    task.apply.assert_called_once_with(args=('arg',), kwargs={'kw': 1}, throw=True)
 
 
 def test_safe_task_delay_queues_normally():

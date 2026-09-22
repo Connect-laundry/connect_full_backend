@@ -266,7 +266,8 @@ class TestReferralAbuse:
                                      password='StrongPass123!')
         for user in (a, b):
             user.referral_code = f'REF{next(_seq):06d}'
-            user.save(update_fields=['referral_code'])
+            user.email_verified = True
+            user.save(update_fields=['referral_code', 'email_verified'])
         return a, b
 
     def _apply(self, user, code):
@@ -302,3 +303,10 @@ class TestFeedbackThrottle:
             assert response.status_code != status.HTTP_429_TOO_MANY_REQUESTS
         response = auth_client.post(url, data={"subject": "test", "message": "test"})
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+@pytest.mark.parametrize('rate', ['0/5m', '10/0m', '0/0h'])
+def test_zero_rate_is_rejected(rate):
+    from config.rate_parsing import parse_rate
+    with pytest.raises(ValueError):
+        parse_rate(rate)

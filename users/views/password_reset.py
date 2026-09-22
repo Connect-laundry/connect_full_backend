@@ -1,14 +1,11 @@
 from rest_framework import status, response, views, permissions
 from drf_spectacular.utils import extend_schema
-from django.conf import settings
-from django.utils import timezone
 from ..models import User, PasswordResetToken
 from ..serializers.password_reset import ForgotPasswordSerializer, ResetPasswordSerializer
 from ..tasks import send_password_reset_email
 from utils.tasks import safe_task_delay
 from config.throttling import PASSWORD_RESET_THROTTLES, RESET_PASSWORD_THROTTLES
-from users.services.session_service import revoke_all_sessions_for_user
-from marketplace.services.customer_events import notify_customer_event
+from users.services.password_reset import apply_password_reset, build_reset_link, find_valid_token
 
 class ForgotPasswordView(views.APIView):
     """
@@ -23,15 +20,16 @@ class ForgotPasswordView(views.APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
-        user = User.objects.filter(email=email).first()
+        # Emails are stored as typed at sign-up; match case-insensitively.
+        user = User.objects.filter(email__iexact=email.strip()).first()
 
         if user:
             token_record, raw_token = PasswordResetToken.create_for_user(user)
-            reset_link = f"{settings.FRONTEND_URL}/reset-password?resetId={token_record.id}"
+            reset_link = build_reset_link(request, token_record)
             # Broker outage must not break password reset — send inline if
             # the queue is unavailable.
             safe_task_delay(
-                send_password_reset_email, email, reset_link, raw_token,
+                send_password_reset_email, user.email, reset_link, raw_token,
                 fallback_sync=True,
             )
 
@@ -55,35 +53,13 @@ class ResetPasswordView(views.APIView):
         raw_token = serializer.validated_data['token']
         new_password = serializer.validated_data['new_password']
 
-        token_hash = PasswordResetToken._hash_token(raw_token)
-
-        try:
-            token_record = PasswordResetToken.objects.get(
-                id=reset_id,
-                token_hash=token_hash,
-            ) if reset_id else PasswordResetToken.objects.get(token_hash=token_hash)
-        except PasswordResetToken.DoesNotExist:
+        token_record = find_valid_token(reset_id, raw_token)
+        if token_record is None:
             return response.Response({
                 "detail": "Invalid or expired token."
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if not token_record.is_valid():
-            return response.Response({
-                "detail": "Invalid or expired token."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        user = token_record.user
-        user.set_password(new_password)
-        user.save(update_fields=['password'])
-
-        token_record.used_at = timezone.now()
-        token_record.save(update_fields=['used_at'])
-        revoke_all_sessions_for_user(user, reason='password_reset')
-        notify_customer_event(
-            user,
-            'PASSWORD_CHANGED',
-            dedup_key=f'password_changed:{token_record.id}',
-        )
+        apply_password_reset(token_record, new_password)
 
         return response.Response({
             "message": "Password successfully reset."

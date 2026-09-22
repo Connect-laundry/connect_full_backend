@@ -28,8 +28,24 @@ class AuthService:
         
         return user, self.get_tokens_for_user(user, request)
 
+    @staticmethod
+    def _stored_email(email):
+        """The stored spelling of ``email``, matched case-insensitively.
+
+        The app lowercases what the user types, but accounts created elsewhere
+        (admin, Clerk, web) keep their original case and could never sign in.
+        An exact match wins if two accounts differ only by case.
+        """
+        # pyre-ignore[missing-module]
+        from ..models import User
+        typed = (email or '').strip()
+        matches = list(User.objects.filter(email__iexact=typed).values_list('email', flat=True)[:2])
+        if typed in matches or not matches:
+            return typed
+        return matches[0]
+
     def login_user(self, email, password, request):
-        user = authenticate(email=email, password=password)
+        user = authenticate(email=self._stored_email(email), password=password)
 
         if not user:
             self._record_failed_login(email, request)

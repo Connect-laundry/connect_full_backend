@@ -303,14 +303,25 @@ class ExpoTransportTests(APITestCase):
         mock_alert.assert_called_once()
 
     @patch('marketplace.tasks.requests.post')
-    def test_rejected_send_raises_so_celery_retries(self, mock_post):
+    def test_rejected_credentials_are_permanent_not_retried(self, mock_post):
+        # A 401 is a bad EXPO_ACCESS_TOKEN: retrying cannot fix it, and a
+        # RequestException would leave the row PENDING forever without a sweep.
+        mock_post.return_value.status_code = 401
+        mock_post.return_value.text = '{"errors":[{"code":"UNAUTHORIZED"}]}'
+
+        from marketplace.tasks import PushProviderRejected, deliver_push
+        with self.assertRaises(PushProviderRejected):
+            deliver_push("t", "b", {}, ["ExponentPushToken[AAAA]"])
+
+    @patch('marketplace.tasks.requests.post')
+    def test_transient_expo_error_raises_so_it_is_retried(self, mock_post):
         import requests as requests_lib
 
         def _raise():
-            raise requests_lib.HTTPError("401 Unauthorized")
+            raise requests_lib.HTTPError("503 Service Unavailable")
 
-        mock_post.return_value.status_code = 401
-        mock_post.return_value.text = '{"errors":[{"code":"UNAUTHORIZED"}]}'
+        mock_post.return_value.status_code = 503
+        mock_post.return_value.text = 'unavailable'
         mock_post.return_value.raise_for_status = _raise
 
         from marketplace.tasks import deliver_push
