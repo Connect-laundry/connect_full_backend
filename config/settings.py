@@ -624,6 +624,15 @@ def _before_send_sentry(event, hint):
 
 
 SENTRY_DSN = os.getenv('SENTRY_DSN')
+# Explicit environment: the SDK default is "production", which tagged every
+# staging error as production. PUSH_ENVIRONMENT is already set per Render service.
+SENTRY_ENVIRONMENT = (
+    os.getenv('SENTRY_ENVIRONMENT')
+    or os.getenv('PUSH_ENVIRONMENT')
+    or ('development' if DEBUG else 'production')
+)
+# Render sets RENDER_GIT_COMMIT on every deploy, so each event names its code.
+SENTRY_RELEASE = os.getenv('SENTRY_RELEASE') or os.getenv('RENDER_GIT_COMMIT') or None
 SENTRY_TRACES_SAMPLE_RATE = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '1.0' if DEBUG else '0.05'))
 if (
     SENTRY_DSN
@@ -640,6 +649,8 @@ if (
         traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
         send_default_pii=False,
         before_send=_before_send_sentry,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE,
     )
 
 # Sentry Issues API (read-only) — powers the Connect Insights → Errors panel.
