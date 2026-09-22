@@ -222,8 +222,10 @@ class NotificationService:
                 if claim_push(notification_id):
                     dispatch_claimed_push(notification_id)
             except Exception as e:
-                logger.warning(
-                    "Push dispatch failed",
+                # With no broker and no sweep this row stays PENDING, so keep
+                # the traceback: it is the only trace of why nothing was sent.
+                logger.exception(
+                    "Push dispatch failed: %s", type(e).__name__,
                     extra={"notification_id": str(notification_id), "error": str(e)},
                 )
 

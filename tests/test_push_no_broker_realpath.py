@@ -48,17 +48,14 @@ def test_production_like_push_without_broker_is_sent(settings, use_celery):
         return _ExpoResponse([m['to'] for m in json])
 
     try:
+        before = set(threading.enumerate())
         with patch('marketplace.tasks.requests.post', side_effect=fake_post):
             n = NotificationService.notify_user(user, 'Order Placed', 'QA', category='ORDER_CREATED')
-            deadline = time.time() + 120
-            while time.time() < deadline:
-                n.refresh_from_db()
-                if n.push_status != Notification.PushStatus.PENDING:
-                    break
-                time.sleep(0.5)
-            for t in threading.enumerate():
-                if t is not threading.current_thread() and not t.daemon:
-                    t.join(timeout=120)
+            # Wait for the dispatch thread instead of polling the row: SQLite's
+            # shared-cache test DB raises "table is locked" (no busy wait) when
+            # this thread reads while the dispatch thread writes.
+            for t in set(threading.enumerate()) - before:
+                t.join(timeout=120)
         n.refresh_from_db()
         assert len(calls) == 1, f'expected exactly one Expo send, got {len(calls)}'
         assert n.push_status == Notification.PushStatus.SENT, n.push_status
