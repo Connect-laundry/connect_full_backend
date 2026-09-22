@@ -174,7 +174,8 @@ class TestProxyIdentity:
 @pytest.mark.django_db
 class TestResilienceAndConfig:
     def test_counter_store_outage_allows_signup_and_is_logged(self, client, caplog):
-        with patch.object(SimpleRateThrottle, 'cache') as broken:
+        from config.throttling import SimameThrottle
+        with patch.object(SimameThrottle, 'cache') as broken:
             broken.get.side_effect = ConnectionError('redis down')
             response = _signup(client, **SAME_IP)
         assert response.status_code == status.HTTP_201_CREATED

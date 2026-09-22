@@ -20,6 +20,8 @@ import time
 
 # pyre-ignore[missing-module]
 from rest_framework.throttling import BaseThrottle, SimpleRateThrottle
+from django.core.cache import caches
+from django.utils.connection import ConnectionProxy
 
 from config.client_ip import get_client_ip
 from config.rate_parsing import parse_rate
@@ -43,7 +45,14 @@ def _report_degraded(scope, exc):
 
 
 class SimameThrottle(SimpleRateThrottle):
-    """Proxy-aware identity, flexible windows, fail-open on store errors."""
+    """Proxy-aware identity, flexible windows, fail-open on store errors.
+
+    Counters live in the shared 'throttle' cache (Redis, or a Postgres table
+    when there is no Redis), so every worker counts the same attempts. The
+    per-request general budget overrides this to stay in process memory.
+    """
+
+    cache = ConnectionProxy(caches, 'throttle')
 
     def get_ident(self, request):
         return get_client_ip(request)
@@ -151,11 +160,14 @@ class _AuthAwareThrottle(SimameThrottle):
 
 
 class BurstUserThrottle(_AuthAwareThrottle):
+    # Hit on every request: approximate per-worker memory, no DB round trip.
+    cache = ConnectionProxy(caches, 'default')
     user_scope = 'burst_user'
     anon_scope = 'burst_anon'
 
 
 class SustainedUserThrottle(_AuthAwareThrottle):
+    cache = ConnectionProxy(caches, 'default')
     user_scope = 'sustained_user'
     anon_scope = 'sustained_anon'
 

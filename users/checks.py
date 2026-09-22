@@ -53,7 +53,7 @@ def clerk_production_configuration_check(app_configs, **kwargs):
 @register(Tags.security)
 def throttle_storage_check(app_configs, **kwargs):
     """Say plainly when rate-limit counters are not shared between workers."""
-    backend = settings.CACHES.get('default', {}).get('BACKEND', '')
+    backend = settings.CACHES.get('throttle', settings.CACHES.get('default', {})).get('BACKEND', '')
     if 'locmem' in backend.lower() and not getattr(settings, 'DEBUG', False):
         return [Warning(
             'Rate-limit counters use per-process memory (no Redis): each worker '
