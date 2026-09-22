@@ -68,6 +68,7 @@ def sweep_pending_pushes(batch_size=None):
     return {'expired': expired, 'dispatched': dispatched}
 
 
+
 def check_pending_receipts(now=None, batch_size=None):
     """Resolve Expo tickets into APNs/FCM receipts without Celery.
 
