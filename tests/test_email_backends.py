@@ -7,9 +7,15 @@ from django.core.mail import EmailMultiAlternatives, get_connection
 
 
 class _Resp:
-    def __init__(self, status_code, text=''):
+    def __init__(self, status_code, text='', body=None):
         self.status_code = status_code
         self.text = text
+        self._body = body
+
+    def json(self):
+        if self._body is None:
+            raise ValueError('no json')
+        return self._body
 
 
 def _message(connection):
@@ -48,3 +54,14 @@ def test_provider_rejection_raises_so_it_is_not_reported_as_sent(settings):
     with patch('config.email_backends.requests.post', return_value=_Resp(401, 'unauthorized')):
         with pytest.raises(Exception, match='brevo HTTP 401'):
             _message(connection).send()
+
+
+def test_brevo_ip_block_is_explained_in_the_log(settings, caplog):
+    settings.BREVO_API_KEY = 'k'
+    connection = get_connection('config.email_backends.BrevoEmailBackend')
+    body = {'code': 'unauthorized', 'message': 'We have detected you are using an unrecognised IP address 1.2.3.4'}
+    with patch('config.email_backends.requests.post', return_value=_Resp(401, body=body)):
+        with pytest.raises(Exception):
+            _message(connection).send()
+    assert 'HTTP 401 unauthorized' in caplog.text
+    assert 'Authorised IPs' in caplog.text

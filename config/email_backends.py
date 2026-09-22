@@ -28,6 +28,30 @@ def _html_body(message):
     return None
 
 
+_HINTS = (
+    ('unrecognised ip', 'Brevo blocks unknown IPs: Brevo > Security > Authorised IPs, deactivate blocking (Render IPs change).'),
+    ('sender', 'The sender address is not verified in the provider (Brevo > Senders).'),
+    ('not activated', 'The provider account is not activated for transactional email yet.'),
+    ('unauthorized', 'The API key was rejected: check BREVO_API_KEY / RESEND_API_KEY.'),
+    ('key not found', 'The API key was rejected: check BREVO_API_KEY / RESEND_API_KEY.'),
+    ('domain', 'The sending domain is not verified with the provider.'),
+)
+
+
+def _provider_reason(response):
+    """(provider error code, human hint) without echoing credentials."""
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    code = str(body.get('code') or body.get('name') or '')[:60] if isinstance(body, dict) else ''
+    text = (str(body.get('message', '')) if isinstance(body, dict) else response.text or '').lower()
+    for needle, hint in _HINTS:
+        if needle in text or needle in code.lower():
+            return code or 'error', hint
+    return code or 'error', 'See the provider dashboard logs.'
+
+
 class _HttpsEmailBackend(BaseEmailBackend):
     provider = ''
 
@@ -42,10 +66,22 @@ class _HttpsEmailBackend(BaseEmailBackend):
             try:
                 response = self._post(message)
                 if response.status_code >= 300:
-                    raise requests.HTTPError(f'{self.provider} HTTP {response.status_code}: {response.text[:300]}')
+                    code, hint = _provider_reason(response)
+                    # Status, provider code and hint go in the message itself:
+                    # Sentry scrubs extra fields whose text mentions a key.
+                    logger.error(
+                        'Email delivery failed: %s HTTP %s %s. %s',
+                        self.provider, response.status_code, code, hint,
+                        extra={'provider': self.provider, 'provider_status': response.status_code},
+                    )
+                    raise requests.HTTPError(f'{self.provider} HTTP {response.status_code}: {code}')
                 sent += 1
+            except requests.HTTPError:
+                if not self.fail_silently:
+                    raise
             except Exception as exc:
-                logger.error('Email delivery failed', extra={'provider': self.provider, 'error': str(exc)[:300]})
+                logger.error('Email delivery failed: %s %s', self.provider, type(exc).__name__,
+                             extra={'provider': self.provider})
                 if not self.fail_silently:
                     raise
         return sent
