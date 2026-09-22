@@ -58,6 +58,36 @@ from ..filters import LaundryFilter
 
 logger = logging.getLogger(__name__)
 
+
+def annotate_haversine_distance(queryset, user_lat, user_lng, radius_km):
+    """Filter to laundries within radius_km and annotate `distance` in km.
+
+    A bounding box on the indexed decimal columns narrows the rows first; the
+    haversine great-circle distance then gives the exact figure. It works on
+    Postgres and SQLite without PostGIS.
+    """
+    import math
+    from django.db.models import Value
+    from django.db.models.functions import ASin, Cos, Least, Power, Radians, Sin, Sqrt
+
+    lat_delta = radius_km / 111.32
+    lng_delta = radius_km / (111.32 * max(math.cos(math.radians(user_lat)), 0.01))
+    queryset = queryset.filter(
+        latitude__isnull=False, longitude__isnull=False,
+        latitude__gte=user_lat - lat_delta, latitude__lte=user_lat + lat_delta,
+        longitude__gte=user_lng - lng_delta, longitude__lte=user_lng + lng_delta,
+    )
+    lat1 = Radians(Value(user_lat, output_field=FloatField()))
+    lat2 = Radians(F('latitude'))
+    dlat = Radians(F('latitude') - Value(user_lat, output_field=FloatField()))
+    dlng = Radians(F('longitude') - Value(user_lng, output_field=FloatField()))
+    a = Power(Sin(dlat / 2), 2) + Cos(lat1) * Cos(lat2) * Power(Sin(dlng / 2), 2)
+    distance_km = ExpressionWrapper(
+        Value(2 * 6371.0088, output_field=FloatField()) * ASin(Sqrt(Least(a, Value(1.0, output_field=FloatField())))),
+        output_field=FloatField(),
+    )
+    return queryset.annotate(distance=distance_km).filter(distance__lte=radius_km).order_by('distance')
+
 class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for exploring laundries. Optimized with PostGIS for proximity search.
@@ -151,40 +181,46 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
             queryset = queryset.prefetch_related(*prefetch_items)
         
-        # 3. Optimized Spatial Nearby Search Logic (only if PostGIS is enabled)
-        if USE_POSTGIS:
-            nearby = self.request.query_params.get('nearby') == 'true'
-            lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
-            lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
+        # 3. Nearby search: PostGIS when available, otherwise a portable
+        # bounding box + haversine distance. Production runs without PostGIS,
+        # and the radius was ignored there: a Kumasi search returned an Accra
+        # laundry 250 km away, and every card said "N/A away".
+        nearby = self.request.query_params.get('nearby') == 'true'
+        lat = self.request.query_params.get('lat') or self.request.query_params.get('latitude')
+        lng = self.request.query_params.get('lng') or self.request.query_params.get('longitude')
+        radius_km = 10
+        MAX_RADIUS_KM = 100
+        try:
+            radius_param = self.request.query_params.get('radius')
+            if radius_param:
+                radius_km = float(radius_param)
+        except (ValueError, TypeError):
+            pass
+        # Clamp to a sane range to avoid expensive/degenerate scans.
+        if radius_km <= 0:
             radius_km = 10
-            MAX_RADIUS_KM = 100
-            try:
-                radius_param = self.request.query_params.get('radius')
-                if radius_param:
-                    radius_km = float(radius_param)
-            except (ValueError, TypeError):
-                pass
-            # Clamp to a sane range to avoid expensive/degenerate spatial scans.
-            if radius_km <= 0:
-                radius_km = 10
-            radius_km = min(radius_km, MAX_RADIUS_KM)
+        radius_km = min(radius_km, MAX_RADIUS_KM)
 
-            if nearby and lat and lng:
+        if nearby and lat and lng:
+            try:
+                user_lat, user_lng = float(lat), float(lng)
+                if not (-90 <= user_lat <= 90 and -180 <= user_lng <= 180):
+                    raise ValueError('coordinates out of range')
+            except (ValueError, TypeError):
+                user_lat = user_lng = None
+            if user_lat is not None and USE_POSTGIS:
                 try:
                     # pyre-ignore[reportAttributeAccessIssue]
-                    user_location = Point(float(lng), float(lat), srid=4326)
-                    
-                    # Spatial filter using PostGIS distance lookup (standard for Geography/Geometry)
+                    user_location = Point(user_lng, user_lat, srid=4326)
                     # pyre-ignore[reportAttributeAccessIssue]
                     queryset = queryset.filter(location__distance_lte=(user_location, D(km=radius_km)))
-                    
-                    # Annotate exact distance for display (ST_Distance)
                     # pyre-ignore[reportAttributeAccessIssue]
                     queryset = queryset.annotate(distance=Distance('location', user_location)).order_by('distance')
-                    
                     logger.info(f"Spatial search triggered for ({lat}, {lng}) within {radius_km}km")
-                except (ValueError, TypeError, Exception) as e:
+                except Exception as e:
                     logger.error(f"Error in nearby search: {e}", exc_info=True)
+            elif user_lat is not None:
+                queryset = annotate_haversine_distance(queryset, user_lat, user_lng, radius_km)
 
         # 4. Recommended Sorting Logic
         recommended = self.request.query_params.get('recommended') == 'true'

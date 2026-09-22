@@ -387,6 +387,11 @@ class AdminSearchThrottle(UserThrottle):
     scope = 'admin_search'
 
 
+class TestPushThrottle(UserThrottle):
+    """A customer testing push on their own phone: a few per hour."""
+    scope = 'test_push'
+
+
 class NotifTrackThrottle(UserThrottle):
     """Per-user limit on notification open/click tracking events."""
     scope = 'notif_track'

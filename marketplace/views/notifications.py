@@ -4,7 +4,7 @@ from rest_framework import viewsets, permissions, decorators, serializers, statu
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 # pyre-ignore[missing-module]
-from config.throttling import NotifTrackThrottle
+from config.throttling import NotifTrackThrottle, TestPushThrottle
 # pyre-ignore[missing-module]
 from django.utils import timezone
 # pyre-ignore[missing-module]
@@ -98,6 +98,65 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             "status": "success",
             "message": "All notifications marked as read"
+        })
+
+    @decorators.action(detail=False, methods=['get'], url_path='push-diagnostics')
+    def push_diagnostics(self, request):
+        """Why did (or didn't) my phone get a push? Own account only.
+
+        Lists this user's registered devices for this server's push
+        environment and the delivery outcome of recent pushes, including the
+        APNs/FCM error code from Expo's receipt. Token values are not returned.
+        """
+        from marketplace.models import PushDelivery
+        environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
+        devices = PushDevice.objects.filter(user=request.user).order_by('-last_registered_at')[:10]
+        recent = (Notification.objects.filter(user=request.user, audience=Notification.Audience.USER)
+                  .exclude(push_status=Notification.PushStatus.NONE).order_by('-created_at')[:10])
+        deliveries = {}
+        for d in PushDelivery.objects.filter(notification__in=list(recent)).order_by('created_at'):
+            deliveries.setdefault(d.notification_id, []).append({
+                'status': d.status, 'error_code': d.error_code or None,
+                'receipt_checked_at': d.receipt_checked_at,
+            })
+        return Response({
+            'status': 'success',
+            'data': {
+                'server_environment': environment,
+                'push_enabled': bool(getattr(settings, 'EXPO_PUSH_ENABLED', False)),
+                'devices': [{
+                    'platform': d.platform, 'environment': d.environment, 'is_active': d.is_active,
+                    'matches_server': d.environment == environment,
+                    'app_version': d.app_version, 'last_registered_at': d.last_registered_at,
+                } for d in devices],
+                'recent_pushes': [{
+                    'title': n.title, 'category': n.category, 'push_status': n.push_status,
+                    'created_at': n.created_at, 'deliveries': deliveries.get(n.id, []),
+                } for n in recent],
+            },
+        })
+
+    @decorators.action(detail=False, methods=['post'], url_path='test-push', throttle_classes=[TestPushThrottle])
+    def test_push(self, request):
+        """Send one test notification to the caller's own devices."""
+        from marketplace.services.notification_service import NotificationService
+        environment = getattr(settings, 'PUSH_ENVIRONMENT', 'staging')
+        active = PushDevice.objects.filter(user=request.user, environment=environment, is_active=True).count()
+        if not active:
+            return Response({
+                'status': 'error',
+                'message': 'This phone is not registered for notifications yet. Allow notifications for Simame in Settings, reopen the app and try again.',
+                'data': {'active_devices': 0},
+            }, status=status.HTTP_409_CONFLICT)
+        notification = NotificationService.notify_user(
+            request.user, 'Notifications are working', 'This is a test from Simame. You can ignore it.',
+            type=Notification.Type.SYSTEM, category='SYSTEM', priority=Notification.Priority.URGENT,
+            dedup_key=f'test-push:{timezone.now().timestamp():.0f}',
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Test notification sent. It should arrive within a few seconds.',
+            'data': {'active_devices': active, 'notification_id': str(notification.id), 'push_status': notification.push_status},
         })
 
     @decorators.action(

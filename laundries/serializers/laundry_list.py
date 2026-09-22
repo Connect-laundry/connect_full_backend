@@ -20,6 +20,8 @@ class LaundryListSerializer(SafeMediaModelSerializer):
     pricingModel = serializers.CharField(source='pricing_model', read_only=True)
     isFavorite = serializers.SerializerMethodField()
     minOrder = serializers.DecimalField(source='min_order', max_digits=10, decimal_places=2, read_only=True)
+    # The app's "Featured" map filter reads this; without it the chip was always empty.
+    isFeatured = serializers.BooleanField(source='is_featured', read_only=True)
     deliveryFee = serializers.DecimalField(source='delivery_fee', max_digits=10, decimal_places=2, read_only=True)
     estimatedDelivery = serializers.SerializerMethodField()
     imageUrl = serializers.SerializerMethodField()
@@ -31,7 +33,7 @@ class LaundryListSerializer(SafeMediaModelSerializer):
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
             'reviewsCount', 'isOpen', 'priceRange', 'pricingModel', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice', 'minServicePrice', 'latitude', 'longitude'
+            'minOrder', 'deliveryFee', 'avgPrice', 'minServicePrice', 'latitude', 'longitude', 'isFeatured'
         )
 
     @staticmethod

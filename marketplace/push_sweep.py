@@ -11,6 +11,8 @@ PUSH_INPROCESS_SWEEP_SECONDS, on a background thread:
   "Order placed" alert hours late is worse than none.
 - Newer stale rows go back through claim_push -> dispatch, so the post-commit
   sender, other workers and a later sweep can never send the same push twice.
+- Accepted tickets are resolved into APNs/FCM receipts (DELIVERED/FAILED),
+  dead tokens are deactivated and credential failures alert admins.
 """
 import logging
 import threading
@@ -66,6 +68,39 @@ def sweep_pending_pushes(batch_size=None):
     return {'expired': expired, 'dispatched': dispatched}
 
 
+
+def check_pending_receipts(now=None, batch_size=None):
+    """Resolve Expo tickets into APNs/FCM receipts without Celery.
+
+    Direct mode skipped receipt checks, so a push that Apple/Google refused
+    (bad token, credentials) looked exactly like a delivered one and failed
+    silently on the customer's phone. Tickets are checked once they are at
+    least PUSH_RECEIPT_DELAY_SECONDS old, until a receipt is available.
+    """
+    from celery.exceptions import Retry
+    from marketplace.models import PushDelivery
+    from marketplace.tasks import process_push_receipts
+
+    now = now or timezone.now()
+    delay = timedelta(seconds=getattr(settings, 'PUSH_RECEIPT_DELAY_SECONDS', 60))
+    limit = batch_size or getattr(settings, 'PUSH_INPROCESS_SWEEP_BATCH_SIZE', 25)
+    notification_ids = list(
+        PushDelivery.objects.filter(
+            status=PushDelivery.Status.TICKET_OK, ticket_id__isnull=False, created_at__lt=now - delay,
+            created_at__gte=now - timedelta(days=1),  # Expo keeps receipts for ~24 h
+        ).values_list('notification_id', flat=True).distinct()[:limit]
+    )
+    resolved = 0
+    for notification_id in notification_ids:
+        try:
+            resolved += process_push_receipts.run(str(notification_id)) or 0
+        except Retry:
+            continue  # receipt not ready yet; the next sweep asks again
+        except Exception:
+            logger.exception('Push receipt check failed', extra={'notification_id': str(notification_id)})
+    return resolved
+
+
 def _due():
     global _next_run_at
     interval = getattr(settings, 'PUSH_INPROCESS_SWEEP_SECONDS', 120)
@@ -80,6 +115,7 @@ def _due():
 def _run_in_background():
     try:
         sweep_pending_pushes()
+        check_pending_receipts()
     except Exception:  # never let recovery affect request handling
         logger.exception('In-process push recovery sweep failed')
     finally:

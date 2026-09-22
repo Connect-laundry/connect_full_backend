@@ -97,6 +97,32 @@ class BookingViewSet(viewsets.GenericViewSet):
             if day is None:
                 raise ValidationError({"date": "Use a valid date in YYYY-MM-DD format."})
             slots = slots.filter(start_time__date=day)
+            # No published slots that day: offer windows inside the laundry's
+            # opening hours instead of a fixed 08:00-18:00 list.
+            published = BookingSlot.objects.filter(laundry_id=laundry_id, start_time__date=day).exists()
+            if not published:
+                from laundries.models.laundry import Laundry
+                from laundries.services.pickup_windows import generate_pickup_windows, has_opening_hours
+                laundry = Laundry.objects.filter(pk=laundry_id, is_active=True, status='APPROVED').first()
+                windows = generate_pickup_windows(laundry, day) if laundry else []
+                # Why a day is empty, so the app can say "closed" instead of
+                # offering times the laundry cannot serve.
+                if windows:
+                    reason = None
+                elif not laundry:
+                    reason = 'unavailable'
+                elif getattr(laundry, 'vacation_mode', False):
+                    reason = 'vacation'
+                elif not has_opening_hours(laundry):
+                    reason = 'no_hours'
+                else:
+                    reason = 'closed_or_full'
+                return Response({
+                    "status": "success",
+                    "message": "Pickup times from the laundry's opening hours.",
+                    "data": windows,
+                    "reason": reason,
+                })
         serializer = BookingSlotSerializer(slots, many=True)
         return Response({
             "status": "success",

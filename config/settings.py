@@ -355,6 +355,8 @@ THROTTLE_RATE_DEFAULTS = {
     'legal_public': ('THROTTLE_LEGAL_PUBLIC', '300/h'),
     'admin_search': ('THROTTLE_ADMIN_SEARCH', '120/m'),
     'notif_track': ('THROTTLE_NOTIF_TRACK', '120/m'),
+    'test_push': ('THROTTLE_TEST_PUSH', '5/h'),
+    'places': ('THROTTLE_PLACES', '60/m'),
 }
 
 
@@ -600,6 +602,9 @@ LAUNDRY_APPROVAL_NOTIFY_SMS = [
     n.strip() for n in os.getenv('LAUNDRY_APPROVAL_NOTIFY_SMS', '').split(',') if n.strip()
 ]
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_HOURS', 1))
+# Pickup windows generated from opening hours (laundries/services/pickup_windows.py).
+PICKUP_WINDOW_CAPACITY = int(os.getenv('PICKUP_WINDOW_CAPACITY', '5'))
+PICKUP_WINDOW_LEAD_MINUTES = int(os.getenv('PICKUP_WINDOW_LEAD_MINUTES', '60'))
 
 
 
@@ -729,6 +734,7 @@ PUSH_INPROCESS_SWEEP_ENABLED = os.getenv('PUSH_INPROCESS_SWEEP_ENABLED', 'true')
 PUSH_INPROCESS_SWEEP_SECONDS = int(os.getenv('PUSH_INPROCESS_SWEEP_SECONDS', '120'))
 PUSH_INPROCESS_SWEEP_BATCH_SIZE = int(os.getenv('PUSH_INPROCESS_SWEEP_BATCH_SIZE', '25'))
 PUSH_PENDING_MAX_AGE_HOURS = int(os.getenv('PUSH_PENDING_MAX_AGE_HOURS', '6'))
+PUSH_RECEIPT_DELAY_SECONDS = int(os.getenv('PUSH_RECEIPT_DELAY_SECONDS', '60'))
 CRITICAL_TASKS_USE_CELERY = os.getenv('CRITICAL_TASKS_USE_CELERY', 'false').lower() == 'true'
 # Owner decision: require a verified email for first-order coupons and
 # referrals. Only Clerk (Google/Apple) sign-ins are verified today, so enabling
@@ -827,6 +833,9 @@ DELIVERY_FEES_IN_APP = os.getenv('DELIVERY_FEES_IN_APP', 'false').lower() in ('1
 # endpoint returns 503 and address-only laundry creation requires coordinates.
 GEOCODING_PROVIDER = os.getenv('GEOCODING_PROVIDER', '').lower()
 GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
+# Server-only key for Places API (New), used by /api/v1/places/*. Never the
+# app's Maps SDK key: restrict this one by API (Places API New) and by IP.
+GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', '')
 
 # OCR provider for AI-assisted price-list import. '' / 'null' = stub (no extraction).

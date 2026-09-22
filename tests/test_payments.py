@@ -668,6 +668,33 @@ class TestHardenPaymentAudit:
         assert data['transaction_reference'] == payment.transaction_reference
         assert data['order_no'] == order.order_no
 
+    def test_receipt_wire_format_is_the_standard_envelope(self):
+        # Production wraps every response as {status, message, data}. The app
+        # read the envelope as the receipt, so every field rendered blank/NaN.
+        import json
+        from laundries.renderers import StandardResponseRenderer
+        customer, order, payment = _build_pending_payment('ORD-RECEIPT-WIRE')
+        payment.status = Payment.Status.SUCCESS
+        payment.paid_at = timezone.now()
+        payment.save()
+        response = _auth_client(customer).get(
+            reverse('payment_receipt', kwargs={'reference': payment.transaction_reference}))
+        body = json.loads(StandardResponseRenderer().render(response.data, renderer_context={'response': response}))
+        assert body['status'] == 'success'
+        assert body['data']['transaction_reference'] == payment.transaction_reference
+        assert body['data']['pricing']['total_amount'] == str(payment.amount)
+
+    def test_get_receipt_is_refused_until_the_payment_settles(self):
+        # The app showed an empty 'Official Receipt' with 'Paid At: Pending'.
+        customer, order, payment = _build_pending_payment('ORD-RECEIPT-PENDING')
+        client = _auth_client(customer)
+        for pending_state in (Payment.Status.PENDING, Payment.Status.FAILED, Payment.Status.EXPIRED):
+            payment.status = pending_state
+            payment.save(update_fields=['status'])
+            response = client.get(reverse('payment_receipt', kwargs={'reference': payment.transaction_reference}))
+            assert response.status_code == status.HTTP_409_CONFLICT, pending_state
+            assert 'once the payment is confirmed' in response.json()['detail']
+
     def test_get_analytics_and_owner_stats(self):
         customer, order, payment = _build_pending_payment('ORD-ANALYTICS-TEST')
         payment.status = Payment.Status.SUCCESS
