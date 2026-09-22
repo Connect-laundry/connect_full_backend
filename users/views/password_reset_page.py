@@ -3,7 +3,11 @@
 Works in any browser, with no app or frontend site required. It also offers
 the app deep link, whose reset screen accepts the same resetId + code.
 """
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 from rest_framework import permissions, views
+from rest_framework.authentication import CSRFCheck
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.renderers import TemplateHTMLRenderer
 from rest_framework.response import Response
@@ -25,6 +29,7 @@ def _first_error(errors):
     return 'Please check the form and try again.'
 
 
+@method_decorator(ensure_csrf_cookie, name='get')
 class PasswordResetPageView(views.APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -45,7 +50,16 @@ class PasswordResetPageView(views.APIView):
     def get(self, request):
         return self._render(request.query_params.get('resetId', '')[:64])
 
+    def _enforce_csrf(self, request):
+        # DRF views are CSRF-exempt; this is a browser form, so check it.
+        check = CSRFCheck(lambda _request: None)
+        check.process_request(request)
+        reason = check.process_view(request, None, (), {})
+        if reason:
+            raise PermissionDenied('Your session expired. Reload the page and try again.')
+
     def post(self, request):
+        self._enforce_csrf(request)
         reset_id = (request.data.get('reset_id') or '')[:64]
         serializer = ResetPasswordSerializer(data={
             'reset_id': reset_id or None,

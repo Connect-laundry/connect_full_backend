@@ -1,4 +1,6 @@
 """Password reset shared by the API (mobile app) and the hosted reset page."""
+from urllib.parse import urlencode
+
 from django.conf import settings
 from django.utils import timezone
 
@@ -14,7 +16,7 @@ def build_reset_link(request, token_record):
     itself unless PASSWORD_RESET_PAGE_URL deliberately points elsewhere.
     """
     base = getattr(settings, 'PASSWORD_RESET_PAGE_URL', '') or request.build_absolute_uri('/reset-password/')
-    return f"{base}?resetId={token_record.id}"
+    return base + '?' + urlencode({'resetId': str(token_record.id)})
 
 
 def find_valid_token(reset_id, raw_token):

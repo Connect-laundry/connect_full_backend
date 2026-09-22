@@ -114,3 +114,20 @@ def test_login_matches_email_case_insensitively(client):
         assert response.status_code == 200, typed
     wrong = client.post(reverse('auth_login'), {'email': 'appreview@example.com', 'password': 'nope'}, content_type='application/json')
     assert wrong.status_code == 401
+
+
+@pytest.mark.django_db
+def test_hosted_page_rejects_cross_site_posts():
+    """A form post without the page's CSRF token is refused."""
+    from django.test import Client
+    User.objects.create_user(email='csrf@example.com', phone='233200000906', password='Old-Pass-12345')
+    strict = Client(enforce_csrf_checks=True)
+    link, code = _request_reset(strict, 'csrf@example.com')
+    reset_id = re.search(r'resetId=([0-9a-f-]+)', link).group(1)
+    form = {'reset_id': reset_id, 'token': code, 'new_password': 'New-Pass-67890!', 'confirm_password': 'New-Pass-67890!'}
+    forged = strict.post('/reset-password/', form)
+    assert forged.status_code == 403
+    page = strict.get(link.replace('http://testserver', ''))
+    token = re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"', page.content).group(1).decode()
+    ok = strict.post('/reset-password/', {**form, 'csrfmiddlewaretoken': token})
+    assert ok.status_code == 200 and b'Password updated' in ok.content
