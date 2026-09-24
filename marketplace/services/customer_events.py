@@ -71,8 +71,8 @@ CUSTOMER_EVENT_TEMPLATES = {
         priority=Notification.Priority.HIGH,
     ),
     'REFUND_INITIATED': CustomerEventTemplate(
-        title='Refund started',
-        body='Your refund request has started. We will update you when it settles.',
+        title='Refund on its way',
+        body='Your order was cancelled and your full refund is on its way. It typically reflects within 24 hours for Mobile Money (or 3–5 business days for bank cards).',
         category='REFUND_INITIATED',
         type=Notification.Type.ORDER,
         priority=Notification.Priority.HIGH,
