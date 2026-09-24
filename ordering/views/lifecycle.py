@@ -87,19 +87,48 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
                     }, status=status.HTTP_409_CONFLICT)
 
             if payment and payment.payment_method != Payment.Method.CASH:
-                unsettled_or_paid = {
-                    Payment.Status.PENDING,
-                    Payment.Status.SUCCESS,
-                    Payment.Status.REFUND_PENDING,
-                }
-                if (
-                    to_status in {Order.Status.CANCELLED, Order.Status.REJECTED}
-                    and payment.status in unsettled_or_paid
-                ):
-                    return Response({
-                        "status": "error",
-                        "message": "Complete payment verification or refund before cancelling this order.",
-                    }, status=status.HTTP_409_CONFLICT)
+                if to_status in {Order.Status.CANCELLED, Order.Status.REJECTED}:
+                    if payment.status == Payment.Status.SUCCESS:
+                        from payments.services.refund import refund_payment, RefundError, RefundOutcomeUnknown
+                        try:
+                            refund_payment(
+                                payment,
+                                reason=reason or f'Order {to_status.lower()}',
+                                actor=request.user,
+                                request=request,
+                            )
+                        except (RefundError, RefundOutcomeUnknown) as e:
+                            logger.error(
+                                "Refund failed during order transition",
+                                extra={"order_id": str(order.id), "error": str(e)},
+                            )
+                            return Response({
+                                "status": "error",
+                                "message": f"Unable to process refund: {str(e)}. Please contact support to cancel.",
+                            }, status=status.HTTP_409_CONFLICT)
+                    elif payment.status == Payment.Status.PENDING and payment.transaction_reference:
+                        from payments.services.paystack import PaystackService
+                        from payments.services.refund import refund_payment, RefundError, RefundOutcomeUnknown
+                        try:
+                            verify_data = PaystackService().verify_transaction(payment.transaction_reference)
+                            if verify_data.get('status') and verify_data.get('data', {}).get('status') == 'success':
+                                payment.transition_to(Payment.Status.SUCCESS)
+                                order.payment_status = Order.PaymentStatus.PAID
+                                order.save(update_fields=['payment_status', 'updated_at'])
+                                refund_payment(
+                                    payment,
+                                    reason=reason or f'Order {to_status.lower()}',
+                                    actor=request.user,
+                                    request=request,
+                                )
+                            else:
+                                payment.transition_to(Payment.Status.FAILED)
+                        except Exception as e:
+                            logger.warning(f"Verification during cancel failed: {e}")
+                            payment.transition_to(Payment.Status.FAILED)
+                    elif payment.status == Payment.Status.PENDING:
+                        payment.transition_to(Payment.Status.FAILED)
+
             # The state machine reuses the surrounding transaction and locks
             # the order before validating the transition.
             updated_order, success = OrderStateMachine.transition(

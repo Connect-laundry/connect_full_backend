@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from django.urls import reverse
 from rest_framework import status
 
@@ -21,8 +22,10 @@ class TestPaymentAwareOrderLifecycle:
         order.refresh_from_db()
         assert order.status == order.Status.PENDING
 
-    def test_customer_cannot_cancel_pending_paystack_order(self):
-        customer, order, _ = _build_pending_payment('ORD-LIFECYCLE-CANCEL')
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_customer_can_cancel_uncompleted_pending_paystack_order(self, mock_verify):
+        mock_verify.return_value = {'status': False, 'message': 'Transaction not found'}
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-CANCEL')
 
         response = _auth_client(customer).patch(
             reverse('order-lifecycle-cancel', kwargs={'pk': order.id}),
@@ -30,12 +33,74 @@ class TestPaymentAwareOrderLifecycle:
             format='json',
         )
 
-        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.status_code == status.HTTP_200_OK
         order.refresh_from_db()
-        assert order.status == order.Status.PENDING
+        payment.refresh_from_db()
+        assert order.status == order.Status.CANCELLED
+        assert payment.status == Payment.Status.FAILED
 
-    def test_laundry_cannot_reject_successful_payment_before_refund(self):
+    def test_customer_can_cancel_pending_order_without_reference(self):
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-CANCEL-NOREF')
+        payment.transaction_reference = None
+        payment.save(update_fields=['transaction_reference'])
+
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}),
+            {'reason': 'Changed my mind'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.CANCELLED
+        assert payment.status == Payment.Status.FAILED
+
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    def test_customer_can_cancel_successful_payment_order_with_refund(self, mock_refund):
+        mock_refund.return_value = {'status': True, 'data': {'id': 1}}
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-CANCEL-PAID')
+        payment.status = Payment.Status.SUCCESS
+        payment.save(update_fields=['status'])
+        order.status = order.Status.CONFIRMED
+        order.payment_status = order.PaymentStatus.PAID
+        order.save(update_fields=['status', 'payment_status'])
+
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}),
+            {'reason': 'Changed my mind'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.CANCELLED
+        assert payment.status == Payment.Status.REFUND_PENDING
+
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    def test_laundry_can_reject_successful_payment_order_with_refund(self, mock_refund):
+        mock_refund.return_value = {'status': True, 'data': {'id': 1}}
         _, order, payment = _build_pending_payment('ORD-LIFECYCLE-REJECT')
+        payment.status = Payment.Status.SUCCESS
+        payment.save(update_fields=['status'])
+
+        response = _auth_client(order.laundry.owner).patch(
+            reverse('order-lifecycle-reject', kwargs={'pk': order.id}),
+            {'reason': 'Cannot fulfill'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.REJECTED
+        assert payment.status == Payment.Status.REFUND_PENDING
+
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    def test_rejection_blocked_if_gateway_refund_fails(self, mock_refund):
+        mock_refund.return_value = {'status': False, 'message': 'Insufficient balance for refund'}
+        _, order, payment = _build_pending_payment('ORD-LIFECYCLE-REJECT-FAIL')
         payment.status = Payment.Status.SUCCESS
         payment.save(update_fields=['status'])
 

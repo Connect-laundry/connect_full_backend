@@ -88,16 +88,20 @@ TERMINAL_STATUSES = {Order.Status.DELIVERED, Order.Status.COMPLETED, Order.Statu
 def derive_otp(order: Order) -> str:
     """The 4-digit code the customer reads out when their clothes come back.
 
-    This used to be decorative: derived from the order number, shown to the
-    customer, and checked by nobody. It is now the order's real
-    ``handover_code``, which the laundry must enter to prove a delivery and
-    release the customer's payment.
-
-    Orders confirmed before handover codes existed have none, so the old
-    derivation stays as a fallback rather than showing them a blank space.
+    This is the order's real ``handover_code``, which the laundry must enter to
+    prove a delivery and release the customer's payment.
     """
     if order.handover_code:
         return order.handover_code
+
+    if hasattr(order, 'pk') and order.pk:
+        try:
+            db_code = Order.objects.filter(pk=order.pk).values_list('handover_code', flat=True).first()
+            if db_code:
+                order.handover_code = db_code
+                return db_code
+        except Exception:
+            pass
 
     digits = "".join(ch for ch in order.order_no if ch.isdigit())
     if len(digits) >= 4:

@@ -50,6 +50,13 @@ def verify_handover_code(order, submitted):
     though the practical risk is low.
     """
     expected = (order.handover_code or '').strip()
+    if not expected:
+        try:
+            from ordering.views.tracking_view import derive_otp
+            expected = (derive_otp(order) or '').strip()
+        except Exception:
+            pass
+
     provided = (str(submitted or '')).strip()
     if not expected or not provided:
         return False
