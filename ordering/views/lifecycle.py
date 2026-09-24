@@ -221,7 +221,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         """DELIVERED -> COMPLETED (Laundry)"""
         return self._handle_transition(request, Order.Status.COMPLETED)
 
-    @decorators.action(detail=True, methods=['patch'])
+    @decorators.action(detail=True, methods=['patch', 'post'])
     def cancel(self, request, pk=None):
         """PENDING/CONFIRMED -> CANCELLED (Customer/Laundry)"""
         return self._handle_transition(request, Order.Status.CANCELLED)
