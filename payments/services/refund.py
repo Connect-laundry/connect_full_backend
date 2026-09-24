@@ -87,6 +87,33 @@ def refund_payment(payment, *, amount=None, reason='', actor=None, request=None)
     )
     if not response.get('status'):
         message = response.get('message') or 'The payment provider rejected the refund.'
+        if 'already exist' in message.lower():
+            logger.info(
+                'Refund already exists at Paystack; staying in REFUND_PENDING',
+                extra={'payment_id': str(payment.pk), 'order_id': str(order_id)},
+            )
+            notify_customer_event(
+                payment.user,
+                'REFUND_INITIATED',
+                payment=payment,
+                dedup_key=f'refund_initiated_{payment.pk}',
+            )
+            record_audit(
+                action='PAYMENT_REFUND_REQUESTED',
+                actor=actor,
+                request=request,
+                target_type='Payment',
+                target_id=str(payment.pk),
+                target_repr=f'Refund requested for {reference}',
+                metadata={
+                    'amount': str(amount if amount is not None else payment_amount),
+                    'reason': reason or '',
+                    'order_id': str(order_id),
+                },
+            )
+            payment.refresh_from_db()
+            return payment
+
         if response.get('indeterminate'):
             logger.error(
                 'Refund outcome unknown; left pending for reconciliation',

@@ -339,6 +339,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 **validated_data
             )
 
+            from ..services.handover import ensure_handover_code
+            ensure_handover_code(order)
+
             # By weight: the price comes from the laundry's tariff, computed
             # server-side so the client's estimate is never trusted. A single
             # line item stands in for the weigh-in, so receipts and settlement
