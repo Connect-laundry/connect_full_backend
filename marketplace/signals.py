@@ -43,9 +43,24 @@ def admin_notify_new_booking(sender, instance, created, **kwargs):
     def _do():
         from marketplace.services.notification_service import NotificationService
         from marketplace.models import Notification
+
+        pickup_dist_str = f"{instance.pickup_distance_km} km" if instance.pickup_distance_km is not None else "N/A"
+        delivery_dist_str = f"{instance.delivery_distance_km} km" if instance.delivery_distance_km is not None else "N/A"
+        promo_str = "YES" if instance.is_free_delivery_promo else "NO"
+        funding_str = instance.promo_funding_source or "NONE"
+        pm_display = getattr(instance, 'get_payment_method_display', lambda: instance.payment_method)()
+
+        body = (
+            f"Order {instance.order_no} placed ({pm_display}).\n"
+            f"Total: GHS {instance.total_amount}\n"
+            f"Pickup: {pickup_dist_str} (GHS {instance.pickup_fee})\n"
+            f"Delivery: {delivery_dist_str} (GHS {instance.delivery_fee})\n"
+            f"Free Delivery Promo: {promo_str} (Funded by: {funding_str})"
+        )
+
         NotificationService.notify_admins(
-            title="New booking created",
-            body=f"Order {instance.order_no} was placed.",
+            title=f"New booking: {instance.order_no} (GHS {instance.total_amount})",
+            body=body,
             category='NEW_BOOKING',
             priority=Notification.Priority.NORMAL,
             type=Notification.Type.ORDER,
@@ -54,6 +69,48 @@ def admin_notify_new_booking(sender, instance, created, **kwargs):
             dedup_key=f'new_booking:{instance.id}',
         )
     _safe(_do)
+
+
+@receiver(post_save, sender='laundries.Laundry')
+def user_notify_free_delivery_promo(sender, instance, created, **kwargs):
+    """
+    When a laundry activates a free pickup/delivery promotion, send a
+    deduplicated push notification to relevant customers and fans.
+    """
+    if not getattr(instance, 'free_delivery_promo_enabled', False):
+        return
+
+    def _do():
+        from marketplace.services.notification_service import NotificationService
+        from marketplace.models import Notification
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        from ordering.models import Order
+        from laundries.models.favorite import Favorite
+
+        promo_ver = str(instance.promo_start_at or getattr(instance, 'updated_at', None))
+
+        favorited_user_ids = set(Favorite.objects.filter(laundry=instance).values_list('user_id', flat=True))
+        past_customer_ids = set(Order.objects.filter(laundry=instance).values_list('user_id', flat=True))
+        target_ids = favorited_user_ids | past_customer_ids
+
+        for user_id in target_ids:
+            try:
+                user = User.objects.get(id=user_id)
+                NotificationService.notify_user(
+                    user=user,
+                    title="Free Pickup & Delivery! 🚚",
+                    body=f"{instance.name} is offering FREE pickup & delivery.",
+                    category='PROMO_FREE_DELIVERY',
+                    priority=Notification.Priority.NORMAL,
+                    action_url=f"connect://laundry/{instance.id}",
+                    dedup_key=f"promo_free_del:{instance.id}:{user.id}:{promo_ver}",
+                    push=True,
+                )
+            except Exception:
+                continue
+    _safe(_do)
+
 
 
 @receiver(post_save, sender=Order)

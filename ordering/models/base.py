@@ -119,6 +119,18 @@ class Order(models.Model):
     # Null on orders created before snapshots existed; those still recompute.
     priced_at = models.DateTimeField(null=True, blank=True)
 
+    # --- Authoritative Logistics Pricing Snapshot ---
+    pickup_distance_km = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    delivery_distance_km = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pickup_rate_per_km = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    delivery_rate_per_km = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    logistics_pricing_version = models.CharField(max_length=50, blank=True, default='')
+    is_free_delivery_promo = models.BooleanField(default=False)
+    promo_funding_source = models.CharField(max_length=20, blank=True, default='')
+    logistics_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    logistics_notice = models.TextField(blank=True, default='')
+
+
     pickup_date = models.DateTimeField()
     delivery_date = models.DateTimeField(null=True, blank=True)
     

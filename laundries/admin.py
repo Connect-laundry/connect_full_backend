@@ -116,7 +116,18 @@ class LaundryAdmin(ModelAdmin):
             ),
             "classes": ("collapse",),
         }),
+        ("Free Pickup & Delivery Promotion", {
+            "fields": (
+                'free_delivery_promo_enabled',
+                'promo_funding_source',
+                'promo_max_distance_km',
+                'promo_start_at',
+                'promo_end_at',
+            ),
+            "description": "Controlled promotional toggle for free pickup & delivery. Laundry-funded promos have their logistics subsidy settled against the laundry's payout.",
+        }),
         ("Direct Settlement (Paystack Subaccount)", {
+
             "fields": (
                 'split_payments_enabled',
                 'paystack_subaccount_code',

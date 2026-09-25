@@ -18,11 +18,19 @@ class FinanceService:
         """
         Whether pickup and delivery are billed through the app.
 
-        False while the platform has no courier fleet: laundries handle
-        logistics themselves and settle the fee with the customer directly.
-        See ``settings.DELIVERY_FEES_IN_APP``.
+        False while logistics pricing is disabled in admin.
+        When LogisticsPricingConfig.pricing_enabled is True, this returns True immediately
+        without requiring any server restart or mobile app rebuild.
         """
+        try:
+            from logistics.models import LogisticsPricingConfig
+            config = LogisticsPricingConfig.get_active()
+            if config and config.pricing_enabled:
+                return True
+        except Exception:
+            pass
         return bool(getattr(settings, 'DELIVERY_FEES_IN_APP', False))
+
 
     @staticmethod
     def compute_weight_price(weight_pricing, weight_kg):
@@ -151,13 +159,27 @@ class FinanceService:
     def calculate_delivery_fee(order):
         """
         Delivery fee charged through the app.
-
-        Zero while logistics settle directly with the laundry. The per-laundry
-        distance bands below stay wired so the switch is a config change, not a
-        rewrite.
+        When dynamic logistics pricing is enabled, authoritative distance-based rate applies.
+        Otherwise falls back to per-laundry zone pricing.
         """
         if not FinanceService.delivery_fees_in_app():
             return Decimal('0.00')
+
+        try:
+            from logistics.models import LogisticsPricingConfig
+            from logistics.services.pricing_service import LogisticsPricingService
+            config = LogisticsPricingConfig.get_active()
+            if config and config.pricing_enabled:
+                quote = LogisticsPricingService.calculate_quote(
+                    laundry=getattr(order, 'laundry', None),
+                    pickup_lat=getattr(order, 'pickup_lat', None),
+                    pickup_lng=getattr(order, 'pickup_lng', None),
+                    delivery_lat=getattr(order, 'delivery_lat', None),
+                    delivery_lng=getattr(order, 'delivery_lng', None),
+                )
+                return quote['delivery_fee']
+        except Exception:
+            pass
 
         pickup_lat = getattr(order, 'pickup_lat', None)
         pickup_lng = getattr(order, 'pickup_lng', None)
@@ -186,9 +208,7 @@ class FinanceService:
                         if zone.min_distance_km <= distance <= zone.max_distance_km:
                             return Decimal(str(zone.delivery_fee))
         
-        # The laundry's own flat fee. There is deliberately no platform-level
-        # fallback: the platform performs no deliveries, so it must never be
-        # the origin of a delivery charge.
+        # The laundry's own flat fee.
         laundry_fee = getattr(laundry, 'delivery_fee', None) if laundry is not None else None
         if laundry_fee is not None and not hasattr(laundry_fee, '_mock_return_value'):
             return Decimal(str(laundry_fee))
@@ -200,6 +220,22 @@ class FinanceService:
         """Pickup fee charged through the app. See ``calculate_delivery_fee``."""
         if not FinanceService.delivery_fees_in_app():
             return Decimal('0.00')
+
+        try:
+            from logistics.models import LogisticsPricingConfig
+            from logistics.services.pricing_service import LogisticsPricingService
+            config = LogisticsPricingConfig.get_active()
+            if config and config.pricing_enabled:
+                quote = LogisticsPricingService.calculate_quote(
+                    laundry=getattr(order, 'laundry', None),
+                    pickup_lat=getattr(order, 'pickup_lat', None),
+                    pickup_lng=getattr(order, 'pickup_lng', None),
+                    delivery_lat=getattr(order, 'delivery_lat', None),
+                    delivery_lng=getattr(order, 'delivery_lng', None),
+                )
+                return quote['pickup_fee']
+        except Exception:
+            pass
 
         pickup_lat = getattr(order, 'pickup_lat', None)
         pickup_lng = getattr(order, 'pickup_lng', None)
@@ -238,10 +274,8 @@ class FinanceService:
     def _stored_breakdown(order):
         """
         The frozen snapshot for an order, or None if it has none.
-
-        `priced_at` is the marker. Orders created before snapshots existed
-        return None and fall through to a live recomputation, which is the old
-        behaviour and the best that can be done for them.
+        Preserves original rates, distances, promo subsidy, and logistics total.
+        Later Admin rate changes do NOT alter already-booked orders.
         """
         priced_at = getattr(order, 'priced_at', None)
         if not isinstance(priced_at, datetime):
@@ -253,26 +287,48 @@ class FinanceService:
                 return default
             return str(Decimal(str(value)).quantize(Decimal('0.01')))
 
+        laundry = getattr(order, 'laundry', None)
+        laundry_name = getattr(laundry, 'name', '') if laundry else ''
+        is_promo = bool(getattr(order, 'is_free_delivery_promo', False))
+
+        pickup_f = Decimal(money('pickup_fee'))
+        deliv_f = Decimal(money('delivery_fee'))
+        total_logistics = (pickup_f + deliv_f).quantize(Decimal('0.01'))
+
+        from logistics.services.pricing_service import TEMPORARY_LOGISTICS_NOTICE
+        delivery_fees_in_app = bool(getattr(order, 'delivery_fees_in_app', False))
+        logistics_notice = getattr(order, 'logistics_notice', '') or (TEMPORARY_LOGISTICS_NOTICE if not delivery_fees_in_app else '')
+
         return {
             "items_total": money('items_total'),
             "delivery_fee": money('delivery_fee'),
             "pickup_fee": money('pickup_fee'),
+            "total_logistics_fee": str(total_logistics),
+            "pickup_distance_km": str(order.pickup_distance_km) if getattr(order, 'pickup_distance_km', None) is not None else None,
+            "delivery_distance_km": str(order.delivery_distance_km) if getattr(order, 'delivery_distance_km', None) is not None else None,
+            "pickup_rate_per_km": money('pickup_rate_per_km'),
+            "delivery_rate_per_km": money('delivery_rate_per_km'),
+            "is_promo_free_delivery": is_promo,
+            "promo_funding_source": getattr(order, 'promo_funding_source', '') or '',
+            "promo_label": f"Courtesy of {laundry_name}" if is_promo and laundry_name else None,
+            "logistics_discount": money('logistics_discount'),
+            "logistics_pricing_version": getattr(order, 'logistics_pricing_version', '') or '',
+            "logistics_notice": logistics_notice,
             "discount": money('discount_amount'),
             "tax": money('tax_amount'),
             "platform_fee": money('platform_fee'),
             "total": money('total_amount'),
             "currency": getattr(order, 'currency', None) or 'GHS',
-            "delivery_fees_in_app": bool(getattr(order, 'delivery_fees_in_app', False)),
+            "delivery_fees_in_app": delivery_fees_in_app,
         }
 
     @staticmethod
     def freeze_price_breakdown(order, coupon=None):
         """
         Compute the breakdown once and store it on the order.
-
         Called when the order is created. Everything afterwards reads the
-        stored values, so a laundry changing its prices tomorrow cannot alter
-        what this customer was charged today or what the laundry is owed.
+        stored values, so Admin rate changes or laundry price edits
+        cannot alter what this customer was charged.
         """
         breakdown = FinanceService.calculate_price_breakdown(order, coupon=coupon, use_snapshot=False)
 
@@ -285,11 +341,34 @@ class FinanceService:
         order.total_amount = Decimal(breakdown['total'])
         order.currency = breakdown['currency']
         order.delivery_fees_in_app = breakdown['delivery_fees_in_app']
+
+        # Logistics snapshot
+        order.pickup_distance_km = (
+            Decimal(str(breakdown['pickup_distance_km']))
+            if breakdown.get('pickup_distance_km') is not None
+            else None
+        )
+        order.delivery_distance_km = (
+            Decimal(str(breakdown['delivery_distance_km']))
+            if breakdown.get('delivery_distance_km') is not None
+            else None
+        )
+        order.pickup_rate_per_km = Decimal(str(breakdown.get('pickup_rate_per_km') or '0.00'))
+        order.delivery_rate_per_km = Decimal(str(breakdown.get('delivery_rate_per_km') or '0.00'))
+        order.logistics_pricing_version = breakdown.get('logistics_pricing_version') or breakdown.get('pricing_version', '')
+        order.is_free_delivery_promo = bool(breakdown.get('is_promo_free_delivery', False))
+        order.promo_funding_source = breakdown.get('promo_funding_source', '')
+        order.logistics_discount = Decimal(str(breakdown.get('logistics_discount') or '0.00'))
+        order.logistics_notice = breakdown.get('logistics_notice', '')
+
         order.priced_at = timezone.now()
         order.save(update_fields=[
             'items_total', 'delivery_fee', 'pickup_fee', 'discount_amount',
             'tax_amount', 'platform_fee', 'total_amount', 'currency',
-            'delivery_fees_in_app', 'priced_at', 'updated_at',
+            'delivery_fees_in_app', 'pickup_distance_km', 'delivery_distance_km',
+            'pickup_rate_per_km', 'delivery_rate_per_km', 'logistics_pricing_version',
+            'is_free_delivery_promo', 'promo_funding_source', 'logistics_discount',
+            'logistics_notice', 'priced_at', 'updated_at',
         ])
         return breakdown
 
@@ -312,11 +391,29 @@ class FinanceService:
             total=Sum(F('quantity') * F('price'))
         )['total'] or Decimal('0.00')
         
-        # 2. Fees
-        delivery_fee = FinanceService.calculate_delivery_fee(order)
-        pickup_fee = FinanceService.calculate_pickup_fee(order)
-        
+        # 2. Logistics Quote
+        from logistics.services.pricing_service import LogisticsPricingService
+        quote = LogisticsPricingService.calculate_quote(
+            laundry=getattr(order, 'laundry', None),
+            pickup_lat=getattr(order, 'pickup_lat', None),
+            pickup_lng=getattr(order, 'pickup_lng', None),
+            delivery_lat=getattr(order, 'delivery_lat', None),
+            delivery_lng=getattr(order, 'delivery_lng', None),
+        )
+
+        if quote['pricing_enabled']:
+            delivery_fee = quote['delivery_fee']
+            pickup_fee = quote['pickup_fee']
+        else:
+            delivery_fee = FinanceService.calculate_delivery_fee(order)
+            pickup_fee = FinanceService.calculate_pickup_fee(order)
+            quote['delivery_fee'] = delivery_fee
+            quote['pickup_fee'] = pickup_fee
+            quote['total_logistics_fee'] = (pickup_fee + delivery_fee).quantize(Decimal('0.01'))
+            quote['delivery_fees_in_app'] = FinanceService.delivery_fees_in_app()
+
         # 3. Discount
+
         discount = Decimal('0.00')
         if coupon:
             is_valid, error = coupon.is_valid(
@@ -348,12 +445,27 @@ class FinanceService:
             "items_total": str(items_total.quantize(Decimal('0.01'))),
             "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
             "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
+            "total_logistics_fee": str(quote['total_logistics_fee']),
+            "pickup_distance_km": str(quote['pickup_distance_km']) if quote['pickup_distance_km'] is not None else None,
+            "delivery_distance_km": str(quote['delivery_distance_km']) if quote['delivery_distance_km'] is not None else None,
+            "pickup_rate_per_km": str(quote['pickup_rate_per_km']),
+            "delivery_rate_per_km": str(quote['delivery_rate_per_km']),
+            "nominal_pickup_fee": str(quote['nominal_pickup_fee']),
+            "nominal_delivery_fee": str(quote['nominal_delivery_fee']),
+            "nominal_logistics_total": str(quote['nominal_logistics_total']),
+            "is_promo_free_delivery": quote['is_promo_free_delivery'],
+            "promo_funding_source": quote['promo_funding_source'],
+            "promo_label": quote['promo_label'],
+            "logistics_discount": str(quote['logistics_discount']),
+            "logistics_pricing_version": quote['pricing_version'],
+            "logistics_notice": quote['logistics_notice'],
             "discount": str(discount.quantize(Decimal('0.01'))),
             "tax": str(tax.quantize(Decimal('0.01'))),
             "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
             "total": str(total.quantize(Decimal('0.01'))),
-            "currency": "GHS", # Standardized
-            # Lets the client tell "delivery is free" apart from "delivery is
-            # not billed here". Without it a 0.00 fee reads as free delivery.
-            "delivery_fees_in_app": FinanceService.delivery_fees_in_app(),
+            "currency": "GHS",
+            "delivery_fees_in_app": quote['delivery_fees_in_app'],
+            "outside_service_area": quote['outside_service_area'],
+            "warning": quote['warning'],
         }
+

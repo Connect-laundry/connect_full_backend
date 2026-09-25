@@ -191,9 +191,24 @@ class BookingViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
                 
-        # 3. Use FinanceService for the full breakdown
+        # 3. Use FinanceService & LogisticsPricingService for authoritative quote
         from ..services.finance_service import FinanceService
+        from logistics.services.pricing_service import LogisticsPricingService
         
+        delivery_lat = request.data.get('delivery_lat')
+        delivery_lng = request.data.get('delivery_lng')
+
+        quote = LogisticsPricingService.calculate_quote(
+            laundry=laundry,
+            pickup_lat=pickup_lat,
+            pickup_lng=pickup_lng,
+            delivery_lat=delivery_lat,
+            delivery_lng=delivery_lng,
+        )
+
+        delivery_fee = quote['delivery_fee']
+        pickup_fee = quote['pickup_fee']
+
         outside_service_area = False
         warning_msg = None
         if pickup_lat is not None and pickup_lng is not None:
@@ -213,11 +228,7 @@ class BookingViewSet(viewsets.GenericViewSet):
                     outside_service_area = True
                     warning_msg = f"Coordinates are {distance:.2f} km away, which is outside the laundry's {laundry.service_radius_km} km service radius."
 
-        # Let's do a semi-manual calculation for the preview to avoid DB order creation
-        delivery_fee = FinanceService.calculate_delivery_fee(temp_order)
-        pickup_fee = FinanceService.calculate_pickup_fee(temp_order)
-        # Platform fee & Tax logic. Both are zero-rated by default, so the
-        # quote is the laundry's own prices and nothing else.
+        # Platform fee & Tax logic. Both are zero-rated by default.
         tax = FinanceService.calculate_tax_amount(total_items_price)
         platform_fee = FinanceService.calculate_platform_fee(total_items_price)
 
@@ -230,15 +241,31 @@ class BookingViewSet(viewsets.GenericViewSet):
                 "items_total": str(total_items_price.quantize(Decimal('0.01'))),
                 "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
                 "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
+                "total_logistics_fee": str(quote['total_logistics_fee']),
+                "pickup_distance_km": str(quote['pickup_distance_km']) if quote['pickup_distance_km'] is not None else None,
+                "delivery_distance_km": str(quote['delivery_distance_km']) if quote['delivery_distance_km'] is not None else None,
+                "pickup_rate_per_km": str(quote['pickup_rate_per_km']),
+                "delivery_rate_per_km": str(quote['delivery_rate_per_km']),
+                "nominal_pickup_fee": str(quote['nominal_pickup_fee']),
+                "nominal_delivery_fee": str(quote['nominal_delivery_fee']),
+                "nominal_logistics_total": str(quote['nominal_logistics_total']),
+                "is_promo_free_delivery": quote['is_promo_free_delivery'],
+                "promo_funding_source": quote['promo_funding_source'],
+                "promo_label": quote['promo_label'],
+                "logistics_discount": str(quote['logistics_discount']),
+                "pricing_version": quote['pricing_version'],
+                "logistics_pricing_version": quote['pricing_version'],
+                "logistics_notice": quote['logistics_notice'],
                 "tax": str(tax.quantize(Decimal('0.01'))),
                 "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
                 "total": str(total.quantize(Decimal('0.01'))),
                 "currency": "GHS",
-                "delivery_fees_in_app": FinanceService.delivery_fees_in_app(),
-                "outside_service_area": outside_service_area,
-                "warning": warning_msg
+                "delivery_fees_in_app": quote['delivery_fees_in_app'],
+                "outside_service_area": outside_service_area or quote['outside_service_area'],
+                "warning": warning_msg or quote['warning']
             }
         })
+
 
     @action(detail=False, methods=['post'])
     def calculate(self, request):

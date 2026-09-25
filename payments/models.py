@@ -205,9 +205,12 @@ class OrderSettlement(models.Model):
     #: Paystack's cut, when the webhook reports it. Not deducted automatically:
     #: whether the laundry or the platform absorbs it is a commercial decision.
     processor_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    #: gross - commission. What the laundry is owed.
+    #: Deduction if the laundry funded a free pickup/delivery promotion.
+    logistics_subsidy_deducted = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    #: gross - commission - logistics_subsidy. What the laundry is owed.
     net_payable = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='GHS')
+
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     route = models.CharField(max_length=20, choices=Route.choices, default=Route.PLATFORM)

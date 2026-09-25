@@ -173,6 +173,58 @@ class Laundry(models.Model):
     service_area_polygon = models.JSONField(_('service area polygon'), null=True, blank=True)
     is_eco_friendly = models.BooleanField(_('is eco-friendly'), default=False, db_index=True)
     ironing_available = models.BooleanField(_('ironing available'), default=False, db_index=True)
+
+    # --- Free Pickup & Delivery Promotion ---
+    class PromoFundingSource(models.TextChoices):
+        LAUNDRY = 'LAUNDRY', _('Laundry Funded')
+        PLATFORM = 'PLATFORM', _('Platform Funded')
+
+    free_delivery_promo_enabled = models.BooleanField(
+        _('free pickup & delivery promo enabled'),
+        default=False,
+        db_index=True,
+        help_text=_("Toggle ON to offer free pickup and delivery to customers.")
+    )
+    promo_start_at = models.DateTimeField(_('promo start date/time'), null=True, blank=True)
+    promo_end_at = models.DateTimeField(_('promo end date/time'), null=True, blank=True)
+    promo_max_distance_km = models.DecimalField(
+        _('promo maximum distance (km)'),
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Optional distance ceiling for free delivery (null = up to laundry service radius).")
+    )
+    promo_funding_source = models.CharField(
+        _('promo funding source'),
+        max_length=20,
+        choices=PromoFundingSource.choices,
+        default=PromoFundingSource.LAUNDRY,
+        help_text=_("Who funds the rider logistics subsidy for this promo.")
+    )
+
+    def is_free_delivery_promo_active(self, distance_km=None) -> bool:
+        """
+        Determines whether the free delivery promo is currently active and applicable
+        for the given distance in km.
+        """
+        if not self.free_delivery_promo_enabled:
+            return False
+        from django.utils import timezone
+        now = timezone.now()
+        if self.promo_start_at and now < self.promo_start_at:
+            return False
+        if self.promo_end_at and now > self.promo_end_at:
+            return False
+        if distance_km is not None and self.promo_max_distance_km is not None:
+            from decimal import Decimal
+            try:
+                if Decimal(str(distance_km)) > Decimal(str(self.promo_max_distance_km)):
+                    return False
+            except Exception:
+                pass
+        return True
+
     
     status = models.CharField(
         _('approval status'),

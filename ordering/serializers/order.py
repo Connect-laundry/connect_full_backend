@@ -83,6 +83,9 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             # Lets the app and owner tell a quote request or a weight order
             # apart from an itemised one on the tracking and receipt screens.
             'pricing_mode', 'estimated_weight_kg',
+            # Logistics snapshot fields
+            'pickup_distance_km', 'delivery_distance_km', 'is_free_delivery_promo',
+            'promo_funding_source', 'logistics_discount', 'logistics_notice',
         ]
 
     @staticmethod
@@ -158,6 +161,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     estimated_weight_kg = serializers.DecimalField(
         max_digits=6, decimal_places=2, required=False, allow_null=True
     )
+    expected_total = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
 
     # Accept GPS coords and payment_method from frontend
     pickup_lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
@@ -178,6 +184,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'special_instructions', 'items', 'coupon_code',
             'payment_method', 'pricing_mode', 'estimated_weight_kg',
+            'expected_total',
         ]
 
     def to_internal_value(self, data):
@@ -187,7 +194,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 data['pickup_address'] = data['address']
             if 'address' in data and not data.get('delivery_address'):
                 data['delivery_address'] = data['address']
-            harmless_aliases = {'address', 'idempotency_key', 'pickup_time', 'delivery_time'}
+            if 'quoted_total' in data and 'expected_total' not in data:
+                data['expected_total'] = data['quoted_total']
+            harmless_aliases = {
+                'address', 'idempotency_key', 'pickup_time', 'delivery_time',
+                'quoted_total', 'pricing_version', 'logistics_pricing_version',
+            }
             unsupported_fields = sorted(set(data) - set(self.fields) - harmless_aliases)
             if unsupported_fields:
                 raise serializers.ValidationError({
@@ -208,6 +220,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             # Clean copy without harmless aliases before validation
             data = {k: v for k, v in data.items() if k in set(self.fields)}
         return super().to_internal_value(data)
+
 
     def validate(self, data):
         laundry = data.get('laundry')
@@ -339,6 +352,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             items_data = validated_data.pop('items', []) or []
             coupon_obj = validated_data.pop('coupon_obj', None)
             validated_data.pop('coupon_code', None)
+            expected_total = validated_data.pop('expected_total', None)
             pricing_mode = validated_data.get('pricing_mode') or Order.PricingMode.BY_ITEM
             user = self.context['request'].user
 
@@ -375,7 +389,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     price=price,
                 )
                 price_breakdown = FinanceService.freeze_price_breakdown(order, coupon=coupon_obj)
+                if expected_total is not None:
+                    diff = abs(order.total_amount - Decimal(str(expected_total)))
+                    if diff > Decimal('0.05'):
+                        raise serializers.ValidationError({
+                            "total": f"Prices have been updated. Your current total is GHS {order.total_amount} (was GHS {expected_total}). Please review and confirm.",
+                            "code": "STALE_QUOTE",
+                            "updated_total": str(order.total_amount),
+                        })
                 return order
+
 
             # Pay after quote: nothing is priced yet. The order is left as a
             # pending request with no items and no frozen price; the laundry
@@ -456,7 +479,17 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             # settlement owed to the laundry, uses these stored numbers.
             price_breakdown = FinanceService.freeze_price_breakdown(order, coupon=coupon_obj)
 
+            if expected_total is not None:
+                diff = abs(order.total_amount - Decimal(str(expected_total)))
+                if diff > Decimal('0.05'):
+                    raise serializers.ValidationError({
+                        "total": f"Prices have been updated. Your current total is GHS {order.total_amount} (was GHS {expected_total}). Please review and confirm.",
+                        "code": "STALE_QUOTE",
+                        "updated_total": str(order.total_amount),
+                    })
+
             if coupon_obj:
+
                 # pyre-ignore[missing-module]
                 from ..models.coupons import Coupon, CouponUsage
                 # Lock the coupon row to enforce usage limits atomically and

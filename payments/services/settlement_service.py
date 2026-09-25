@@ -87,15 +87,31 @@ class SettlementService:
             # resurrect a debt that a refund cancelled.
             return existing
 
-        gross = _money(getattr(order, 'total_amount', ZERO))
+        # When delivery fees are collected in-app, the laundry's share is from items.
+        delivery_fees_in_app = getattr(order, 'delivery_fees_in_app', False)
+        if delivery_fees_in_app:
+            items_gross = _money(getattr(order, 'items_total', ZERO) - getattr(order, 'discount_amount', ZERO))
+            gross = max(ZERO, items_gross)
+        else:
+            gross = _money(getattr(order, 'total_amount', ZERO))
+
         commission = _money(getattr(order, 'platform_fee', ZERO))
-        net = gross - commission
+
+        # Laundry-funded free delivery promo subsidy deduction
+        logistics_subsidy_deducted = ZERO
+        if getattr(order, 'is_free_delivery_promo', False) and getattr(order, 'promo_funding_source', '') == 'LAUNDRY':
+            logistics_subsidy_deducted = _money(getattr(order, 'logistics_discount', ZERO))
+
+        net = gross - commission - logistics_subsidy_deducted
         if net < ZERO:
-            # Commission cannot exceed what the customer paid. Clamping keeps a
-            # bad configuration from writing a negative debt into the ledger.
             logger.error(
-                "Settlement commission exceeded gross",
-                extra={"order_id": str(order.id), "gross": str(gross), "commission": str(commission)},
+                "Settlement deductions exceeded gross",
+                extra={
+                    "order_id": str(order.id),
+                    "gross": str(gross),
+                    "commission": str(commission),
+                    "subsidy": str(logistics_subsidy_deducted)
+                },
             )
             net = ZERO
 
@@ -108,8 +124,10 @@ class SettlementService:
             gross_amount=gross,
             platform_commission=commission,
             processor_fee=_money(processor_fee),
+            logistics_subsidy_deducted=logistics_subsidy_deducted,
             net_payable=net,
             currency=getattr(order, 'currency', None) or 'GHS',
+
             route=(
                 OrderSettlement.Route.DIRECT
                 if is_direct
