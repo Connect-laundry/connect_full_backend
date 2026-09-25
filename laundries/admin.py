@@ -116,6 +116,13 @@ class LaundryAdmin(ModelAdmin):
             ),
             "classes": ("collapse",),
         }),
+        ("Direct Settlement (Paystack Subaccount)", {
+            "fields": (
+                'split_payments_enabled',
+                'paystack_subaccount_code',
+            ),
+            "description": "When enabled with a Paystack subaccount code (e.g. ACCT_...), payments are settled directly to this laundry owner's MoMo account.",
+        }),
         ("Payout Account", {
             "fields": (
                 'payout_status', 'payout_method', 'payout_provider',

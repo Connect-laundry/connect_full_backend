@@ -821,7 +821,7 @@ PAYOUT_MAX_TRANSFER_AMOUNT = os.getenv('PAYOUT_MAX_TRANSFER_AMOUNT', '5000.00')
 # Even when on, each laundry must be enabled individually
 # (Laundry.split_payments_enabled) and hold a subaccount code. Anything
 # missing falls back to platform collection, which is recoverable.
-PAYSTACK_SPLIT_ENABLED = os.getenv('PAYSTACK_SPLIT_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+PAYSTACK_SPLIT_ENABLED = os.getenv('PAYSTACK_SPLIT_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 # Who absorbs Paystack's processing fee on a split transaction:
 # 'account' (the platform) or 'subaccount' (the laundry).
 PAYSTACK_SPLIT_BEARER = os.getenv('PAYSTACK_SPLIT_BEARER', 'account')
