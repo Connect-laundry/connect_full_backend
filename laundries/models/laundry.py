@@ -236,6 +236,12 @@ class Laundry(models.Model):
                 logging.getLogger(__name__).warning(
                     "Could not sync PostGIS point for laundry %s: %s", self.pk, exc
                 )
+        if self.payout_phone:
+            from users.utils.phone import normalize_phone, PhoneValidationError
+            try:
+                self.payout_phone_normalized = normalize_phone(self.payout_phone)
+            except PhoneValidationError:
+                pass
         super().save(*args, **kwargs)
 
     # We keep it as a normal field but handle the case where GDAL is missing
