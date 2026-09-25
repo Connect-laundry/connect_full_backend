@@ -34,6 +34,22 @@ def _money(value):
     return Decimal(str(value)).quantize(Decimal('0.01'))
 
 
+def transport_collected(order):
+    """Pickup + delivery the customer paid through the app. Owed to the rider."""
+    if not getattr(order, 'delivery_fees_in_app', False):
+        return ZERO
+    return _money(getattr(order, 'pickup_fee', ZERO)) + _money(getattr(order, 'delivery_fee', ZERO))
+
+
+def laundry_funded_subsidy(order):
+    """Rider cost the laundry agreed to cover through a free-transport promo."""
+    if not getattr(order, 'is_free_delivery_promo', False):
+        return ZERO
+    if getattr(order, 'promo_funding_source', '') != 'LAUNDRY':
+        return ZERO
+    return _money(getattr(order, 'logistics_discount', ZERO))
+
+
 def release_blocker(settlement):
     """
     Why this HELD settlement must not be released right now, or None.
@@ -87,20 +103,13 @@ class SettlementService:
             # resurrect a debt that a refund cancelled.
             return existing
 
-        # When delivery fees are collected in-app, the laundry's share is from items.
-        delivery_fees_in_app = getattr(order, 'delivery_fees_in_app', False)
-        if delivery_fees_in_app:
-            items_gross = _money(getattr(order, 'items_total', ZERO) - getattr(order, 'discount_amount', ZERO))
-            gross = max(ZERO, items_gross)
-        else:
-            gross = _money(getattr(order, 'total_amount', ZERO))
-
+        # Transport the customer paid in the app belongs to the rider, not the
+        # laundry, so it is taken out of the laundry's gross.
+        gross = max(ZERO, _money(getattr(order, 'total_amount', ZERO)) - transport_collected(order))
         commission = _money(getattr(order, 'platform_fee', ZERO))
-
-        # Laundry-funded free delivery promo subsidy deduction
-        logistics_subsidy_deducted = ZERO
-        if getattr(order, 'is_free_delivery_promo', False) and getattr(order, 'promo_funding_source', '') == 'LAUNDRY':
-            logistics_subsidy_deducted = _money(getattr(order, 'logistics_discount', ZERO))
+        # A laundry-funded free pickup/delivery promo: the rider is still paid
+        # in full, out of the laundry's share.
+        logistics_subsidy_deducted = laundry_funded_subsidy(order)
 
         net = gross - commission - logistics_subsidy_deducted
         if net < ZERO:

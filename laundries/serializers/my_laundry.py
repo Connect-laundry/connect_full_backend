@@ -1,6 +1,7 @@
 """Serializers for the owner-facing "My Laundry" management feature."""
 import json
 from datetime import time
+from decimal import Decimal
 
 # pyre-ignore[missing-module]
 from django.db import transaction
@@ -392,3 +393,58 @@ class PayoutAccountSetupSerializer(serializers.Serializer):
     confirmed = serializers.BooleanField(required=True)
 
 
+
+
+class OwnerPromotionSerializer(serializers.Serializer):
+    """
+    The free pickup/delivery promo an owner may run. Rates and distance rules
+    are Simame's and are not editable here; an owner-run promo is always
+    laundry funded.
+    """
+    enabled = serializers.BooleanField(source='free_delivery_promo_enabled')
+    scope = serializers.ChoiceField(
+        source='promo_scope', choices=Laundry.PromoScope.choices, required=False,
+    )
+    name = serializers.CharField(source='promo_name', max_length=80, required=False, allow_blank=True)
+    start_at = serializers.DateTimeField(source='promo_start_at', required=False, allow_null=True)
+    end_at = serializers.DateTimeField(source='promo_end_at', required=False, allow_null=True)
+    min_order_value = serializers.DecimalField(
+        source='promo_min_order_value', max_digits=10, decimal_places=2,
+        required=False, allow_null=True, min_value=Decimal('0.00'),
+    )
+    max_distance_km = serializers.DecimalField(
+        source='promo_max_distance_km', max_digits=6, decimal_places=2,
+        required=False, allow_null=True, min_value=Decimal('0.10'),
+    )
+    funded_by = serializers.CharField(source='promo_funding_source', read_only=True)
+    status = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        from django.utils import timezone
+        if not obj.free_delivery_promo_enabled:
+            return 'OFF'
+        now = timezone.now()
+        if obj.promo_end_at and obj.promo_end_at < now:
+            return 'ENDED'
+        if obj.promo_start_at and obj.promo_start_at > now:
+            return 'SCHEDULED'
+        return 'RUNNING'
+
+    def validate(self, attrs):
+        from django.utils import timezone
+        instance = self.instance
+        enabled = attrs.get('free_delivery_promo_enabled', getattr(instance, 'free_delivery_promo_enabled', False))
+        start = attrs.get('promo_start_at', getattr(instance, 'promo_start_at', None))
+        end = attrs.get('promo_end_at', getattr(instance, 'promo_end_at', None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({'end_at': 'The promo must end after it starts.'})
+        if enabled:
+            if end and end <= timezone.now():
+                raise serializers.ValidationError({'end_at': 'Choose an end date in the future.'})
+            if instance is not None and (
+                instance.status != Laundry.ApprovalStatus.APPROVED or not instance.is_active
+            ):
+                raise serializers.ValidationError(
+                    {'enabled': 'Your laundry must be approved and active before running a promo.'}
+                )
+        return attrs

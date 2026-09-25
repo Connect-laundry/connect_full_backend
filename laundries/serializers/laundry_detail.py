@@ -76,6 +76,9 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
     vacation_mode = serializers.SerializerMethodField()
     features = serializers.SerializerMethodField()
     tagline = serializers.SerializerMethodField()
+    # Transport status and any running free pickup/delivery promo, from the
+    # admin pricing config, so the app never hardcodes whether fees apply.
+    logistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
@@ -85,7 +88,7 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
             'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
             'minOrder', 'deliveryFee', 'pickup_fee', 'pickupFee', 'opening_hours', 'isOpen',
             'is_open_now', 'status_as_of', 'next_open_at', 'accepts_future_bookings', 'vacation_mode',
-            'features', 'tagline'
+            'features', 'tagline', 'logistics'
         )
 
 
@@ -95,6 +98,11 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
             from .pricing import LaundryWeightPricingSerializer
             return LaundryWeightPricingSerializer(obj.weight_pricing, context=self.context).data
         return None
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_logistics(self, obj):
+        from logistics.services.pricing_service import laundry_logistics_summary
+        return laundry_logistics_summary(obj)
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
@@ -209,4 +217,3 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
         }
         pm_display = pm_map.get(obj.pricing_model, 'Item-Based')
         return f"{price_range} pricing • {pm_display}"
-

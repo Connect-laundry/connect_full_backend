@@ -199,14 +199,11 @@ class TestModernizationFeatures:
         change_obj.refresh_from_db()
         assert change_obj.is_applied is True
 
-    @override_settings(DELIVERY_FEES_IN_APP=True)
     def test_delivery_zone_pricing(self):
         """
-        The distance bands stay correct behind the flag.
-
-        Logistics currently settle between customer and laundry, so the app
-        charges nothing; this proves the banding is ready for the day that
-        switches on, rather than rotting until then.
+        Owner delivery zones can still be saved, but they no longer price
+        anything: transport is priced only from Simame's admin config, so a
+        laundry cannot set its own per-km rates.
         """
         owner = _owner()
         laundry = _laundry(owner)
@@ -227,14 +224,14 @@ class TestModernizationFeatures:
         # Laundry is at 5.603700, -0.187000
         # 1km away coordinates approx: 5.603700, -0.178000
         order_near = DummyOrder(Decimal('5.603700'), Decimal('-0.178000'), laundry)
-        assert FinanceService.calculate_delivery_fee(order_near) == Decimal('5.00')
-        assert FinanceService.calculate_pickup_fee(order_near) == Decimal('1.00')
+        assert FinanceService.calculate_delivery_fee(order_near) == Decimal('0.00')
+        assert FinanceService.calculate_pickup_fee(order_near) == Decimal('0.00')
 
         # Test zone 2 matching (4km away)
         # 4km away coordinates approx: 5.603700, -0.151000
         order_far = DummyOrder(Decimal('5.603700'), Decimal('-0.151000'), laundry)
-        assert FinanceService.calculate_delivery_fee(order_far) == Decimal('12.00')
-        assert FinanceService.calculate_pickup_fee(order_far) == Decimal('3.00')
+        assert FinanceService.calculate_delivery_fee(order_far) == Decimal('0.00')
+        assert FinanceService.calculate_pickup_fee(order_far) == Decimal('0.00')
 
     def test_holiday_override_open_now(self):
         owner = _owner()

@@ -40,7 +40,17 @@ class TrackingLogAdmin(ModelAdmin):
         return super().get_queryset(request).select_related('order')
 
 
+from django.db.models import Count, Q, Sum
+
 from .models import LogisticsPricingConfig, LogisticsPricingAudit
+
+AUDITED_FIELDS = (
+    'pricing_enabled', 'pickup_price_per_km', 'delivery_price_per_km',
+    'pickup_base_fee', 'delivery_base_fee', 'pickup_min_fee', 'delivery_min_fee',
+    'max_service_distance_km', 'distance_rounding_precision',
+    'minimum_billable_distance_km', 'road_distance_factor', 'is_active', 'effective_from',
+    'min_android_build', 'min_ios_build',
+)
 
 
 @admin.register(LogisticsPricingConfig)
@@ -57,25 +67,36 @@ class LogisticsPricingConfigAdmin(ModelAdmin):
         'is_active',
     )
     list_filter = ('pricing_enabled', 'is_active', 'effective_from')
-    readonly_fields = ('id', 'version', 'currency', 'created_at', 'updated_at')
+    readonly_fields = (
+        'id', 'version', 'currency', 'created_at', 'updated_at',
+        'orders_priced', 'rider_transport_total', 'customer_transport_total', 'promo_subsidy_totals',
+    )
 
     fieldsets = (
-        ("Master Toggle & Activation", {
+        ("Master switch", {
             "fields": (
                 'pricing_enabled',
                 'is_active',
                 'effective_from',
             ),
-            "description": "When Pricing Enabled is OFF, mobile app displays that pickup and delivery are separate. When ON, live rates apply immediately.",
+            "description": (
+                "Pricing enabled OFF: the app tells customers pickup and delivery are not included and "
+                "confirmed separately. ON: every quote uses the rates below, in all installed apps, "
+                "within a few seconds. No app update is needed. Booked orders keep the rates they were "
+                "priced with."
+            ),
         }),
-        ("Kilometre Pricing (GHS)", {
+        ("Price per kilometre (GHS)", {
             "fields": (
                 'pickup_price_per_km',
                 'delivery_price_per_km',
             ),
-            "description": "Authoritative price per kilometre. Backend computes distance between laundry and customer coordinates.",
+            "description": (
+                "Pickup = customer pickup pin to laundry. Delivery = laundry to customer delivery pin. "
+                "Fee per leg = base fee + (km x rate), never below the minimum."
+            ),
         }),
-        ("Base Fees & Minimums (GHS)", {
+        ("Base fees and minimums (GHS)", {
             "fields": (
                 'pickup_base_fee',
                 'delivery_base_fee',
@@ -83,13 +104,39 @@ class LogisticsPricingConfigAdmin(ModelAdmin):
                 'delivery_min_fee',
             ),
         }),
-        ("Service Constraints", {
+        ("Distance rules", {
             "fields": (
                 'max_service_distance_km',
+                'minimum_billable_distance_km',
+                'road_distance_factor',
                 'distance_rounding_precision',
             ),
+            "description": (
+                "Distance is measured between the map pins (metres internally) and billed in km. "
+                "Trips beyond the maximum distance cannot be booked."
+            ),
         }),
-        ("System & Audit", {
+        ("Minimum app build while pricing is ON", {
+            "fields": (
+                'min_android_build',
+                'min_ios_build',
+            ),
+            "description": (
+                "Older app builds describe transport as not charged in the app, so while pricing is ON "
+                "they cannot start or place a booking and are asked to update. Viewing orders, tracking, "
+                "delivery confirmation, disputes and support keep working. Build 9 is the launch build; "
+                "set these to the first build that ships the new transport screens."
+            ),
+        }),
+        ("Usage (orders priced with this version)", {
+            "fields": (
+                'orders_priced',
+                'rider_transport_total',
+                'customer_transport_total',
+                'promo_subsidy_totals',
+            ),
+        }),
+        ("System", {
             "fields": (
                 'id',
                 'version',
@@ -100,6 +147,41 @@ class LogisticsPricingConfigAdmin(ModelAdmin):
             "classes": ("collapse",),
         }),
     )
+
+    def _usage(self, obj):
+        if not obj or not obj.pk:
+            return {}
+        cached = getattr(obj, '_usage_cache', None)
+        if cached is None:
+            from ordering.models import Order
+            cached = Order.objects.filter(logistics_pricing_version=f"v{obj.version}").aggregate(
+                orders=Count('id'),
+                rider=Sum('logistics_nominal_total'),
+                pickup=Sum('pickup_fee'),
+                delivery=Sum('delivery_fee'),
+                laundry_funded=Sum('logistics_discount', filter=Q(is_free_delivery_promo=True, promo_funding_source='LAUNDRY')),
+                simame_funded=Sum('logistics_discount', filter=Q(is_free_delivery_promo=True, promo_funding_source='SIMAME')),
+            )
+            obj._usage_cache = cached
+        return cached
+
+    @display(description="Orders priced")
+    def orders_priced(self, obj):
+        return self._usage(obj).get('orders') or 0
+
+    @display(description="Rider transport total (GHS)")
+    def rider_transport_total(self, obj):
+        return self._usage(obj).get('rider') or 0
+
+    @display(description="Paid by customers (GHS)")
+    def customer_transport_total(self, obj):
+        usage = self._usage(obj)
+        return (usage.get('pickup') or 0) + (usage.get('delivery') or 0)
+
+    @display(description="Promo subsidies (GHS)")
+    def promo_subsidy_totals(self, obj):
+        usage = self._usage(obj)
+        return f"Laundry funded: {usage.get('laundry_funded') or 0} | Simame funded: {usage.get('simame_funded') or 0}"
 
     @display(description="Version")
     def version_display(self, obj):
@@ -121,33 +203,32 @@ class LogisticsPricingConfigAdmin(ModelAdmin):
         return f"GHS {obj.delivery_price_per_km}"
 
     def save_model(self, request, obj, form, change):
-        old_data = {}
-        new_data = {}
+        old_data, new_data = {}, {}
         if change:
-            # Capture audit diff
-            tracked_fields = [
-                'pricing_enabled', 'pickup_price_per_km', 'delivery_price_per_km',
-                'pickup_base_fee', 'delivery_base_fee', 'pickup_min_fee', 'delivery_min_fee',
-                'max_service_distance_km', 'distance_rounding_precision', 'is_active', 'effective_from'
-            ]
-            for f in tracked_fields:
-                old_val = form.initial.get(f)
-                new_val = form.cleaned_data.get(f)
-                if str(old_val) != str(new_val):
-                    old_data[f] = str(old_val)
-                    new_data[f] = str(new_val)
-            if old_data:
-                obj.version = obj.version + 1
+            for field in AUDITED_FIELDS:
+                if field in form.changed_data:
+                    old_data[field] = str(form.initial.get(field))
+                    new_data[field] = str(form.cleaned_data.get(field))
+            if new_data:
+                # A new version number for every change, so an order's version
+                # always identifies exactly the rates it was priced with.
+                obj.version = LogisticsPricingConfig.next_version()
+        else:
+            new_data = {field: str(form.cleaned_data.get(field)) for field in AUDITED_FIELDS if field in form.cleaned_data}
         super().save_model(request, obj, form, change)
 
-        # Record audit log
-        LogisticsPricingAudit.objects.create(
-            config=obj,
-            changed_by=request.user if request.user.is_authenticated else None,
-            old_values=old_data,
-            new_values=new_data or {k: str(form.cleaned_data.get(k)) for k in form.cleaned_data if k in form.fields},
-            notes="Modified via Django Admin" if change else "Created via Django Admin"
-        )
+        if new_data or not change:
+            LogisticsPricingAudit.objects.create(
+                config=obj,
+                changed_by=request.user if request.user.is_authenticated else None,
+                old_values=old_data,
+                new_values=new_data,
+                notes=f"{'Changed' if change else 'Created'} via Django admin (now v{obj.version})",
+            )
+
+    def has_delete_permission(self, request, obj=None):
+        # Orders reference versions by number; deleting a row would orphan them.
+        return False
 
 
 @admin.register(LogisticsPricingAudit)

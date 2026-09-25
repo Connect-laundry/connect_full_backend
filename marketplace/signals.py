@@ -40,77 +40,59 @@ def admin_notify_new_booking(sender, instance, created, **kwargs):
     if not created:
         return
 
+    order_id = instance.pk
+
     def _do():
         from marketplace.services.notification_service import NotificationService
         from marketplace.models import Notification
 
-        pickup_dist_str = f"{instance.pickup_distance_km} km" if instance.pickup_distance_km is not None else "N/A"
-        delivery_dist_str = f"{instance.delivery_distance_km} km" if instance.delivery_distance_km is not None else "N/A"
-        promo_str = "YES" if instance.is_free_delivery_promo else "NO"
-        funding_str = instance.promo_funding_source or "NONE"
-        pm_display = getattr(instance, 'get_payment_method_display', lambda: instance.payment_method)()
-
-        body = (
-            f"Order {instance.order_no} placed ({pm_display}).\n"
-            f"Total: GHS {instance.total_amount}\n"
-            f"Pickup: {pickup_dist_str} (GHS {instance.pickup_fee})\n"
-            f"Delivery: {delivery_dist_str} (GHS {instance.delivery_fee})\n"
-            f"Free Delivery Promo: {promo_str} (Funded by: {funding_str})"
-        )
-
+        # The order row is inserted before its prices are frozen, so read it
+        # back once the booking transaction has committed.
+        order = Order.objects.filter(pk=order_id).first()
+        if order is None:
+            return
         NotificationService.notify_admins(
-            title=f"New booking: {instance.order_no} (GHS {instance.total_amount})",
-            body=body,
+            title=f"New booking: {order.order_no} (GHS {order.total_amount})",
+            body=booking_admin_summary(order),
             category='NEW_BOOKING',
             priority=Notification.Priority.NORMAL,
             type=Notification.Type.ORDER,
-            related_order=instance,
-            action_url=f'/admin/ordering/order/{instance.id}/change/',
-            dedup_key=f'new_booking:{instance.id}',
+            related_order=order,
+            action_url=f'/admin/ordering/order/{order.id}/change/',
+            dedup_key=f'new_booking:{order.id}',
         )
-    _safe(_do)
+
+    from django.db import transaction
+    transaction.on_commit(lambda: _safe(_do))
 
 
-@receiver(post_save, sender='laundries.Laundry')
-def user_notify_free_delivery_promo(sender, instance, created, **kwargs):
-    """
-    When a laundry activates a free pickup/delivery promotion, send a
-    deduplicated push notification to relevant customers and fans.
-    """
-    if not getattr(instance, 'free_delivery_promo_enabled', False):
-        return
+def booking_admin_summary(order):
+    """The money and logistics lines an admin needs to dispatch a rider."""
+    def km(value):
+        return f"{value} km" if value is not None else "n/a"
 
-    def _do():
-        from marketplace.services.notification_service import NotificationService
-        from marketplace.models import Notification
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        from ordering.models import Order
-        from laundries.models.favorite import Favorite
-
-        promo_ver = str(instance.promo_start_at or getattr(instance, 'updated_at', None))
-
-        favorited_user_ids = set(Favorite.objects.filter(laundry=instance).values_list('user_id', flat=True))
-        past_customer_ids = set(Order.objects.filter(laundry=instance).values_list('user_id', flat=True))
-        target_ids = favorited_user_ids | past_customer_ids
-
-        for user_id in target_ids:
-            try:
-                user = User.objects.get(id=user_id)
-                NotificationService.notify_user(
-                    user=user,
-                    title="Free Pickup & Delivery! 🚚",
-                    body=f"{instance.name} is offering FREE pickup & delivery.",
-                    category='PROMO_FREE_DELIVERY',
-                    priority=Notification.Priority.NORMAL,
-                    action_url=f"connect://laundry/{instance.id}",
-                    dedup_key=f"promo_free_del:{instance.id}:{user.id}:{promo_ver}",
-                    push=True,
-                )
-            except Exception:
-                continue
-    _safe(_do)
-
+    lines = [
+        f"Order {order.order_no}: {order.get_payment_method_display()} ({order.get_payment_status_display()})",
+        f"Items: GHS {order.items_total}",
+    ]
+    if order.delivery_fees_in_app:
+        lines += [
+            f"Pickup: GHS {order.pickup_fee} ({km(order.pickup_distance_km)})",
+            f"Delivery: GHS {order.delivery_fee} ({km(order.delivery_distance_km)})",
+        ]
+        if order.is_free_delivery_promo:
+            lines.append(
+                f"Promo: customer transport waived; rider cost GHS {order.logistics_nominal_total} "
+                f"funded by {order.promo_funding_source}"
+            )
+    elif order.is_free_delivery_promo:
+        lines.append("Transport: FREE (laundry promo)")
+    else:
+        lines.append("Transport: not included; confirm with the customer")
+    if order.discount_amount:
+        lines.append(f"Discount: -GHS {order.discount_amount}")
+    lines.append(f"Grand total: GHS {order.total_amount}")
+    return "\n".join(lines)
 
 
 @receiver(post_save, sender=Order)

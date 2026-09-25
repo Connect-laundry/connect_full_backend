@@ -16,7 +16,7 @@ from rest_framework import viewsets
 from users.models import User
 from ..models.laundry import Laundry, OwnerAuditLog
 from ..models.opening_hours import OpeningHours, HolidayOverride
-from ..serializers.my_laundry import MyLaundrySerializer, HolidayOverrideSerializer, CopyTodayHoursSerializer, ToggleVacationModeResponseSerializer
+from ..serializers.my_laundry import MyLaundrySerializer, HolidayOverrideSerializer, CopyTodayHoursSerializer, ToggleVacationModeResponseSerializer, OwnerPromotionSerializer
 from .pricing import get_owner_laundry
 
 from ..permissions import IsOwnerRole
@@ -426,3 +426,79 @@ class OwnerPayoutAccountView(APIView):
             )
 
 
+
+
+class OwnerPromotionView(APIView):
+    """
+    GET /api/v1/laundries/dashboard/my-laundry/promotion/  -> the owner's promo
+    PUT /api/v1/laundries/dashboard/my-laundry/promotion/  -> change it
+
+    Owners may only run laundry-funded free pickup/delivery promos. When a new
+    campaign starts, the laundry's own customers get one push (see
+    laundries.services.promo_notifications); edits to a running promo do not
+    re-notify anyone.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    renderer_classes = [StandardResponseRenderer]
+    serializer_class = OwnerPromotionSerializer
+
+    def _laundry_or_error(self, request):
+        laundry = get_owner_laundry(request.user)
+        if laundry is None:
+            return None, Response(
+                {'status': 'error', 'message': 'Register a laundry first.', 'data': None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return laundry, None
+
+    @extend_schema(responses={200: OwnerPromotionSerializer})
+    def get(self, request):
+        laundry, error = self._laundry_or_error(request)
+        if error:
+            return error
+        return Response({
+            'status': 'success',
+            'message': 'Promotion loaded.',
+            'data': OwnerPromotionSerializer(laundry).data,
+        })
+
+    @extend_schema(request=OwnerPromotionSerializer, responses={200: OwnerPromotionSerializer})
+    def put(self, request):
+        laundry, error = self._laundry_or_error(request)
+        if error:
+            return error
+        serializer = OwnerPromotionSerializer(laundry, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(
+                {'status': 'error', 'message': 'Please check the promotion details.', 'data': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        promo_fields = [
+            'free_delivery_promo_enabled', 'promo_scope', 'promo_name', 'promo_start_at',
+            'promo_end_at', 'promo_min_order_value', 'promo_max_distance_km',
+        ]
+        before = {f: str(getattr(laundry, f)) for f in promo_fields}
+        with transaction.atomic():
+            for field, value in serializer.validated_data.items():
+                setattr(laundry, field, value)
+            # Only Simame admins can fund a promo on the platform's account.
+            laundry.promo_funding_source = Laundry.PromoFundingSource.LAUNDRY
+            laundry.save(update_fields=promo_fields + ['promo_funding_source', 'updated_at'])
+            after = {f: str(getattr(laundry, f)) for f in promo_fields}
+            OwnerAuditLog.objects.create(
+                laundry=laundry,
+                actor=request.user,
+                action='UPDATE_PROMOTION',
+                details={
+                    'before': {k: v for k, v in before.items() if before[k] != after[k]},
+                    'after': {k: v for k, v in after.items() if before[k] != after[k]},
+                },
+            )
+        laundry.refresh_from_db()
+        return Response({
+            'status': 'success',
+            'message': 'Promotion saved.',
+            'data': OwnerPromotionSerializer(laundry).data,
+        })
+
+    patch = put

@@ -92,11 +92,18 @@ def platform_charge_pesewas(order):
     amount split out matches the amount the customer was shown. Zero while the
     app is free to use, which sends the laundry the whole payment.
     """
-    commission = getattr(order, 'platform_fee', None)
-    if commission is None:
-        return 0
+    from .settlement_service import laundry_funded_subsidy, transport_collected
+
     try:
-        pesewas = (Decimal(str(commission)) * 100).quantize(Decimal('1'))
+        commission = Decimal(str(getattr(order, 'platform_fee', None) or 0))
+        # Transport is kept by the platform to pay the rider: what the customer
+        # paid for it, plus what a laundry-funded promo owes on their behalf.
+        # Without this the subaccount would receive the rider's money.
+        charge = commission + transport_collected(order) + laundry_funded_subsidy(order)
+        total = Decimal(str(getattr(order, 'total_amount', None) or 0))
+        if total > 0:
+            charge = min(charge, total)
+        pesewas = (charge * 100).quantize(Decimal('1'))
     except (TypeError, ValueError, ArithmeticError):
         return 0
     return max(0, int(pesewas))

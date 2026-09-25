@@ -261,6 +261,16 @@ def _build_charges_and_payment(order: Order) -> dict:
             "total": breakdown["total"],
             "currency": breakdown["currency"],
             "delivery_fees_in_app": breakdown["delivery_fees_in_app"],
+            # Transport as frozen at booking; the app renders these as-is.
+            **{
+                key: breakdown.get(key)
+                for key in (
+                    "transport_status", "pricing_enabled", "pickup_distance_km", "delivery_distance_km",
+                    "total_logistics_fee", "logistics_discount", "logistics_notice",
+                    "is_promo_free_delivery", "free_pickup", "free_delivery", "promo_label",
+                    "promo_name", "promo_message", "promo_funding_source",
+                )
+            },
         },
         "payment": {
             "status": payment_status,

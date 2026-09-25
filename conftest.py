@@ -31,9 +31,12 @@ def auth_client(authenticated_user):
 
 @pytest.fixture(autouse=True)
 def clear_test_cache():
+    from logistics.models import clear_pricing_cache
     cache.clear()
+    clear_pricing_cache()
     yield
     cache.clear()
+    clear_pricing_cache()
 
 from laundries.models.laundry import Laundry
 from ordering.models import Order

@@ -43,24 +43,31 @@ class TestPriceSnapshot:
 
     def test_a_later_fee_change_does_not_rewrite_history(self):
         # Line-item prices were already snapshotted onto OrderItem. The fees
-        # were not: they were re-read from the laundry profile on every request,
-        # so raising a delivery fee silently restated every past order.
+        # were not: they were re-read on every request, so raising a delivery
+        # rate silently restated every past order.
+        from logistics.models import LogisticsPricingConfig
+        LogisticsPricingConfig.objects.all().delete()
         _, order = _build_order()
-        order.laundry.delivery_fee = Decimal('5.00')
-        order.laundry.save(update_fields=['delivery_fee'])
+        order.pickup_lat = order.delivery_lat = Decimal('5.6100')
+        order.pickup_lng = order.delivery_lng = Decimal('-0.1870')
+        order.save(update_fields=['pickup_lat', 'pickup_lng', 'delivery_lat', 'delivery_lng'])
+        config = LogisticsPricingConfig.objects.create(
+            pricing_enabled=True, is_active=True, effective_from=timezone.now(),
+            pickup_price_per_km='0', delivery_price_per_km='0',
+            pickup_base_fee='0', delivery_base_fee='5.00',
+        )
 
-        with override_settings(DELIVERY_FEES_IN_APP=True):
-            FinanceService.freeze_price_breakdown(order)
-            order.refresh_from_db()
-            original = FinanceService.calculate_price_breakdown(order)
-            assert original['delivery_fee'] == '5.00'
+        FinanceService.freeze_price_breakdown(order)
+        order.refresh_from_db()
+        original = FinanceService.calculate_price_breakdown(order)
+        assert original['delivery_fee'] == '5.00'
 
-            # The laundry triples its delivery fee the next day.
-            order.laundry.delivery_fee = Decimal('15.00')
-            order.laundry.save(update_fields=['delivery_fee'])
-            order.refresh_from_db()
+        # Simame triples the delivery fee the next day.
+        config.delivery_base_fee = Decimal('15.00')
+        config.save()
+        order.refresh_from_db()
 
-            assert FinanceService.calculate_price_breakdown(order) == original
+        assert FinanceService.calculate_price_breakdown(order) == original
 
     def test_a_later_rate_change_does_not_rewrite_history(self):
         _, order = _build_order()
@@ -87,7 +94,6 @@ class TestPriceSnapshot:
 
         assert FinanceService.calculate_price_breakdown(order)['items_total'] == '25.00'
 
-    @override_settings(DELIVERY_FEES_IN_APP=False)
     def test_the_snapshot_records_how_logistics_were_settled(self):
         _, order = _build_order()
         FinanceService.freeze_price_breakdown(order)

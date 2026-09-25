@@ -136,6 +136,10 @@ class BookingViewSet(viewsets.GenericViewSet):
         Provides a real-time price breakdown before the user clicks 'Confirm Order'.
         Uses FinanceService and LaundryService for vendor-specific accuracy.
         """
+        from logistics.services.client_gate import update_required
+        blocked = update_required(request)
+        if blocked is not None:
+            return blocked
         laundry_id = request.data.get('laundry')
         items_data = request.data.get('items', [])
         
@@ -158,15 +162,7 @@ class BookingViewSet(viewsets.GenericViewSet):
         
         pickup_lat = request.data.get('pickup_lat')
         pickup_lng = request.data.get('pickup_lng')
-        
-        # Build a transient order-like object in memory for preview pricing only.
-        temp_order = Order(
-            laundry=laundry,
-            user=request.user,
-            pickup_lat=Decimal(str(pickup_lat)) if pickup_lat is not None else None,
-            pickup_lng=Decimal(str(pickup_lng)) if pickup_lng is not None else None
-        )
-        
+
         total_items_price = Decimal('0.00')
         errors = []
         for data in items_data:
@@ -191,31 +187,32 @@ class BookingViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
                 
-        # 3. Use FinanceService & LogisticsPricingService for authoritative quote
+        # 3. One authoritative quote and one money formula, shared with order
+        # creation, so the total shown here is the total that gets charged.
         from ..services.finance_service import FinanceService
         from logistics.services.pricing_service import LogisticsPricingService
-        
-        delivery_lat = request.data.get('delivery_lat')
-        delivery_lng = request.data.get('delivery_lng')
 
         quote = LogisticsPricingService.calculate_quote(
             laundry=laundry,
             pickup_lat=pickup_lat,
             pickup_lng=pickup_lng,
-            delivery_lat=delivery_lat,
-            delivery_lng=delivery_lng,
+            delivery_lat=request.data.get('delivery_lat'),
+            delivery_lng=request.data.get('delivery_lng'),
+            items_total=total_items_price,
         )
-
-        delivery_fee = quote['delivery_fee']
-        pickup_fee = quote['pickup_fee']
+        breakdown = FinanceService.compose_breakdown(total_items_price, quote)
 
         outside_service_area = False
         warning_msg = None
         if pickup_lat is not None and pickup_lng is not None:
-            lat = float(pickup_lat)
-            lng = float(pickup_lng)
-            
-            if getattr(laundry, 'service_area_polygon', None):
+            try:
+                lat = float(pickup_lat)
+                lng = float(pickup_lng)
+            except (TypeError, ValueError):
+                lat = lng = None
+            if lat is None:
+                pass
+            elif getattr(laundry, 'service_area_polygon', None):
                 inside = FinanceService.is_point_in_polygon(lng, lat, laundry.service_area_polygon)
                 if not inside:
                     outside_service_area = True
@@ -228,42 +225,13 @@ class BookingViewSet(viewsets.GenericViewSet):
                     outside_service_area = True
                     warning_msg = f"Coordinates are {distance:.2f} km away, which is outside the laundry's {laundry.service_radius_km} km service radius."
 
-        # Platform fee & Tax logic. Both are zero-rated by default.
-        tax = FinanceService.calculate_tax_amount(total_items_price)
-        platform_fee = FinanceService.calculate_platform_fee(total_items_price)
-
-        total = total_items_price + delivery_fee + pickup_fee + tax + platform_fee
+        breakdown["outside_service_area"] = outside_service_area or quote['outside_service_area']
+        breakdown["warning"] = warning_msg or quote['warning']
 
         return Response({
             "status": "success",
             "message": "Price breakdown calculated successfully.",
-            "data": {
-                "items_total": str(total_items_price.quantize(Decimal('0.01'))),
-                "delivery_fee": str(delivery_fee.quantize(Decimal('0.01'))),
-                "pickup_fee": str(pickup_fee.quantize(Decimal('0.01'))),
-                "total_logistics_fee": str(quote['total_logistics_fee']),
-                "pickup_distance_km": str(quote['pickup_distance_km']) if quote['pickup_distance_km'] is not None else None,
-                "delivery_distance_km": str(quote['delivery_distance_km']) if quote['delivery_distance_km'] is not None else None,
-                "pickup_rate_per_km": str(quote['pickup_rate_per_km']),
-                "delivery_rate_per_km": str(quote['delivery_rate_per_km']),
-                "nominal_pickup_fee": str(quote['nominal_pickup_fee']),
-                "nominal_delivery_fee": str(quote['nominal_delivery_fee']),
-                "nominal_logistics_total": str(quote['nominal_logistics_total']),
-                "is_promo_free_delivery": quote['is_promo_free_delivery'],
-                "promo_funding_source": quote['promo_funding_source'],
-                "promo_label": quote['promo_label'],
-                "logistics_discount": str(quote['logistics_discount']),
-                "pricing_version": quote['pricing_version'],
-                "logistics_pricing_version": quote['pricing_version'],
-                "logistics_notice": quote['logistics_notice'],
-                "tax": str(tax.quantize(Decimal('0.01'))),
-                "platform_fee": str(platform_fee.quantize(Decimal('0.01'))),
-                "total": str(total.quantize(Decimal('0.01'))),
-                "currency": "GHS",
-                "delivery_fees_in_app": quote['delivery_fees_in_app'],
-                "outside_service_area": outside_service_area or quote['outside_service_area'],
-                "warning": warning_msg or quote['warning']
-            }
+            "data": breakdown,
         })
 
 
@@ -274,6 +242,10 @@ class BookingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['post'])
     def create(self, request):
+        from logistics.services.client_gate import update_required
+        blocked = update_required(request)
+        if blocked is not None:
+            return blocked
         idempotency_key = request.headers.get("X-Idempotency-Key")
         cache_key = None
         if idempotency_key:
@@ -304,7 +276,7 @@ class BookingViewSet(viewsets.GenericViewSet):
             try:
                 order = serializer.save()
             except ValidationError as exc:
-                return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                return Response(_booking_error_payload(exc.detail), status=status.HTTP_400_BAD_REQUEST)
 
             # A pay-after-quote order has no price yet, so there is nothing to
             # charge. It waits for the laundry's invoice, which the customer
@@ -362,7 +334,35 @@ class BookingViewSet(viewsets.GenericViewSet):
                 )
 
             return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_booking_error_payload(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+
+def _booking_error_payload(detail):
+    """
+    Field errors as DRF reports them, plus a flat machine-readable `code`
+    (STALE_QUOTE, LOGISTICS_QUOTE_UNAVAILABLE) the app can switch on.
+    """
+    if not isinstance(detail, dict):
+        return detail
+    payload = dict(detail)
+    code = payload.get('code')
+    if isinstance(code, (list, tuple)):
+        code = code[0] if code else None
+    if code is not None:
+        payload['code'] = str(code)
+        if 'message' not in payload:
+            for key, value in payload.items():
+                if key in ('code', 'updated_total'):
+                    continue
+                text = value[0] if isinstance(value, (list, tuple)) and value else value
+                if isinstance(text, str) and text:
+                    payload['message'] = text
+                    break
+    updated_total = payload.get('updated_total')
+    if isinstance(updated_total, (list, tuple)) and updated_total:
+        payload['updated_total'] = str(updated_total[0])
+    return payload
+
 
 class OrderViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
     """Viewset for managing and tracking orders."""
@@ -384,6 +384,13 @@ class OrderViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
         if self.action in ['list', 'retrieve', 'active']:
             return OrderDetailSerializer
         return OrderCreateSerializer
+
+    def create(self, request, *args, **kwargs):
+        from logistics.services.client_gate import update_required
+        blocked = update_required(request)
+        if blocked is not None:
+            return blocked
+        return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=['get'], url_path='price-breakdown')
     def price_breakdown(self, request, pk=None):

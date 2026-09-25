@@ -129,6 +129,13 @@ class Order(models.Model):
     promo_funding_source = models.CharField(max_length=20, blank=True, default='')
     logistics_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     logistics_notice = models.TextField(blank=True, default='')
+    #: What the rider is owed per leg, before any promo. `pickup_fee` and
+    #: `delivery_fee` are what the customer pays; the gap is `logistics_discount`.
+    nominal_pickup_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    nominal_delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    logistics_nominal_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    promo_scope = models.CharField(max_length=24, blank=True, default='')
+    promo_name = models.CharField(max_length=80, blank=True, default='')
 
 
     pickup_date = models.DateTimeField()

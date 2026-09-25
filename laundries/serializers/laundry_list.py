@@ -32,6 +32,9 @@ class LaundryListSerializer(SafeMediaModelSerializer):
     imageUrl = serializers.SerializerMethodField()
     avgPrice = serializers.SerializerMethodField()
     minServicePrice = serializers.SerializerMethodField()
+    # Transport status and any running free pickup/delivery promo, from the
+    # admin pricing config, so the app never hardcodes whether fees apply.
+    logistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Laundry
@@ -40,7 +43,7 @@ class LaundryListSerializer(SafeMediaModelSerializer):
             'reviewsCount', 'isOpen', 'is_open_now', 'status_as_of', 'next_open_at',
             'accepts_future_bookings', 'vacation_mode', 'priceRange', 'pricingModel',
             'isFavorite', 'estimatedDelivery', 'minOrder', 'deliveryFee', 'avgPrice',
-            'minServicePrice', 'latitude', 'longitude', 'isFeatured'
+            'minServicePrice', 'latitude', 'longitude', 'isFeatured', 'logistics'
         )
 
     @staticmethod
@@ -61,6 +64,11 @@ class LaundryListSerializer(SafeMediaModelSerializer):
     @extend_schema_field(OpenApiTypes.FLOAT)
     def get_minServicePrice(self, obj):
         return self._money(getattr(obj, 'min_service_price', None))
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_logistics(self, obj):
+        from logistics.services.pricing_service import laundry_logistics_summary
+        return laundry_logistics_summary(obj)
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):

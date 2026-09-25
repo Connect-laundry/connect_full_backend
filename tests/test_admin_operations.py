@@ -224,15 +224,17 @@ class TestEventTriggers:
             longitude=-0.1, phone_number='0240000001', status=Laundry.ApprovalStatus.PENDING)
         assert _admin_notifs(category='LAUNDRY_PENDING').exists()
 
-    def test_new_order_notifies_admins(self, customer):
+    def test_new_order_notifies_admins(self, customer, django_capture_on_commit_callbacks):
         owner = User.objects.create_user(
             email='ow3@example.com', phone='233466666666', password='x', role=User.Role.OWNER)
         laundry = Laundry.objects.create(
             name='Order Shop', owner=owner, address='Accra', latitude=5.6,
             longitude=-0.1, phone_number='0240000002')
-        Order.objects.create(
-            user=customer, laundry=laundry, status='PENDING',
-            total_amount=10, pickup_date=timezone.now())
+        # Sent once the booking commits, so it carries the frozen prices.
+        with django_capture_on_commit_callbacks(execute=True):
+            Order.objects.create(
+                user=customer, laundry=laundry, status='PENDING',
+                total_amount=10, pickup_date=timezone.now())
         assert _admin_notifs(category='NEW_BOOKING').exists()
 
     def test_payment_success_notifies_admin_and_customer(self, customer):

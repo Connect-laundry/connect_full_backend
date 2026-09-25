@@ -176,8 +176,13 @@ class Laundry(models.Model):
 
     # --- Free Pickup & Delivery Promotion ---
     class PromoFundingSource(models.TextChoices):
-        LAUNDRY = 'LAUNDRY', _('Laundry Funded')
-        PLATFORM = 'PLATFORM', _('Platform Funded')
+        LAUNDRY = 'LAUNDRY', _('Laundry funded (deducted from laundry payout)')
+        SIMAME = 'SIMAME', _('Simame funded (platform promotional cost)')
+
+    class PromoScope(models.TextChoices):
+        PICKUP_AND_DELIVERY = 'PICKUP_AND_DELIVERY', _('Free pickup & delivery')
+        PICKUP_ONLY = 'PICKUP_ONLY', _('Free pickup only')
+        DELIVERY_ONLY = 'DELIVERY_ONLY', _('Free delivery only')
 
     free_delivery_promo_enabled = models.BooleanField(
         _('free pickup & delivery promo enabled'),
@@ -200,29 +205,73 @@ class Laundry(models.Model):
         max_length=20,
         choices=PromoFundingSource.choices,
         default=PromoFundingSource.LAUNDRY,
-        help_text=_("Who funds the rider logistics subsidy for this promo.")
+        help_text=_("Who pays the rider for the transport the customer gets free. Owners can only choose laundry funded.")
     )
+    promo_scope = models.CharField(
+        _('promo covers'),
+        max_length=24,
+        choices=PromoScope.choices,
+        default=PromoScope.PICKUP_AND_DELIVERY,
+    )
+    promo_name = models.CharField(_('promo name'), max_length=80, blank=True, default='')
+    promo_min_order_value = models.DecimalField(
+        _('promo minimum order (GHS)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Optional. Orders whose items total is below this pay normal transport."),
+    )
+    #: Identifies one campaign. A fresh id is minted each time the promo is
+    #: switched on (or restarted after it ended), and the customer push is
+    #: de-duplicated on it, so editing a running promo never re-notifies anyone.
+    promo_campaign_id = models.UUIDField(null=True, blank=True, editable=False)
+    promo_notified_campaign_id = models.UUIDField(null=True, blank=True, editable=False)
+    promo_last_notified_at = models.DateTimeField(null=True, blank=True, editable=False)
 
-    def is_free_delivery_promo_active(self, distance_km=None) -> bool:
-        """
-        Determines whether the free delivery promo is currently active and applicable
-        for the given distance in km.
-        """
+    @property
+    def promo_covers_pickup(self) -> bool:
+        return self.promo_scope in (self.PromoScope.PICKUP_AND_DELIVERY, self.PromoScope.PICKUP_ONLY)
+
+    @property
+    def promo_covers_delivery(self) -> bool:
+        return self.promo_scope in (self.PromoScope.PICKUP_AND_DELIVERY, self.PromoScope.DELIVERY_ONLY)
+
+    def promo_display_label(self) -> str:
+        return {
+            self.PromoScope.PICKUP_ONLY: 'FREE PICKUP',
+            self.PromoScope.DELIVERY_ONLY: 'FREE DELIVERY',
+        }.get(self.promo_scope, 'FREE PICKUP & DELIVERY')
+
+    def is_promo_running(self, now=None) -> bool:
+        """Switched on and inside its date window. Ignores per-order limits."""
         if not self.free_delivery_promo_enabled:
             return False
         from django.utils import timezone
-        now = timezone.now()
+        now = now or timezone.now()
         if self.promo_start_at and now < self.promo_start_at:
             return False
         if self.promo_end_at and now > self.promo_end_at:
             return False
-        if distance_km is not None and self.promo_max_distance_km is not None:
-            from decimal import Decimal
-            try:
+        return True
+
+    def is_free_delivery_promo_active(self, distance_km=None, items_total=None) -> bool:
+        """
+        Whether the promo applies to one order: running, within its distance
+        ceiling, and meeting its minimum order value when one is set.
+        """
+        if not self.is_promo_running():
+            return False
+        from decimal import Decimal, InvalidOperation
+        try:
+            if distance_km is not None and self.promo_max_distance_km is not None:
                 if Decimal(str(distance_km)) > Decimal(str(self.promo_max_distance_km)):
                     return False
-            except Exception:
-                pass
+            if items_total is not None and self.promo_min_order_value is not None:
+                if Decimal(str(items_total)) < Decimal(str(self.promo_min_order_value)):
+                    return False
+        except (InvalidOperation, TypeError, ValueError):
+            return False
         return True
 
     
@@ -294,7 +343,43 @@ class Laundry(models.Model):
                 self.payout_phone_normalized = normalize_phone(self.payout_phone)
             except PhoneValidationError:
                 pass
+        started_campaign = self._start_promo_campaign_if_new(kwargs)
         super().save(*args, **kwargs)
+        if started_campaign or (
+            self.free_delivery_promo_enabled
+            and self.promo_campaign_id
+            and self.promo_campaign_id != self.promo_notified_campaign_id
+        ):
+            from django.db import transaction
+            from laundries.services.promo_notifications import announce_promo_campaign
+            laundry_id, campaign_id = self.pk, self.promo_campaign_id
+            transaction.on_commit(lambda: announce_promo_campaign(laundry_id, campaign_id))
+
+    def _start_promo_campaign_if_new(self, save_kwargs) -> bool:
+        """
+        Mint a new campaign id when the promo is switched on, or restarted after
+        its previous window ended. Edits to a running promo keep the same id.
+        """
+        if not self.free_delivery_promo_enabled:
+            return False
+        is_new = self.promo_campaign_id is None
+        if not is_new and self.pk and not self._state.adding:
+            previous = (
+                Laundry.objects.filter(pk=self.pk)
+                .values('free_delivery_promo_enabled', 'promo_end_at')
+                .first()
+            )
+            if previous is not None:
+                from django.utils import timezone
+                ended = previous['promo_end_at'] is not None and previous['promo_end_at'] < timezone.now()
+                is_new = (not previous['free_delivery_promo_enabled']) or ended
+        if not is_new:
+            return False
+        self.promo_campaign_id = uuid.uuid4()
+        update_fields = save_kwargs.get('update_fields')
+        if update_fields is not None:
+            save_kwargs['update_fields'] = list(set(update_fields) | {'promo_campaign_id'})
+        return True
 
     # We keep it as a normal field but handle the case where GDAL is missing
     # in the migrations or local environment.

@@ -1,4 +1,6 @@
 # pyre-ignore[missing-module]
+import uuid
+
 from rest_framework import viewsets, permissions
 # pyre-ignore[missing-module]
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -101,3 +103,71 @@ class TrackingViewSet(viewsets.ReadOnlyModelViewSet):
         if order_id:
             return self.queryset.filter(order_id=order_id, order__in=visible_orders).select_related('order').distinct()
         return self.queryset.filter(order__in=visible_orders).select_related('order').distinct()
+
+
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+
+class LogisticsPricingView(APIView):
+    """
+    GET /api/v1/logistics/pricing/
+
+    The transport pricing in force right now, straight from Django admin.
+    Public and read-only: it is what the app shows before an address is known.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        from logistics.services.pricing_service import laundry_logistics_summary
+        summary = laundry_logistics_summary(None)
+        summary.pop('promo', None)
+        return Response({"status": "success", "message": "Current transport pricing.", "data": summary})
+
+
+class LogisticsQuoteView(APIView):
+    """
+    POST /api/v1/logistics/quote/
+    {"laundry": <id>, "pickup_lat", "pickup_lng", "delivery_lat", "delivery_lng", "items_total"?}
+
+    Transport-only quote for one trip. The full checkout breakdown (items +
+    transport) comes from POST /api/v1/booking/estimate/, which uses the same
+    quote. Neither accepts a client-supplied distance or fee.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from laundries.models.laundry import Laundry
+        from logistics.services.client_gate import update_required
+        from logistics.services.pricing_service import LogisticsPricingService
+
+        blocked = update_required(request)
+        if blocked is not None:
+            return blocked
+
+        laundry = Laundry.objects.filter(pk=request.data.get('laundry'), is_active=True).first() \
+            if _is_uuid(request.data.get('laundry')) else None
+        if laundry is None:
+            return Response({"status": "error", "message": "Laundry not found.", "data": {}}, status=404)
+        quote = LogisticsPricingService.calculate_quote(
+            laundry=laundry,
+            pickup_lat=request.data.get('pickup_lat'),
+            pickup_lng=request.data.get('pickup_lng'),
+            delivery_lat=request.data.get('delivery_lat'),
+            delivery_lng=request.data.get('delivery_lng'),
+            items_total=request.data.get('items_total'),
+        )
+        return Response({
+            "status": "success",
+            "message": "Transport quote calculated.",
+            "data": LogisticsPricingService.serialize_quote(quote),
+        })
+
+
+def _is_uuid(value):
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (TypeError, ValueError):
+        return False

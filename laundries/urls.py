@@ -20,7 +20,8 @@ from .views.dashboard import (
 )
 from .views.my_laundry import (
     MyLaundryView, MyLaundryDetailView, OwnerPayoutAccountView,
-    CopyMondayHoursView, CopyTodayHoursView, ToggleVacationModeView, HolidayOverrideViewSet
+    CopyMondayHoursView, CopyTodayHoursView, ToggleVacationModeView, HolidayOverrideViewSet,
+    OwnerPromotionView,
 )
 from .views.pricing import (
     PricingItemViewSet, WeightPricingView,
@@ -57,6 +58,7 @@ urlpatterns = [
     path('dashboard/my-laundry/hours/copy-monday/', CopyMondayHoursView.as_view(), name='dashboard-copy-monday-hours'),
     path('dashboard/my-laundry/hours/copy-today/', CopyTodayHoursView.as_view(), name='dashboard-copy-today-hours'),
     path('dashboard/my-laundry/toggle-vacation/', ToggleVacationModeView.as_view(), name='dashboard-toggle-vacation'),
+    path('dashboard/my-laundry/promotion/', OwnerPromotionView.as_view(), name='dashboard-my-laundry-promotion'),
     path('dashboard/weight-pricing/', WeightPricingView.as_view(), name='dashboard-weight-pricing'),
     path('dashboard/geocode/', GeocodeView.as_view(), name='dashboard-geocode'),
     path('dashboard/services/<uuid:id>/', ServiceStatusUpdateView.as_view(), name='dashboard-service-update'),

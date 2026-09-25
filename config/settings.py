@@ -826,18 +826,13 @@ PAYSTACK_SPLIT_ENABLED = os.getenv('PAYSTACK_SPLIT_ENABLED', 'true').lower() in 
 # 'account' (the platform) or 'subaccount' (the laundry).
 PAYSTACK_SPLIT_BEARER = os.getenv('PAYSTACK_SPLIT_BEARER', 'account')
 
-# Logistics settlement
+# Logistics pricing
 # -------------------------------------------------------------------------
-# The platform operates no courier fleet: laundries collect and return orders
-# themselves. Until in-app logistics billing is switched on, pickup and
-# delivery are arranged and paid directly between the customer and the
-# laundry, and the app must not charge or quote a fee it cannot honour.
-#
-# Flipping this to True activates the per-laundry DeliveryZonePricing bands
-# that already exist. Do not flip it before vendors have configured zones and
-# there is a payout path back to them, or customers will be charged money the
-# platform has no way to forward.
-DELIVERY_FEES_IN_APP = os.getenv('DELIVERY_FEES_IN_APP', 'false').lower() in ('1', 'true', 'yes')
+# Pickup and delivery pricing is controlled only from Django admin
+# (Logistics > Logistics Pricing Configurations). The old
+# DELIVERY_FEES_IN_APP environment flag and per-laundry zone fees are retired
+# so there is exactly one source of transport prices.
+
 
 # Geocoding (business-location resolution for owner onboarding)
 # Provider: 'google' | 'mapbox' | '' (disabled). When disabled, the geocode

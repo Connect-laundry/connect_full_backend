@@ -1,6 +1,8 @@
 import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock
+from django.utils import timezone
+from logistics.models import LogisticsPricingConfig
 from ordering.services.finance_service import FinanceService
 
 
@@ -8,24 +10,43 @@ from ordering.services.finance_service import FinanceService
 def mock_order():
     order = MagicMock()
     order.items.aggregate.return_value = {'total': Decimal('100.00')}
-    order.laundry.delivery_fee = Decimal('10.00')
-    order.laundry.pickup_fee = Decimal('0.00')
+    order.laundry.latitude = Decimal('5.600000')
+    order.laundry.longitude = Decimal('-0.180000')
+    order.laundry.service_radius_km = None
+    order.laundry.is_free_delivery_promo_active.return_value = False
+    order.pickup_lat = order.delivery_lat = Decimal('5.610000')
+    order.pickup_lng = order.delivery_lng = Decimal('-0.180000')
     order.coupon = None
     return order
 
 
-@pytest.fixture
-def logistics_billed_in_app(settings):
-    """Option B: the app quotes and collects the laundry's logistics fee."""
-    settings.DELIVERY_FEES_IN_APP = True
-    return settings
+@pytest.fixture(autouse=True)
+def active_config(monkeypatch):
+    """No pricing row by default: transport is not billed in the app."""
+    holder = {'config': None}
+    monkeypatch.setattr(LogisticsPricingConfig, 'get_active', classmethod(lambda cls: holder['config']))
+    return holder
 
 
 @pytest.fixture
-def logistics_settled_directly(settings):
-    """Option A (current): the customer pays the laundry for pickup/delivery."""
-    settings.DELIVERY_FEES_IN_APP = False
-    return settings
+def logistics_billed_in_app(active_config):
+    """Admin has switched pricing on: flat GHS 10 delivery, free pickup leg."""
+    active_config['config'] = LogisticsPricingConfig(
+        pricing_enabled=True, is_active=True, effective_from=timezone.now(), version=3,
+        pickup_price_per_km=Decimal('0'), delivery_price_per_km=Decimal('0'),
+        pickup_base_fee=Decimal('0'), delivery_base_fee=Decimal('10.00'),
+        pickup_min_fee=Decimal('0'), delivery_min_fee=Decimal('0'),
+        max_service_distance_km=Decimal('25'), distance_rounding_precision=1,
+        minimum_billable_distance_km=Decimal('0'), road_distance_factor=Decimal('1.00'),
+    )
+    return active_config
+
+
+@pytest.fixture
+def logistics_settled_directly(active_config):
+    """Pricing off in admin (the launch configuration)."""
+    active_config['config'] = None
+    return active_config
 
 
 @pytest.fixture
@@ -38,7 +59,6 @@ def free_to_use(settings):
     """
     settings.PLATFORM_FEE_RATE = 0.00
     settings.TAX_RATE = 0.00
-    settings.DELIVERY_FEES_IN_APP = False
     return settings
 
 
@@ -134,19 +154,22 @@ class TestLogisticsSettledDirectly:
 
 
 class TestLogisticsBilledInApp:
-    """Option B, switched on by DELIVERY_FEES_IN_APP once payouts exist."""
+    """Transport billed in the app, priced only from the admin config."""
 
-    def test_delivery_fee_comes_from_the_laundry(
+    def test_delivery_fee_comes_from_the_admin_config(
         self, mock_order, logistics_billed_in_app
     ):
         assert FinanceService.calculate_delivery_fee(mock_order) == Decimal('10.00')
 
-    def test_no_platform_fallback_when_the_laundry_has_no_fee(
+    def test_laundry_profile_fees_are_never_used(
         self, mock_order, logistics_billed_in_app
     ):
-        # The platform performs no deliveries, so it can never be the origin of
-        # a delivery charge. A laundry with nothing configured charges nothing.
-        mock_order.laundry.delivery_fee = None
+        # The old per-laundry flat fee is retired: one pricing system only.
+        mock_order.laundry.delivery_fee = Decimal('99.00')
+        assert FinanceService.calculate_delivery_fee(mock_order) == Decimal('10.00')
+
+    def test_no_fee_while_pricing_is_off(self, mock_order, logistics_settled_directly):
+        mock_order.laundry.delivery_fee = Decimal('10.00')
         assert FinanceService.calculate_delivery_fee(mock_order) == Decimal('0.00')
 
     def test_breakdown_includes_logistics(self, mock_order, logistics_billed_in_app):

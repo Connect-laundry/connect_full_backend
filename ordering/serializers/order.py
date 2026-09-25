@@ -262,6 +262,32 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         data['pickup_address'] = pickup_address
         data['delivery_address'] = delivery_address
 
+        # Transport is priced from the map pins, on the server. When pricing is
+        # on, an order whose trip cannot be priced (missing or invalid pins,
+        # too far) is refused rather than created with a guessed or zero fee.
+        if laundry:
+            from logistics.services.pricing_service import LogisticsPricingService
+            delivery_lat, delivery_lng = data.get('delivery_lat'), data.get('delivery_lng')
+            if (delivery_lat is None or delivery_lng is None) and delivery_address != pickup_address:
+                from ..services.finance_service import FinanceService
+                if FinanceService.delivery_fees_in_app():
+                    raise serializers.ValidationError({
+                        "delivery_address": "Choose your delivery location on the map so the delivery fee can be calculated.",
+                        "code": "LOGISTICS_QUOTE_UNAVAILABLE",
+                    })
+            quote = LogisticsPricingService.calculate_quote(
+                laundry=laundry,
+                pickup_lat=pickup_lat,
+                pickup_lng=pickup_lng,
+                delivery_lat=delivery_lat,
+                delivery_lng=delivery_lng,
+            )
+            if not quote['quote_available']:
+                raise serializers.ValidationError({
+                    "pickup_address": quote['unavailable_reason'],
+                    "code": "LOGISTICS_QUOTE_UNAVAILABLE",
+                })
+
         pricing_mode = data.get('pricing_mode') or Order.PricingMode.BY_ITEM
         items = data.get('items') or []
         weight = data.get('estimated_weight_kg')

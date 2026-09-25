@@ -186,6 +186,10 @@ class TestPhase2Security:
             total_amount='127.00',
             pickup_address='Customer Address',
             delivery_address='Customer Delivery',
+            pickup_lat='5.6100',
+            pickup_lng='-0.1870',
+            delivery_lat='5.6100',
+            delivery_lng='-0.1870',
         )
         OrderItem.objects.create(
             order=order,
@@ -196,9 +200,17 @@ class TestPhase2Security:
             price='100.00',
         )
 
-        # Logistics billing on: every fee the server charges is in the payload,
-        # so the client never has to compute money for itself.
-        with override_settings(ROOT_URLCONF='config.urls', DELIVERY_FEES_IN_APP=True):
+        # Logistics billing on in admin: every fee the server charges is in the
+        # payload, so the client never has to compute money for itself. Flat
+        # base fees keep the arithmetic readable.
+        from logistics.models import LogisticsPricingConfig
+        LogisticsPricingConfig.objects.all().delete()
+        config = LogisticsPricingConfig.objects.create(
+            pricing_enabled=True, is_active=True, effective_from=timezone.now() - timedelta(minutes=1),
+            pickup_price_per_km='0.00', delivery_price_per_km='0.00',
+            pickup_base_fee='5.00', delivery_base_fee='10.00',
+        )
+        with override_settings(ROOT_URLCONF='config.urls'):
             client, _ = _auth_client(customer, device_id='device-price')
             response = client.get(f'/api/v1/orders/{order.id}/')
 
@@ -216,7 +228,9 @@ class TestPhase2Security:
         # laundry's configured fees are ignored and excluded from the total,
         # and the payload says so rather than leaving a bare 0.00 to be read
         # as free delivery.
-        with override_settings(ROOT_URLCONF='config.urls', DELIVERY_FEES_IN_APP=False):
+        config.pricing_enabled = False
+        config.save()
+        with override_settings(ROOT_URLCONF='config.urls'):
             client, _ = _auth_client(customer, device_id='device-price-direct')
             response = client.get(f'/api/v1/orders/{order.id}/')
 

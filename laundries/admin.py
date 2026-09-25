@@ -64,6 +64,7 @@ class LaundryAdmin(ModelAdmin):
     inlines = [OpeningHoursInline, LaundryPricingItemInline]
     readonly_fields = (
         'id', 'created_at', 'updated_at', 'submitted_at', 'approved_at',
+        'promo_campaign_id', 'promo_last_notified_at',
         'rejected_at', 'changes_requested_at', 'reviewed_by', 'status_reason',
         'logo_preview', 'owner_contact', 'hours_summary',
         'payout_phone_normalized', 'payout_confirmed_at', 'payout_confirmed_by',
@@ -119,15 +120,24 @@ class LaundryAdmin(ModelAdmin):
         ("Free Pickup & Delivery Promotion", {
             "fields": (
                 'free_delivery_promo_enabled',
+                'promo_scope',
+                'promo_name',
                 'promo_funding_source',
-                'promo_max_distance_km',
                 'promo_start_at',
                 'promo_end_at',
+                'promo_min_order_value',
+                'promo_max_distance_km',
+                'promo_campaign_id',
+                'promo_last_notified_at',
             ),
-            "description": "Controlled promotional toggle for free pickup & delivery. Laundry-funded promos have their logistics subsidy settled against the laundry's payout.",
+            "description": (
+                "Free to the customer is not free to the rider: the rider is always paid the full fee. "
+                "Laundry funded: the fee is deducted from the laundry's payout. Simame funded: it is "
+                "recorded as a Simame promotional cost. Switching a promo on notifies the laundry's "
+                "favourites and past customers once per campaign (at most weekly)."
+            ),
         }),
         ("Direct Settlement (Paystack Subaccount)", {
-
             "fields": (
                 'split_payments_enabled',
                 'paystack_subaccount_code',
