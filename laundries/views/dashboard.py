@@ -49,7 +49,11 @@ class DashboardOrderViewSet(viewsets.ReadOnlyModelViewSet, DashboardBaseView):
         laundry = self.get_laundry(self.request)
         if not laundry:
             return Order.objects.none()
-        return Order.objects.filter(laundry=laundry).select_related('user', 'payment')
+        return (
+            Order.objects.filter(laundry=laundry)
+            .select_related('user', 'payment')
+            .prefetch_related('disputes')
+        )
 
 class DashboardStatsView(views.APIView, DashboardBaseView):
     """
@@ -209,7 +213,7 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
 
         settlements = (
             OrderSettlement.objects.filter(laundry=laundry)
-            .select_related('order')
+            .select_related('order', 'payout')
             .order_by('-created_at')[:50]
         )
         payouts = Payout.objects.filter(laundry=laundry).order_by('-created_at')[:20]
@@ -227,15 +231,36 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
                     "cash_collected": str(cash_collected),
                 },
                 "settles_directly": bool(laundry.split_payments_enabled),
+                "payout_account": {
+                    "status": laundry.payout_status,
+                    "method": laundry.payout_method,
+                    "provider": laundry.payout_provider,
+                    "phone": laundry.payout_phone,
+                    "masked_phone": laundry.masked_payout_phone,
+                    "account_name": laundry.payout_account_name,
+                    "is_ready": laundry.is_payout_ready,
+                    "confirmed_at": laundry.payout_confirmed_at.isoformat() if laundry.payout_confirmed_at else None,
+                    "recipient_code_masked": (
+                        laundry.paystack_recipient_code[:8] + "..."
+                        if laundry.paystack_recipient_code else None
+                    ),
+                    "failure_reason": laundry.payout_failure_reason,
+                },
                 "settlements": [
                     {
+                        "id": str(s.id),
+                        "order_id": str(s.order_id) if s.order_id else None,
                         "order_no": s.order.order_no if s.order_id else None,
                         "gross": str(s.gross_amount),
+                        "platform_fee": str(s.platform_commission),
                         "commission": str(s.platform_commission),
                         "net": str(s.net_payable),
                         "status": s.status,
                         "route": s.route,
                         "created_at": s.created_at.isoformat(),
+                        "payout_id": str(s.payout_id) if s.payout_id else None,
+                        "payout_status": s.payout.status if s.payout_id else None,
+                        "paid_at": s.payout.paid_at.isoformat() if s.payout_id and s.payout.paid_at else None,
                     }
                     for s in settlements
                 ],
@@ -246,7 +271,9 @@ class DashboardPayoutsView(views.APIView, DashboardBaseView):
                         "status": p.status,
                         "method": p.method,
                         "reference": p.reference,
+                        "paystack_transfer_code": p.paystack_transfer_code,
                         "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                        "failure_reason": p.failure_reason,
                         "created_at": p.created_at.isoformat(),
                     }
                     for p in payouts

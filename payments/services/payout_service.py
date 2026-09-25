@@ -130,7 +130,16 @@ class PayoutService:
             claimed.status = Payout.Status.PROCESSING
             claimed.reference = reference
             claimed.method = Payout.Method.PAYSTACK
-            claimed.save(update_fields=['status', 'reference', 'method', 'updated_at'])
+            claimed.recipient_code_used = recipient
+            claimed.save(
+                update_fields=[
+                    'status',
+                    'reference',
+                    'method',
+                    'recipient_code_used',
+                    'updated_at',
+                ]
+            )
 
         response = client.initiate_transfer(
             amount=claimed.amount,
@@ -140,10 +149,21 @@ class PayoutService:
         )
 
         if response.get('status'):
+            transfer_code = response.get('data', {}).get('transfer_code', '')
+            with transaction.atomic():
+                claimed.paystack_transfer_code = transfer_code
+                claimed.save(update_fields=['paystack_transfer_code', 'updated_at'])
+
             logger.info(
                 "Payout transfer accepted",
-                extra={"payout_id": str(claimed.id), "amount": str(claimed.amount)},
+                extra={
+                    "payout_id": str(claimed.id),
+                    "amount": str(claimed.amount),
+                    "transfer_code": transfer_code,
+                },
             )
+            from . import payout_notifications
+            transaction.on_commit(lambda: payout_notifications.payout_started(claimed))
             # Stays PROCESSING. Paystack confirms by webhook; treating an
             # accepted request as settled money would be a lie the ledger
             # cannot take back.
@@ -158,18 +178,28 @@ class PayoutService:
                 "Transfer outcome unknown. The payout is left PROCESSING for manual review."
             )
 
-        # A clean rejection: nothing was sent, so the payout can be corrected.
+        # A clean rejection or insufficient balance: nothing was sent.
         message = response.get('message') or 'Transfer was rejected.'
+        is_insufficient_funds = any(
+            w in str(message).lower() for w in ('insufficient', 'balance', 'not sufficient')
+        )
+
         with transaction.atomic():
-            claimed.status = Payout.Status.DRAFT
+            claimed.status = (
+                Payout.Status.WAITING_FOR_FUNDS
+                if is_insufficient_funds
+                else Payout.Status.DRAFT
+            )
             claimed.failure_reason = str(message)[:500]
             claimed.save(update_fields=['status', 'failure_reason', 'updated_at'])
 
         logger.error(
-            # Not `message`: that is a reserved LogRecord attribute and
-            # passing it through `extra` raises rather than logging.
             "Payout transfer rejected",
-            extra={"payout_id": str(claimed.id), "rejection_reason": str(message)},
+            extra={
+                "payout_id": str(claimed.id),
+                "rejection_reason": str(message),
+                "status": claimed.status,
+            },
         )
         raise PayoutError(message)
 
@@ -178,7 +208,10 @@ class PayoutService:
     def mark_transfer_settled(payout, reference=''):
         """Paystack confirmed the transfer landed."""
         from .settlement_service import SettlementService
-        return SettlementService.mark_payout_paid(payout, reference=reference)
+        paid = SettlementService.mark_payout_paid(payout, reference=reference)
+        from . import payout_notifications
+        transaction.on_commit(lambda: payout_notifications.payout_paid(paid))
+        return paid
 
     @staticmethod
     @transaction.atomic
@@ -204,7 +237,109 @@ class PayoutService:
             "Payout failed; settlements returned to the payable pool",
             extra={"payout_id": str(locked.id), "reason": locked.failure_reason},
         )
+        from . import payout_notifications
+        transaction.on_commit(lambda: payout_notifications.payout_needs_attention(locked))
         return locked
+
+    @staticmethod
+    @transaction.atomic
+    def mark_transfer_reversed(payout, reason=''):
+        """
+        Paystack or banking network reversed the transfer.
+        Re-credits the payable ledger so the laundry is owed the funds again.
+        """
+        locked = Payout.objects.select_for_update().get(pk=payout.pk)
+        locked.status = Payout.Status.REVERSED
+        locked.reversed_at = timezone.now()
+        locked.failure_reason = str(reason or 'Transfer reversed')[:500]
+        locked.save(update_fields=['status', 'reversed_at', 'failure_reason', 'updated_at'])
+
+        locked.settlements.filter(
+            status__in=[OrderSettlement.Status.SCHEDULED, OrderSettlement.Status.PAID]
+        ).update(
+            payout=None,
+            status=OrderSettlement.Status.PENDING,
+            updated_at=timezone.now(),
+        )
+        logger.warning(
+            "Payout reversed; settlements restored to payable pool",
+            extra={"payout_id": str(locked.id), "reason": locked.failure_reason},
+        )
+        from . import payout_notifications
+        transaction.on_commit(lambda: payout_notifications.payout_needs_attention(locked))
+        return locked
+
+    @classmethod
+    def execute_automatic_payout_for_laundry(cls, laundry_id, paystack=None):
+        """
+        Zero-Celery/Redis safe automatic payout execution.
+        Runs on commit of an eligible order completion or settlement release.
+        Safely claims pending settlements and triggers Paystack transfer.
+        Never blocks caller or raises unhandled errors into state transitions.
+        """
+        from laundries.models.laundry import Laundry
+        from .settlement_service import SettlementService
+
+        auto_enabled = bool(getattr(settings, 'PAYOUT_AUTOMATIC_ENABLED', True))
+        if not auto_enabled:
+            logger.info("Automatic payouts disabled by PAYOUT_AUTOMATIC_ENABLED.")
+            return None
+
+        try:
+            laundry = Laundry.objects.filter(id=laundry_id).first()
+            if not laundry:
+                return None
+
+            if not laundry.is_payout_ready:
+                logger.info(
+                    "Laundry payout account not ready; settlements held in PENDING pool",
+                    extra={"laundry_id": str(laundry.id), "status": laundry.payout_status},
+                )
+                return None
+
+            # Below the configured floor, wait rather than attempt a transfer.
+            # Paystack enforces its own provider minimum per transfer; a
+            # single small order (e.g. a GHS 0.50 top-up) firing a transfer
+            # attempt on every completion wastes a live API call today and,
+            # if a payout is ever built and then cleanly rejected as
+            # too-small, nothing currently re-sweeps money stuck in that
+            # DRAFT payout's settlements (run_scheduled_payouts only picks up
+            # settlements still in PENDING). Staying under the floor keeps
+            # the money PENDING and outstanding_total()-visible to the owner,
+            # accumulating until either another order or the scheduled run
+            # pushes it over.
+            floor = Decimal(str(getattr(settings, 'PAYOUT_MINIMUM_AMOUNT', '1.00')))
+            if SettlementService.outstanding_total(laundry) < floor:
+                logger.info(
+                    "Outstanding balance below payout floor; carried forward",
+                    extra={"laundry_id": str(laundry.id), "floor": str(floor)},
+                )
+                return None
+
+            # Build payout atomically from all PENDING settlements
+            payout = SettlementService.build_payout(
+                laundry,
+                method=Payout.Method.PAYSTACK,
+                notes="Automatic payout triggered upon order completion."
+            )
+            if payout is None:
+                return None
+
+            if not transfers_enabled():
+                logger.info(
+                    "PAYSTACK_TRANSFERS_ENABLED is off; payout created in DRAFT.",
+                    extra={"payout_id": str(payout.id), "amount": str(payout.amount)},
+                )
+                return payout
+
+            return cls.send(payout, paystack=paystack)
+        except Exception as exc:
+            logger.error(
+                "Automatic payout failed safely; ledger protected",
+                extra={"laundry_id": str(laundry_id), "error": str(exc)},
+            )
+            return None
+
 
 
 def mask(value):

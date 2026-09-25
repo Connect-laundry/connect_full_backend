@@ -18,6 +18,25 @@ os.environ.setdefault('CLERK_WEBHOOK_SECRET', 'whsec_ci_clerk_webhook_secret')
 from pathlib import Path
 
 from .settings import BASE_DIR, THROTTLE_RATES as _PRODUCTION_THROTTLE_RATES
+# AI price-list import: production defaults, but the feature is off and no
+# provider has a key, so no test can reach a paid API by accident. Tests that
+# exercise the pipeline override these and mock the providers.
+from .settings import (  # noqa: E402
+    PRICE_LIST_AI_LAUNDRY_ALLOWLIST, PRICE_LIST_PRIMARY_PROVIDER, PRICE_LIST_FALLBACK_PROVIDER,
+    PRICE_LIST_GEMINI_ENABLED, PRICE_LIST_OCR_ENABLED, PRICE_LIST_SHADOW_CROSSCHECK,
+    PRICE_LIST_SHADOW_CROSSCHECK_LIMIT, PRICE_LIST_UPLOAD_MAX_MB, PRICE_LIST_MAX_PIXELS,
+    PRICE_LIST_GEMINI_LONG_EDGE, PRICE_LIST_OCR_MAX_BYTES, PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY,
+    PRICE_LIST_MAX_PRICE, PRICE_LIST_IMAGE_RETENTION_DAYS, PRICE_LIST_TOTAL_BUDGET_SECONDS,
+    PRICE_LIST_MAX_CONCURRENT, GEMINI_MODEL, GEMINI_FALLBACK_MODEL, GEMINI_TIMEOUT_SECONDS,
+    GEMINI_THINKING_LEVEL, OCR_SPACE_ENDPOINT, OCR_SPACE_ENGINE, OCR_SPACE_TIMEOUT_SECONDS,
+    OCR_SPACE_MONTHLY_LIMIT, OCR_SPACE_FALLBACK_ENGINE, OCR_SPACE_PRIMARY_ENGINE_TIMEOUT_SECONDS,
+    SENTRY_ENVIRONMENT,
+)
+PRICE_LIST_AI_ENABLED = False
+# A background thread cannot see a test's uncommitted rows; run inline.
+PRICE_LIST_BACKGROUND_MODE = 'inline'
+GEMINI_API_KEY = ''
+OCR_SPACE_API_KEY = ''
 
 # Production limits, except the general API budget, so unrelated tests that
 # make many calls are not throttled. Throttle tests override scopes explicitly.

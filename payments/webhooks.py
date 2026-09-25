@@ -158,11 +158,17 @@ def _handle_transfer_event(request, event_type, event_data, dedup_key):
 
             if event_type == 'transfer.success':
                 PayoutService.mark_transfer_settled(payout, reference=reference)
+            elif event_type == 'transfer.reversed':
+                PayoutService.mark_transfer_reversed(
+                    payout,
+                    reason=data.get('reason') or event_type,
+                )
             else:
                 PayoutService.mark_transfer_failed(
                     payout,
                     reason=data.get('reason') or event_type,
                 )
+
 
             logger.info(
                 "Transfer webhook applied",

@@ -13,7 +13,6 @@ from django.db.models import Count, Sum, Q, Avg
 
 from laundries.models.pricing import ScheduledPriceChange, LaundryPricingItem
 from laundries.models.laundry import Laundry, OwnerAuditLog
-from laundries.models.price_import import PriceListImportJob, PriceListDraftItem
 from ordering.models import Order, OrderItem
 
 logger = logging.getLogger(__name__)
@@ -88,78 +87,6 @@ def apply_scheduled_pricing_changes(self):
         except Exception as e:
             logger.exception(f"Error applying scheduled price change {change.id}: {e}")
             raise e
-
-@shared_task(bind=True, max_retries=3)
-def process_ocr_import(self, job_id):
-    """
-    Asynchronously process an OCR price import job.
-    """
-    from laundries.services.ocr import get_ocr_provider
-    
-    logger.info(f"Starting OCR processing task for job {job_id}")
-    try:
-        job = PriceListImportJob.objects.get(id=job_id)
-    except PriceListImportJob.DoesNotExist:
-        logger.error(f"PriceListImportJob {job_id} not found.")
-        return
-    
-    if job.status != PriceListImportJob.Status.PROCESSING:
-        logger.warning(f"Job {job_id} is not in PROCESSING status. Skipping.")
-        return
-        
-    provider = get_ocr_provider()
-    try:
-        candidates = provider.extract(job.source_image) or []
-        with transaction.atomic():
-            for cand in candidates:
-                name = (cand.get('item_name') or '').strip()
-                if not name:
-                    continue
-                
-                category = (cand.get('category') or '').strip()
-                if not category:
-                    name_lower = name.lower()
-                    if any(k in name_lower for k in ['shirt', 't-shirt', 'top', 'blouse']):
-                        category = 'Shirts'
-                    elif any(k in name_lower for k in ['trouser', 'pants', 'jeans', 'shorts', 'suit trouser']):
-                        category = 'Trousers'
-                    elif any(k in name_lower for k in ['dress', 'gown', 'skirt']):
-                        category = 'Dresses'
-                    elif any(k in name_lower for k in ['suit', 'blazer', 'tuxedo', 'coat', 'jacket']):
-                        category = 'Suits'
-                    elif any(k in name_lower for k in ['bedding', 'sheet', 'duvet', 'blanket', 'pillow', 'quilt']):
-                        category = 'Bedding'
-                    elif any(k in name_lower for k in ['curtain', 'drape']):
-                        category = 'Curtains'
-                    elif any(k in name_lower for k in ['shoe', 'sneaker', 'boot', 'footwear']):
-                        category = 'Shoes'
-                    elif any(k in name_lower for k in ['household', 'towel', 'rug', 'mat', 'cloth', 'napkin']):
-                        category = 'Household'
-                    else:
-                        category = 'Shirts'
-                
-                PriceListDraftItem.objects.create(
-                    job=job,
-                    item_name=name[:120],
-                    suggested_price=cand.get('suggested_price'),
-                    category=category[:80],
-                    confidence=cand.get('confidence', 1.0)
-                )
-            job.status = PriceListImportJob.Status.READY
-            job.save(update_fields=['status', 'updated_at'])
-    except Exception as exc:
-        logger.exception("OCR processing failed for job %s", job_id)
-        job.status = PriceListImportJob.Status.FAILED
-        
-        # Sanitize error messages to prevent secret or system path leakages
-        error_msg = str(exc)
-        if isinstance(exc, (ValueError, RuntimeError)) and not any(k in error_msg.lower() for k in ['credential', 'gcp', 'key', 'path', 'token', 'auth']):
-            job.error = error_msg[:255]
-        else:
-            job.error = "The OCR service failed to process the image. Please ensure the image is clear and try again."
-            
-        job.save(update_fields=['status', 'error', 'updated_at'])
-
 
 @shared_task(bind=True, max_retries=5, autoretry_for=(Exception,), retry_backoff=30, retry_backoff_max=600)
 def send_admin_new_laundry_email(self, laundry_id, resubmission=False):

@@ -45,6 +45,17 @@ class Laundry(models.Model):
         BY_WEIGHT = 'BY_WEIGHT', _('Per weight (kg)')
         HYBRID = 'HYBRID', _('Hybrid (item + weight)')
 
+    class PayoutMethod(models.TextChoices):
+        MOBILE_MONEY = 'MOBILE_MONEY', _('Mobile Money')
+        BANK_ACCOUNT = 'BANK_ACCOUNT', _('Bank Account')
+
+    class PayoutStatus(models.TextChoices):
+        PAYOUT_SETUP_REQUIRED = 'PAYOUT_SETUP_REQUIRED', _('Payout Setup Required')
+        PAYOUT_SETUP_PENDING = 'PAYOUT_SETUP_PENDING', _('Payout Setup Pending')
+        PAYOUT_READY = 'PAYOUT_READY', _('Payout Ready')
+        PAYOUT_FAILED_RETRYABLE = 'PAYOUT_FAILED_RETRYABLE', _('Payout Failed Retryable')
+
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(_('name'), max_length=255, db_index=True)
     description = models.TextField(_('description'), blank=True)
@@ -104,9 +115,58 @@ class Laundry(models.Model):
     paystack_recipient_code = models.CharField(
         _('paystack recipient code'), max_length=100, blank=True, default=''
     )
+    payout_method = models.CharField(
+        _('payout method'),
+        max_length=20,
+        choices=PayoutMethod.choices,
+        default=PayoutMethod.MOBILE_MONEY,
+    )
+    payout_provider = models.CharField(
+        _('payout provider'), max_length=50, blank=True, default=''
+    )
+    payout_phone = models.CharField(
+        _('payout phone display'), max_length=30, blank=True, default=''
+    )
+    payout_phone_normalized = models.CharField(
+        _('payout phone normalized'), max_length=30, blank=True, default=''
+    )
+    payout_account_name = models.CharField(
+        _('payout account name'), max_length=150, blank=True, default=''
+    )
+    payout_status = models.CharField(
+        _('payout status'),
+        max_length=30,
+        choices=PayoutStatus.choices,
+        default=PayoutStatus.PAYOUT_SETUP_REQUIRED,
+        db_index=True,
+    )
+    payout_confirmed_at = models.DateTimeField(null=True, blank=True)
+    payout_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='confirmed_payout_laundries',
+    )
+    recipient_created_at = models.DateTimeField(null=True, blank=True)
+    payout_failure_reason = models.TextField(blank=True, default='')
 
+    @property
+    def is_payout_ready(self) -> bool:
+        return bool(
+            self.payout_status == self.PayoutStatus.PAYOUT_READY
+            and self.paystack_recipient_code
+        )
+
+    @property
+    def masked_payout_phone(self) -> str:
+        from users.utils.phone import mask_phone_number
+        return mask_phone_number(
+            self.payout_phone or self.payout_phone_normalized or self.phone_number
+        )
 
     is_featured = models.BooleanField(_('is featured'), default=False, db_index=True)
+
     is_active = models.BooleanField(_('is active'), default=False, db_index=True)
     vacation_mode = models.BooleanField(_('vacation mode'), default=False, db_index=True)
     service_radius_km = models.DecimalField(_('service radius (km)'), max_digits=5, decimal_places=2, default=5.0)

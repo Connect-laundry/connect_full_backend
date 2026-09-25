@@ -34,6 +34,35 @@ def _money(value):
     return Decimal(str(value)).quantize(Decimal('0.01'))
 
 
+def release_blocker(settlement):
+    """
+    Why this HELD settlement must not be released right now, or None.
+
+    A refund only reverses the settlement once Paystack reports it settled,
+    so a refund still in flight (REFUND_PENDING) leaves the settlement HELD
+    with its timer running. Releasing then would pay the laundry for an order
+    whose customer is being refunded. Blocked settlements stay HELD and are
+    re-evaluated on the next run: a settled refund reverses them, and a
+    rejected one puts the payment back to SUCCESS so they release normally.
+    """
+    from ordering.models import Order
+    from ..models import OrderDispute, Payment
+
+    order = settlement.order
+    if OrderDispute.objects.filter(order_id=order.id, status=OrderDispute.Status.OPEN).exists():
+        return 'customer dispute is open'
+    if settlement.laundry_id != order.laundry_id:
+        return 'settlement laundry does not match order laundry'
+    if order.status in (Order.Status.CANCELLED, Order.Status.REJECTED):
+        return f'order is {order.status}'
+    if order.payment_status == Order.PaymentStatus.REFUNDED:
+        return 'order payment is refunded'
+    payment = Payment.objects.filter(order_id=order.id).first()
+    if payment is not None and payment.status != Payment.Status.SUCCESS:
+        return f'payment is {payment.status}'
+    return None
+
+
 class SettlementService:
     """Creates and reverses the platform's debts to laundries."""
 
@@ -70,6 +99,9 @@ class SettlementService:
             )
             net = ZERO
 
+        is_cash = getattr(order, 'payment_method', '') == 'CASH'
+        is_direct = settled_directly or is_cash
+
         settlement = OrderSettlement.objects.create(
             order=order,
             laundry=order.laundry,
@@ -80,7 +112,7 @@ class SettlementService:
             currency=getattr(order, 'currency', None) or 'GHS',
             route=(
                 OrderSettlement.Route.DIRECT
-                if settled_directly
+                if is_direct
                 else OrderSettlement.Route.PLATFORM
             ),
             # Held, not payable. The customer has paid but the laundry has not
@@ -88,14 +120,17 @@ class SettlementService:
             # could be paid for clothes it never collected. Released by
             # `release_for_order` when the order reaches the customer.
             #
-            # Direct settlement is the exception: Paystack already sent that
-            # money, so there is nothing left to hold.
+            # Direct settlement & Cash on Delivery are the exceptions: Paystack
+            # already sent that money, or the owner collected cash in person,
+            # so there is nothing left to hold.
             status=(
                 OrderSettlement.Status.PAID
-                if settled_directly
+                if is_direct
                 else OrderSettlement.Status.HELD
             ),
         )
+
+
 
         logger.info(
             "Settlement recorded",
@@ -143,6 +178,14 @@ class SettlementService:
             )
             return settlement
 
+        blocker = release_blocker(settlement)
+        if blocker:
+            logger.warning(
+                "Settlement release blocked; left HELD",
+                extra={"order_id": str(order.id), "reason": blocker},
+            )
+            return None
+
         settlement.status = OrderSettlement.Status.PENDING
         settlement.release_after = None
         settlement.save(update_fields=['status', 'release_after', 'updated_at'])
@@ -155,6 +198,8 @@ class SettlementService:
                 "net_payable": str(settlement.net_payable),
             },
         )
+        from . import payout_notifications
+        transaction.on_commit(lambda: payout_notifications.earnings_available(settlement))
         return settlement
 
     @staticmethod
@@ -212,16 +257,42 @@ class SettlementService:
         )
 
         released = 0
-        for settlement in due.select_for_update(skip_locked=True).iterator():
+        released_laundry_ids = set()
+        # Each row is locked inside its own transaction. Iterating a
+        # select_for_update queryset directly raised TransactionManagementError
+        # on Postgres whenever this ran outside a transaction (the run_payouts
+        # command, the Celery task); SQLite ignores row locks so tests hid it.
+        for settlement_id in list(due.values_list('id', flat=True)):
             with transaction.atomic():
+                settlement = (
+                    due.select_for_update(skip_locked=True)
+                    .filter(id=settlement_id)
+                    .first()
+                )
+                if settlement is None:
+                    continue
+                blocker = release_blocker(settlement)
+                if blocker:
+                    logger.warning(
+                        "Auto-release blocked; settlement left HELD",
+                        extra={"order_id": str(settlement.order_id), "reason": blocker},
+                    )
+                    continue
                 settlement.status = OrderSettlement.Status.PENDING
                 settlement.release_after = None
                 settlement.save(update_fields=['status', 'release_after', 'updated_at'])
+                from . import payout_notifications
+                transaction.on_commit(lambda s=settlement: payout_notifications.earnings_available(s))
                 released += 1
+                released_laundry_ids.add(settlement.laundry_id)
 
         if released:
             logger.info("Auto-released settlements", extra={"count": released})
+            from .payout_service import PayoutService
+            for lid in released_laundry_ids:
+                PayoutService.execute_automatic_payout_for_laundry(lid)
         return released
+
 
     @staticmethod
     def run_scheduled_payouts(minimum=None):
@@ -297,14 +368,35 @@ class SettlementService:
         return _money(total)
 
     @staticmethod
+    def processing_total(laundry):
+        """Amount currently in flight with Paystack."""
+        total = Payout.objects.filter(
+            laundry=laundry, status=Payout.Status.PROCESSING
+        ).aggregate(total=Sum('amount'))['total']
+        return _money(total)
+
+    @staticmethod
+    def paid_this_month_total(laundry):
+        """Settled payouts confirmed by Paystack this calendar month."""
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        total = Payout.objects.filter(
+            laundry=laundry, status=Payout.Status.PAID, paid_at__gte=month_start
+        ).aggregate(total=Sum('amount'))['total']
+        return _money(total)
+
+    @staticmethod
     def earnings_summary(laundry):
-        """The three numbers a laundry owner needs: held, available, paid."""
+        """The core numbers an owner needs for their payout ledger."""
         return {
             'held': str(SettlementService.held_total(laundry)),
             'available': str(SettlementService.outstanding_total(laundry)),
+            'processing': str(SettlementService.processing_total(laundry)),
+            'paid_this_month': str(SettlementService.paid_this_month_total(laundry)),
             'paid': str(SettlementService.paid_total(laundry)),
             'currency': 'GHS',
         }
+
 
     @staticmethod
     @transaction.atomic

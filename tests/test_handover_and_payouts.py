@@ -173,6 +173,35 @@ class TestDeliveryThroughTheStateMachine:
         assert OrderSettlement.objects.get(order=order).release_after is not None
 
     @override_settings(PLATFORM_FEE_RATE=0.00, TAX_RATE=0.00)
+    def test_owner_cannot_force_release_by_completing_without_proof(self):
+        # An owner marking DELIVERED with no code, then immediately calling
+        # complete(), must not be a back door around the dispute window.
+        # Money release depends only on delivery_confirmed_by_code or the
+        # window elapsing -- never on which lifecycle button was pressed.
+        order = _paid_order()
+        for status in (
+            Order.Status.CONFIRMED,
+            Order.Status.PICKED_UP,
+            Order.Status.IN_PROCESS,
+            Order.Status.OUT_FOR_DELIVERY,
+        ):
+            OrderStateMachine.transition(order.id, status, user=None)
+
+        OrderStateMachine.transition(order.id, Order.Status.DELIVERED, user=None)
+        order.refresh_from_db()
+        assert order.delivery_confirmed_by_code is False
+        assert SettlementService.outstanding_total(order.laundry) == Decimal('0.00')
+
+        OrderStateMachine.transition(order.id, Order.Status.COMPLETED, user=None)
+
+        order.refresh_from_db()
+        assert order.status == Order.Status.COMPLETED
+        settlement = OrderSettlement.objects.get(order=order)
+        assert settlement.status == OrderSettlement.Status.HELD
+        assert settlement.release_after is not None
+        assert SettlementService.outstanding_total(order.laundry) == Decimal('0.00')
+
+    @override_settings(PLATFORM_FEE_RATE=0.00, TAX_RATE=0.00)
     def test_a_proved_delivery_pays_the_laundry_at_once(self):
         order = _paid_order()
         for status in (

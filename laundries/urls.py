@@ -19,7 +19,7 @@ from .views.dashboard import (
 # pyre-ignore[missing-module]
 )
 from .views.my_laundry import (
-    MyLaundryView, MyLaundryDetailView,
+    MyLaundryView, MyLaundryDetailView, OwnerPayoutAccountView,
     CopyMondayHoursView, CopyTodayHoursView, ToggleVacationModeView, HolidayOverrideViewSet
 )
 from .views.pricing import (
@@ -50,7 +50,9 @@ urlpatterns = [
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
     path('dashboard/payouts/', DashboardPayoutsView.as_view(), name='dashboard-payouts'),
     path('dashboard/my-laundry/', MyLaundryView.as_view(), name='dashboard-my-laundry'),
+    path('dashboard/my-laundry/payout-account/', OwnerPayoutAccountView.as_view(), name='dashboard-my-laundry-payout-account'),
     path('dashboard/my-laundry/<uuid:id>/', MyLaundryDetailView.as_view(), name='dashboard-my-laundry-detail'),
+
     path('dashboard/my-laundry/hours/template/', HoursTemplateView.as_view(), name='dashboard-hours-template'),
     path('dashboard/my-laundry/hours/copy-monday/', CopyMondayHoursView.as_view(), name='dashboard-copy-monday-hours'),
     path('dashboard/my-laundry/hours/copy-today/', CopyTodayHoursView.as_view(), name='dashboard-copy-today-hours'),

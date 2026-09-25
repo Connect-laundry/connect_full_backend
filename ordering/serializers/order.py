@@ -195,6 +195,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         f"Unsupported booking fields: {', '.join(unsupported_fields)}."
                     ]
                 })
+            if 'payment_method' in data and data['payment_method'] is not None:
+                pm = str(data['payment_method']).strip().upper()
+                if pm in {'CASH', 'CASH_ON_DELIVERY', 'COD'}:
+                    data['payment_method'] = 'CASH'
+                elif pm in {'CARD', 'PAYSTACK'}:
+                    data['payment_method'] = 'CARD'
+                elif pm in {'BANK_TRANSFER', 'TRANSFER'}:
+                    data['payment_method'] = 'BANK_TRANSFER'
+                else:
+                    data['payment_method'] = pm
             # Clean copy without harmless aliases before validation
             data = {k: v for k, v in data.items() if k in set(self.fields)}
         return super().to_internal_value(data)

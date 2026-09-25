@@ -69,12 +69,12 @@ class PaystackService:
             logger.error("Paystack subaccount request error", extra={"error": summarize_exception(e)})
             return {'status': False, 'message': str(e)}
 
-    def create_transfer_recipient(self, name, account_number, bank_code, recipient_type='ghipss', currency='GHS'):
+    def create_transfer_recipient(self, name, account_number, bank_code, recipient_type='mobile_money', currency='GHS'):
         """
         Register where a laundry's payouts should be sent.
 
-        ``recipient_type`` is Paystack's transfer rail: 'ghipss' for Ghanaian
-        bank accounts, 'mobile_money' for MoMo. The caller stores
+        ``recipient_type`` is Paystack's transfer rail: 'mobile_money' for MoMo,
+        'ghipss' for Ghanaian bank accounts. The caller stores
         ``data.recipient_code``.
         """
         payload = {
@@ -142,6 +142,80 @@ class PaystackService:
             logger.error("Paystack transfer error", extra={"error": summarize_exception(e)})
             return {'status': False, 'message': str(e)}
 
+    def fetch_transfer(self, transfer_code_or_id):
+        """Fetch transfer details from Paystack by transfer code (TRF_...) or ID."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/transfer/{transfer_code_or_id}",
+                headers=self.headers,
+                timeout=15,
+            )
+            return response.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error("Paystack fetch transfer error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def verify_transfer(self, reference):
+        """Verify transfer status by its unique transaction reference."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/transfer/verify/{reference}",
+                headers=self.headers,
+                timeout=15,
+            )
+            return response.json()
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error("Paystack verify transfer error", extra={"error": summarize_exception(e)})
+            return {'status': False, 'message': str(e)}
+
+    def list_payout_providers(self, currency='GHS', provider_type='mobile_money'):
+        """
+        Retrieve supported payout financial institutions from Paystack.
+
+        Defaults to Ghana Mobile Money institutions (`GET /bank?currency=GHS&type=mobile_money`).
+        Provides an authoritative fallback if Paystack is temporarily unreachable.
+        """
+        fallback_providers = [
+            {'name': 'MTN Mobile Money', 'code': 'MTN', 'slug': 'mtn'},
+            {'name': 'Telecel (Vodafone) Cash', 'code': 'VOD', 'slug': 'vodafone'},
+            {'name': 'AirtelTigo Money', 'code': 'ATL', 'slug': 'airteltigo'},
+        ]
+        try:
+            params = {'currency': currency}
+            if provider_type:
+                params['type'] = provider_type
+            response = requests.get(
+                f"{self.base_url}/bank",
+                params=params,
+                headers=self.headers,
+                timeout=10,
+            )
+            data = response.json()
+            if data.get('status') and isinstance(data.get('data'), list) and len(data['data']) > 0:
+                return {
+                    'status': True,
+                    'source': 'paystack',
+                    'data': [
+                        {
+                            'name': b.get('name'),
+                            'code': b.get('code'),
+                            'slug': b.get('slug', b.get('code', '').lower()),
+                        }
+                        for b in data['data']
+                        if b.get('active', True)
+                    ]
+                }
+        except Exception as e:
+            logger.warning(
+                "Paystack list_payout_providers failed; using verified fallback",
+                extra={"error": summarize_exception(e)},
+            )
+        return {
+            'status': True,
+            'source': 'fallback',
+            'data': fallback_providers,
+        }
+
     def list_banks(self, country='ghana'):
         """Supported banks and their codes, needed to create a subaccount."""
         try:
@@ -155,6 +229,7 @@ class PaystackService:
         except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("Paystack bank list error", extra={"error": summarize_exception(e)})
             return {'status': False, 'message': str(e)}
+
 
     def initialize_transaction(
         self, email, amount, reference, metadata=None, subaccount=None,

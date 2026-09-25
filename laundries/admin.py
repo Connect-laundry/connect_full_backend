@@ -56,15 +56,18 @@ class LaundryAdmin(ModelAdmin):
         'pricing_model',
         'display_active',
         'submitted_at',
+        'payout_status',
         'created_at',
     )
-    list_filter = ('status', 'is_featured', 'is_active', 'price_range', 'pricing_model', 'city')
-    search_fields = ('name', 'description', 'address', 'owner__email')
+    list_filter = ('status', 'payout_status', 'is_featured', 'is_active', 'price_range', 'pricing_model', 'city')
+    search_fields = ('name', 'description', 'address', 'owner__email', 'payout_phone')
     inlines = [OpeningHoursInline, LaundryPricingItemInline]
     readonly_fields = (
         'id', 'created_at', 'updated_at', 'submitted_at', 'approved_at',
         'rejected_at', 'changes_requested_at', 'reviewed_by', 'status_reason',
         'logo_preview', 'owner_contact', 'hours_summary',
+        'payout_phone_normalized', 'payout_confirmed_at', 'payout_confirmed_by',
+        'recipient_created_at',
     )
     list_filter_sheet = True
     date_hierarchy = 'created_at'
@@ -112,6 +115,14 @@ class LaundryAdmin(ModelAdmin):
                 'delivery_fee', 'pickup_fee', 'min_order',
             ),
             "classes": ("collapse",),
+        }),
+        ("Payout Account", {
+            "fields": (
+                'payout_status', 'payout_method', 'payout_provider',
+                'payout_phone', 'payout_phone_normalized', 'payout_account_name',
+                'paystack_recipient_code', 'payout_confirmed_at',
+                'payout_confirmed_by', 'recipient_created_at', 'payout_failure_reason',
+            ),
         }),
         ("System", {
             "fields": ('id', 'created_at', 'updated_at'),
@@ -350,16 +361,25 @@ class LaundryWeightPricingAdmin(ModelAdmin):
 class PriceListDraftItemInline(TabularInline):
     model = PriceListDraftItem
     extra = 0
-    fields = ('item_name', 'suggested_price', 'category', 'confidence', 'is_selected')
-    readonly_fields = ('confidence',)
+    can_delete = False
+    fields = ('item_name', 'variant', 'pricing_method', 'suggested_price', 'price_per_kg',
+              'review_state', 'warnings', 'match_type', 'source_text', 'is_selected')
+    readonly_fields = fields
 
 
 @admin.register(PriceListImportJob)
 class PriceListImportJobAdmin(ModelAdmin):
-    list_display = ('id', 'laundry', 'status', 'provider', 'created_at', 'confirmed_at')
-    list_filter = ('status', 'provider')
-    search_fields = ('laundry__name',)
-    readonly_fields = ('id', 'created_at', 'updated_at', 'confirmed_at')
+    """Audit view. Drafts are the owner's to confirm; admins only observe."""
+    list_display = ('id', 'laundry', 'status', 'provider', 'model_name', 'latency_ms',
+                    'served_from_cache', 'created_at', 'confirmed_at')
+    list_filter = ('status', 'provider', 'model_name', 'served_from_cache', 'error_code')
+    search_fields = ('laundry__name', 'image_sha256')
+    readonly_fields = ('id', 'laundry', 'created_by', 'status', 'provider', 'model_name', 'error',
+                       'error_code', 'image_sha256', 'original_filename', 'currency',
+                       'document_warnings', 'provider_trace', 'confirm_result', 'latency_ms',
+                       'served_from_cache', 'source_image', 'created_at', 'updated_at',
+                       'completed_at', 'confirmed_at')
+    exclude = ('result',)
     inlines = [PriceListDraftItemInline]
 
     def get_queryset(self, request):

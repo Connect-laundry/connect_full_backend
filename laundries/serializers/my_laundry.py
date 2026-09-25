@@ -64,6 +64,9 @@ class HolidayOverrideSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'Overnight hours cannot have equal opening and closing times.'
                 )
+            if opening < closing:
+                # Same-day daytime hours cannot be overnight. Normalize to False.
+                attrs['is_overnight'] = False
         elif opening >= closing:
             raise serializers.ValidationError(
                 'opening_time must be earlier than closing_time '
@@ -108,6 +111,9 @@ class OpeningHoursSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'Overnight hours cannot have equal opening and closing times.'
                 )
+            if opening < closing:
+                # Same-day daytime hours cannot be overnight. Normalize to False.
+                attrs['is_overnight'] = False
         elif opening >= closing:
             raise serializers.ValidationError(
                 'opening_time must be earlier than closing_time '
@@ -127,6 +133,16 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
     # exposed read-only (derived) — owners set location through this field.
     location = LocationInputSerializer(write_only=True, required=False)
 
+    is_payout_ready = serializers.BooleanField(read_only=True)
+    masked_payout_phone = serializers.CharField(read_only=True)
+
+    # Optional onboarding payout setup inputs
+    payout_method = serializers.CharField(required=False, write_only=True)
+    payout_provider = serializers.CharField(required=False, write_only=True)
+    payout_phone = serializers.CharField(required=False, write_only=True)
+    payout_account_name = serializers.CharField(required=False, write_only=True)
+    payout_confirmed = serializers.BooleanField(required=False, write_only=True, default=False)
+
     class Meta:
         model = Laundry
         fields = [
@@ -137,16 +153,24 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
             'rejected_at', 'operating_hours', 'created_at', 'updated_at',
             'vacation_mode', 'service_radius_km', 'service_area_polygon',
             'is_eco_friendly', 'ironing_available',
+            'payout_status', 'payout_provider', 'payout_phone_normalized',
+            'payout_account_name', 'payout_confirmed_at', 'recipient_created_at',
+            'payout_failure_reason', 'is_payout_ready', 'masked_payout_phone',
+            'payout_method', 'payout_phone', 'payout_confirmed',
         ]
         # latitude/longitude are backend-derived (set via ``location``), so they
         # are read-only output. The rest are platform/approval-controlled.
         read_only_fields = [
             'id', 'imageUrl', 'latitude', 'longitude', 'is_featured', 'is_active',
             'status', 'approved_at', 'rejected_at', 'created_at', 'updated_at',
+            'payout_status', 'payout_phone_normalized', 'payout_confirmed_at',
+            'recipient_created_at', 'payout_failure_reason', 'is_payout_ready',
+            'masked_payout_phone',
         ]
 
     def get_imageUrl(self, obj) -> str | None:
         return safe_media_url(obj.image, self.context.get('request'))
+
 
     def to_internal_value(self, data):
         """Normalise multipart inputs and fold legacy coordinate fields.
@@ -245,6 +269,12 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
         # "registered without a logo" instead of failing the whole registration
         # with an unhandled 500.
         image = validated_data.pop('image', None)
+        payout_confirmed = validated_data.pop('payout_confirmed', False)
+        payout_method = validated_data.pop('payout_method', 'MOBILE_MONEY')
+        payout_provider = validated_data.pop('payout_provider', '')
+        payout_phone = validated_data.pop('payout_phone', '')
+        payout_account_name = validated_data.pop('payout_account_name', '')
+
         request = self.context['request']
         with transaction.atomic():
             laundry = Laundry.objects.create(
@@ -261,7 +291,28 @@ class MyLaundrySerializer(SafeMediaModelSerializer):
                 laundry, 'image', image, request=request,
                 laundry_id=str(laundry.id),
             )
+
+        if payout_confirmed and (payout_phone or laundry.phone_number) and payout_provider:
+            from payments.services.recipient_service import RecipientService
+            try:
+                RecipientService.setup_payout_account(
+                    laundry=laundry,
+                    user=request.user,
+                    payout_method=payout_method,
+                    payout_provider=payout_provider,
+                    payout_phone=payout_phone or laundry.phone_number,
+                    account_name=payout_account_name or laundry.name,
+                    confirmed=True,
+                )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Payout setup during onboarding failed gracefully; laundry remains registered",
+                    extra={"laundry_id": str(laundry.id), "error": str(exc)},
+                )
+
         return laundry
+
 
     def update(self, instance, validated_data):
         opening_hours = validated_data.pop('opening_hours', None)
@@ -329,4 +380,15 @@ class ToggleVacationModeResponseSerializer(serializers.Serializer):
     vacation_mode = serializers.BooleanField(
         help_text="The updated vacation mode status of the laundry."
     )
+
+
+class PayoutAccountSetupSerializer(serializers.Serializer):
+    payout_method = serializers.ChoiceField(
+        choices=['MOBILE_MONEY', 'BANK_ACCOUNT'], default='MOBILE_MONEY'
+    )
+    payout_provider = serializers.CharField(max_length=50)
+    payout_phone = serializers.CharField(max_length=30)
+    account_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    confirmed = serializers.BooleanField(required=True)
+
 

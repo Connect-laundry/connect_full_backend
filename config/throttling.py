@@ -345,6 +345,33 @@ class ResetPasswordTokenThrottle(SimameThrottle):
 RESET_PASSWORD_THROTTLES = [layered('ResetPasswordThrottle', ResetPasswordIPThrottle, ResetPasswordTokenThrottle)]
 
 
+# -- Delivery / handover -------------------------------------------------------
+
+class HandoverCodeOrderThrottle(SimameThrottle):
+    """Per order being confirmed: the primary brake on guessing one
+    customer's 4-digit code. Keyed on the order id in the URL, not on any
+    submitted value, so it applies before the code is even looked at."""
+    scope = 'handover_code_order'
+
+    def get_cache_key(self, request, view):
+        order_id = view.kwargs.get('pk', '')
+        if not order_id:
+            return None
+        ident = f'order:{self._hash(str(order_id))}'
+        return self.cache_format % {'scope': self.scope, 'ident': ident}
+
+
+class HandoverCodeOwnerThrottle(UserThrottle):
+    """Per laundry owner account: stops spreading guesses across many
+    orders to dodge the per-order limit."""
+    scope = 'handover_code_owner'
+
+
+HANDOVER_CODE_THROTTLES = [layered(
+    'HandoverCodeThrottle', HandoverCodeOrderThrottle, HandoverCodeOwnerThrottle,
+)]
+
+
 # -- Marketplace / commerce ---------------------------------------------------
 
 class ReviewThrottle(UserOrIPThrottle):
@@ -353,6 +380,10 @@ class ReviewThrottle(UserOrIPThrottle):
 
 class FeedbackThrottle(UserOrIPThrottle):
     scope = 'feedback'
+
+
+class OrderDisputeThrottle(UserThrottle):
+    scope = 'order_dispute'
 
 
 class LegalPublicThrottle(IPThrottle):

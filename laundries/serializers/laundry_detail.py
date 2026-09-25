@@ -36,9 +36,9 @@ class LaundryServiceSerializer(serializers.ModelSerializer):
             return None
         return safe_media_url(item.image, self.context.get('request'))
 
-# pyre-ignore[missing-module]
 from django.core.cache import cache
-from ..services.opening_status import is_laundry_open_now
+from ..services.opening_status import is_laundry_open_now, get_laundry_opening_status
+
 
 class OpeningHoursDetailSerializer(serializers.ModelSerializer):
     dayDisplay = serializers.SerializerMethodField()
@@ -69,6 +69,11 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
     phone = serializers.CharField(source='phone_number', read_only=True)
     opening_hours = OpeningHoursDetailSerializer(many=True, read_only=True)
     isOpen = serializers.SerializerMethodField()
+    is_open_now = serializers.SerializerMethodField()
+    status_as_of = serializers.SerializerMethodField()
+    next_open_at = serializers.SerializerMethodField()
+    accepts_future_bookings = serializers.SerializerMethodField()
+    vacation_mode = serializers.SerializerMethodField()
     features = serializers.SerializerMethodField()
     tagline = serializers.SerializerMethodField()
 
@@ -78,7 +83,9 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
             'id', 'name', 'description', 'image', 'imageUrl', 'address', 'latitude',
             'longitude', 'phone_number', 'phone', 'priceRange', 'pricingModel', 'weightPricing', 'estimated_delivery_hours',
             'is_featured', 'services', 'reviews', 'rating', 'reviewsCount', 'isFavorite',
-            'minOrder', 'deliveryFee', 'pickup_fee', 'pickupFee', 'opening_hours', 'isOpen', 'features', 'tagline'
+            'minOrder', 'deliveryFee', 'pickup_fee', 'pickupFee', 'opening_hours', 'isOpen',
+            'is_open_now', 'status_as_of', 'next_open_at', 'accepts_future_bookings', 'vacation_mode',
+            'features', 'tagline'
         )
 
 
@@ -143,16 +150,37 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
             return Favorite.objects.filter(user=request.user, laundry=obj).exists()
         return False
 
+    def _get_opening_status(self, obj):
+        cache_key = f"laundry_opening_status_{obj.id}"
+        status_data = cache.get(cache_key)
+        if status_data is None:
+            status_data = get_laundry_opening_status(obj)
+            cache.set(cache_key, status_data, 60)
+        return status_data
+
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_isOpen(self, obj):
-        cache_key = f"laundry_is_open_{obj.id}"
-        is_open = cache.get(cache_key)
-        if is_open is not None:
-            return is_open
+        return self._get_opening_status(obj)['is_open_now']
 
-        is_open_now = is_laundry_open_now(obj)
-        cache.set(cache_key, is_open_now, 300)
-        return is_open_now
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_open_now(self, obj):
+        return self._get_opening_status(obj)['is_open_now']
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_status_as_of(self, obj):
+        return self._get_opening_status(obj)['status_as_of']
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_next_open_at(self, obj):
+        return self._get_opening_status(obj)['next_open_at']
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_accepts_future_bookings(self, obj):
+        return self._get_opening_status(obj)['accepts_future_bookings']
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_vacation_mode(self, obj):
+        return self._get_opening_status(obj)['vacation_mode']
 
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_features(self, obj):

@@ -2,7 +2,13 @@
 import pytest
 from rest_framework.test import APIClient
 
-from users.utils.phone import PhoneValidationError, format_phone_for_display, normalize_phone
+from users.utils.phone import (
+    PhoneValidationError,
+    format_phone_for_display,
+    mask_phone_number,
+    normalize_phone,
+    to_ghana_momo_account_number,
+)
 
 SAME_NUMBER = [
     '0245738120', '024 573 8120', '024-573-8120', '(024) 573 8120', '245738120',
@@ -14,6 +20,18 @@ SAME_NUMBER = [
 @pytest.mark.parametrize('typed', SAME_NUMBER)
 def test_every_common_spelling_normalises_to_one_number(typed):
     assert normalize_phone(typed) == '+233245738120'
+
+
+@pytest.mark.parametrize('typed', ['0551057139', '+233551057139', '233551057139', '055 105 7139'])
+def test_ghana_momo_account_normalization(typed):
+    """Paystack Ghana recipient account_number must be 10-digit national format."""
+    assert to_ghana_momo_account_number(typed) == '0551057139'
+    assert mask_phone_number(typed) == '055 *** 7139'
+
+
+def test_momo_account_normalization_rejects_foreign():
+    with pytest.raises(PhoneValidationError):
+        to_ghana_momo_account_number('+44 20 7946 0958')
 
 
 @pytest.mark.parametrize('typed', ['0302123456', '+233 30 212 3456'])
@@ -33,6 +51,8 @@ def test_international_numbers_still_work():
 
 def test_display_format():
     assert format_phone_for_display('+233245738120') == '+233 24 573 8120'
+    assert mask_phone_number('+233245738120') == '024 *** 8120'
+    assert mask_phone_number('0551057139') == '055 *** 7139'
 
 
 @pytest.mark.django_db

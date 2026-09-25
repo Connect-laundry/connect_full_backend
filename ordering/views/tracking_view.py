@@ -316,6 +316,11 @@ def build_tracking_payload(order: Order, request=None) -> dict:
     valid_next = list(OrderStateMachine.VALID_TRANSITIONS.get(order.status, []))
     customer_can_cancel = Order.Status.CANCELLED in valid_next
 
+    from payments.models import OrderDispute
+    from payments.services.dispute_service import can_open_dispute
+    # The latest report of any status, so the customer sees how it ended.
+    dispute = OrderDispute.objects.filter(order=order).order_by('-created_at').first()
+
     return {
         "order": {
             "id": str(order.id),
@@ -333,6 +338,29 @@ def build_tracking_payload(order: Order, request=None) -> dict:
             "delivery_address": order.delivery_address,
             "cancellation_reason": order.cancellation_reason or None,
             "rejection_reason": order.rejection_reason or None,
+            # Whether this delivery has been trustedly confirmed (by the
+            # handover code or the customer's own tap) as opposed to just
+            # sitting behind the dispute-window timer.
+            "delivery_confirmed": bool(order.delivery_confirmed_by_code),
+            "can_confirm_received": (
+                order.status in (
+                    Order.Status.OUT_FOR_DELIVERY,
+                    Order.Status.DELIVERED,
+                    Order.Status.COMPLETED,
+                )
+                and not order.delivery_confirmed_by_code
+                and (dispute is None or dispute.status != OrderDispute.Status.OPEN)
+            ),
+            "can_report_problem": can_open_dispute(order),
+            "dispute": (
+                {
+                    "status": dispute.status,
+                    "reason": dispute.reason,
+                    "reason_label": dispute.get_reason_display(),
+                    "created_at": _serialize_iso(dispute.created_at),
+                }
+                if dispute is not None else None
+            ),
         },
         "timeline": timeline,
         "items": _build_items(order),

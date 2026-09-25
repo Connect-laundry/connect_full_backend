@@ -173,12 +173,155 @@ class TestOpeningStatus:
             (2, time(20, 0), time(2, 0), False, True),
             (3, time(0, 0), time(0, 0), True, False),
         ]
-        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 0, tzinfo=ZoneInfo('UTC'))) is True
-        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 6, 0, tzinfo=ZoneInfo('UTC'))) is True
-        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 17, 0, tzinfo=ZoneInfo('UTC'))) is False
+        # Tuesday (day 2) 20:00 -> Wednesday (day 3) 02:00
+        # In Ghana time (Africa/Accra / UTC):
+        # Tuesday 21:00 is OPEN
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 16, 21, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # Wednesday 01:00 is OPEN (Tuesday overnight shift spillover)
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 1, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # Wednesday 02:00 is OPEN (at closing boundary)
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # Wednesday 02:30 is CLOSED (shift ended at 02:00, Wednesday is closed)
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 30, tzinfo=ZoneInfo('Africa/Accra'))) is False
+        # Wednesday 06:00 is CLOSED
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 6, 0, tzinfo=ZoneInfo('Africa/Accra'))) is False
+        # Wednesday 17:00 is CLOSED
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 17, 0, tzinfo=ZoneInfo('Africa/Accra'))) is False
 
+        # When vacation mode is on, business is closed even during operating hours
         laundry.vacation_mode = True
-        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 2, 0, tzinfo=ZoneInfo('UTC'))) is False
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 17, 1, 0, tzinfo=ZoneInfo('Africa/Accra'))) is False
+
+    def test_24_hour_schedule_is_open_all_day(self):
+        owner = _owner(email='24h-owner@example.com', phone='233500050099')
+        laundry = Laundry.objects.create(
+            name='24-7 Laundry',
+            address='24 Hour Way, Accra',
+            latitude='5.603700',
+            longitude='-0.187000',
+            phone_number='0240000099',
+            owner=owner,
+            is_active=True,
+            status=Laundry.ApprovalStatus.APPROVED,
+        )
+        OpeningHours.objects.create(
+            laundry=laundry,
+            day=1, # Monday
+            opening_time=time(0, 0),
+            closing_time=time(0, 0),
+            is_closed=False,
+        )
+        # Monday at 00:00, 12:00, 23:59 are all open
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 0, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 23, 59, tzinfo=ZoneInfo('Africa/Accra'))) is True
+
+    def test_laundry_opening_status_and_booking_while_closed(self):
+        from laundries.services.opening_status import get_laundry_opening_status
+        owner = _owner(email='future-book@example.com', phone='233500050088')
+        laundry = Laundry.objects.create(
+            name='Future Booking Laundry',
+            address='Market St, Accra',
+            latitude='5.603700',
+            longitude='-0.187000',
+            phone_number='0240000088',
+            owner=owner,
+            is_active=True,
+            status=Laundry.ApprovalStatus.APPROVED,
+        )
+        # Monday 08:00 to 18:00
+        OpeningHours.objects.create(
+            laundry=laundry,
+            day=1,
+            opening_time=time(8, 0),
+            closing_time=time(18, 0),
+            is_closed=False,
+        )
+        # Checked at 06:00 Monday (closed now, opens 08:00 today)
+        status_data = get_laundry_opening_status(laundry, datetime(2026, 6, 15, 6, 0, tzinfo=ZoneInfo('Africa/Accra')))
+        assert status_data['is_open_now'] is False
+        assert status_data['accepts_future_bookings'] is True
+        assert status_data['next_open_at'] is not None
+        assert '2026-06-15T08:00:00' in status_data['next_open_at']
+
+    def test_signals_invalidate_cached_status(self):
+        from django.core.cache import cache
+        owner = _owner(email='cache-inval@example.com', phone='233500050077')
+        laundry = Laundry.objects.create(
+            name='Cache Invalidation Laundry',
+            address='Signal St, Accra',
+            latitude='5.603700',
+            longitude='-0.187000',
+            phone_number='0240000077',
+            owner=owner,
+            is_active=True,
+            status=Laundry.ApprovalStatus.APPROVED,
+        )
+        hours = OpeningHours.objects.create(
+            laundry=laundry,
+            day=1,
+            opening_time=time(8, 0),
+            closing_time=time(18, 0),
+            is_closed=False,
+        )
+        cache.set(f"laundry_is_open_{laundry.id}", False, 300)
+        cache.set(f"laundry_opening_status_{laundry.id}", {"is_open_now": False}, 300)
+
+        # Modifying hours fires signal
+        hours.opening_time = time(7, 0)
+        hours.save()
+
+        assert cache.get(f"laundry_is_open_{laundry.id}") is None
+        assert cache.get(f"laundry_opening_status_{laundry.id}") is None
+
+    def test_adepa_corrupt_overnight_flag_daytime_regression(self):
+        """
+        Regression test for Adepa Laundry bug:
+        Schedule: Monday-Sunday 08:30 - 22:00 with is_overnight=True in database.
+        Even if is_overnight is set in the DB, closing > opening (22:00 > 08:30)
+        is physically a same-day shift.
+        At 11:53 or 12:49 daytime in Ghana, it MUST evaluate as OPEN.
+        Before 08:30 (e.g. 07:00) it MUST evaluate as CLOSED.
+        After 22:00 (e.g. 23:00) it MUST evaluate as CLOSED.
+        """
+        owner = _owner(email='adepa-reg@example.com', phone='233500050066')
+        laundry = Laundry.objects.create(
+            name='Adepa Laundry Regression',
+            address='Ayeduase, Kumasi',
+            latitude='6.673700',
+            longitude='-1.567000',
+            phone_number='0240000066',
+            owner=owner,
+            is_active=True,
+            status=Laundry.ApprovalStatus.APPROVED,
+        )
+        for day in range(1, 8):
+            OpeningHours.objects.create(
+                laundry=laundry,
+                day=day,
+                opening_time=time(8, 30),
+                closing_time=time(22, 0),
+                is_closed=False,
+                is_overnight=True,  # Corrupt flag in DB
+            )
+
+        # Ghana Time (Africa/Accra / UTC) on a Monday (2026-06-15)
+        # 11:53 AM - Daytime -> MUST BE OPEN
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 11, 53, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # 12:49 PM - Daytime -> MUST BE OPEN
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 12, 49, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # 08:30 AM - Exact opening time -> MUST BE OPEN
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 8, 30, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # 22:00 PM - Exact closing time -> MUST BE OPEN
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 22, 0, tzinfo=ZoneInfo('Africa/Accra'))) is True
+        # 07:00 AM - Before opening -> MUST BE CLOSED
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 7, 0, tzinfo=ZoneInfo('Africa/Accra'))) is False
+        # 22:30 PM - After closing -> MUST BE CLOSED
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 22, 30, tzinfo=ZoneInfo('Africa/Accra'))) is False
+        # 03:00 AM - Middle of night -> MUST BE CLOSED
+        assert is_laundry_open_now(laundry, datetime(2026, 6, 15, 3, 0, tzinfo=ZoneInfo('Africa/Accra'))) is False
+
+
 
 
 @pytest.mark.django_db

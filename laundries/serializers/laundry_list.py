@@ -5,7 +5,7 @@ from django.core.cache import cache
 from ..models.laundry import Laundry
 # pyre-ignore[missing-module]
 from ..models.favorite import Favorite
-from ..services.opening_status import is_laundry_open_now
+from ..services.opening_status import is_laundry_open_now, get_laundry_opening_status
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from utils.media import SafeMediaModelSerializer, safe_media_url
@@ -16,6 +16,11 @@ class LaundryListSerializer(SafeMediaModelSerializer):
     rating = serializers.FloatField(read_only=True)
     reviewsCount = serializers.IntegerField(read_only=True)
     isOpen = serializers.SerializerMethodField()
+    is_open_now = serializers.SerializerMethodField()
+    status_as_of = serializers.SerializerMethodField()
+    next_open_at = serializers.SerializerMethodField()
+    accepts_future_bookings = serializers.SerializerMethodField()
+    vacation_mode = serializers.SerializerMethodField()
     priceRange = serializers.CharField(source='price_range')
     pricingModel = serializers.CharField(source='pricing_model', read_only=True)
     isFavorite = serializers.SerializerMethodField()
@@ -32,8 +37,10 @@ class LaundryListSerializer(SafeMediaModelSerializer):
         model = Laundry
         fields = (
             'id', 'name', 'image', 'imageUrl', 'location', 'distance', 'rating',
-            'reviewsCount', 'isOpen', 'priceRange', 'pricingModel', 'isFavorite', 'estimatedDelivery',
-            'minOrder', 'deliveryFee', 'avgPrice', 'minServicePrice', 'latitude', 'longitude', 'isFeatured'
+            'reviewsCount', 'isOpen', 'is_open_now', 'status_as_of', 'next_open_at',
+            'accepts_future_bookings', 'vacation_mode', 'priceRange', 'pricingModel',
+            'isFavorite', 'estimatedDelivery', 'minOrder', 'deliveryFee', 'avgPrice',
+            'minServicePrice', 'latitude', 'longitude', 'isFeatured'
         )
 
     @staticmethod
@@ -73,25 +80,51 @@ class LaundryListSerializer(SafeMediaModelSerializer):
                 return None
         return None
 
+    def _get_opening_status(self, obj):
+        cache_key = f"laundry_opening_status_{obj.id}"
+        status_data = cache.get(cache_key)
+        if status_data is None:
+            status_data = get_laundry_opening_status(obj)
+            cache.set(cache_key, status_data, 60)
+        return status_data
+
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_isOpen(self, obj):
-        cache_key = f"laundry_is_open_{obj.id}"
-        is_open = cache.get(cache_key)
-        
-        if is_open is not None:
-            return is_open
+        return self._get_opening_status(obj)['is_open_now']
 
-        is_open_now = is_laundry_open_now(obj)
-        
-        cache.set(cache_key, is_open_now, 300) # 5 minutes
-        return is_open_now
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_open_now(self, obj):
+        return self._get_opening_status(obj)['is_open_now']
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_status_as_of(self, obj):
+        return self._get_opening_status(obj)['status_as_of']
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_next_open_at(self, obj):
+        return self._get_opening_status(obj)['next_open_at']
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_accepts_future_bookings(self, obj):
+        return self._get_opening_status(obj)['accepts_future_bookings']
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_vacation_mode(self, obj):
+        return self._get_opening_status(obj)['vacation_mode']
+
+    def _get_user_favorite_ids(self):
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user') or not request.user.is_authenticated:
+            return set()
+        if not hasattr(request, '_cached_favorite_laundry_ids'):
+            request._cached_favorite_laundry_ids = set(
+                Favorite.objects.filter(user=request.user).values_list('laundry_id', flat=True)
+            )
+        return request._cached_favorite_laundry_ids
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_isFavorite(self, obj):
-        request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return Favorite.objects.filter(user=request.user, laundry=obj).exists()
-        return False
+        return obj.id in self._get_user_favorite_ids()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_estimatedDelivery(self, obj):

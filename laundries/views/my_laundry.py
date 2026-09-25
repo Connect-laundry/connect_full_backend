@@ -352,3 +352,77 @@ class HolidayOverrideViewSet(viewsets.ModelViewSet):
         )
         return super().destroy(request, *args, **kwargs)
 
+
+class OwnerPayoutAccountView(APIView):
+    """
+    GET  /api/v1/laundries/dashboard/my-laundry/payout-account/
+    POST /api/v1/laundries/dashboard/my-laundry/payout-account/
+    """
+    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+
+    def _get_laundry(self, request):
+        return Laundry.objects.filter(owner=request.user).first()
+
+    def get(self, request):
+        laundry = self._get_laundry(request)
+        if laundry is None:
+            return Response(
+                {"status": "error", "message": "You have not registered a laundry yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        from config.redaction import mask_reference
+        return Response({
+            "status": "success",
+            "data": {
+                "payout_status": laundry.payout_status,
+                "is_ready": laundry.is_payout_ready,
+                "payout_method": laundry.payout_method,
+                "payout_provider": laundry.payout_provider,
+                "payout_phone": laundry.payout_phone,
+                "payout_phone_normalized": laundry.payout_phone_normalized,
+                "masked_phone": laundry.masked_payout_phone(),
+                "payout_account_name": laundry.payout_account_name,
+                "has_recipient": bool(laundry.paystack_recipient_code),
+                "recipient_code_masked": mask_reference(laundry.paystack_recipient_code),
+                "confirmed_at": laundry.payout_confirmed_at.isoformat() if laundry.payout_confirmed_at else None,
+                "failure_reason": laundry.payout_failure_reason,
+                "business_phone_display": laundry.phone_number,
+            }
+        })
+
+    def post(self, request):
+        laundry = self._get_laundry(request)
+        if laundry is None:
+            return Response(
+                {"status": "error", "message": "You have not registered a laundry yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        from ..serializers.my_laundry import PayoutAccountSetupSerializer
+        from payments.services.recipient_service import RecipientService
+
+        serializer = PayoutAccountSetupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vd = serializer.validated_data
+
+        try:
+            result = RecipientService.setup_payout_account(
+                laundry=laundry,
+                user=request.user,
+                payout_method=vd.get('payout_method', 'MOBILE_MONEY'),
+                payout_provider=vd.get('payout_provider'),
+                payout_phone=vd.get('payout_phone'),
+                account_name=vd.get('account_name', ''),
+                confirmed=vd.get('confirmed', False),
+            )
+            return Response({
+                "status": "success" if result.get('status') else "error",
+                "message": result.get('message', ''),
+                "data": result,
+            }, status=status.HTTP_200_OK if result.get('status') else status.HTTP_400_BAD_REQUEST)
+        except (ValueError, PermissionDenied) as exc:
+            return Response(
+                {"status": "error", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+

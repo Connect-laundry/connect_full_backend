@@ -17,6 +17,8 @@ class DashboardOrderSerializer(serializers.ModelSerializer):
     # customer app captures it before the first order is created.
     customer_phone = serializers.CharField(source='user.phone', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    # Read-only: the owner sees that payment is on hold, never controls it.
+    dispute_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -26,7 +28,14 @@ class DashboardOrderSerializer(serializers.ModelSerializer):
             'pickup_date', 'delivery_date', 'pickup_address',
             'pricing_mode', 'payment_method', 'payment_status', 'payment_state',
             'amount_due', 'amount_collected', 'cash_collected_at',
+            'dispute_status',
         ]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_dispute_status(self, obj):
+        # .all() reuses the viewset's prefetch; sorting in Python keeps it one query.
+        disputes = sorted(obj.disputes.all(), key=lambda d: d.created_at, reverse=True)
+        return disputes[0].status if disputes else None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_payment_state(self, obj):

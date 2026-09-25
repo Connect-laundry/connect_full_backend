@@ -101,14 +101,30 @@ class OrderStateMachine:
             ensure_handover_code(order)
 
         # Release the escrow once the clothes are back with the customer.
-        # Both DELIVERED and COMPLETED release, because COMPLETED is an extra
-        # step a laundry may never take, and money stuck in escrow forever is
-        # worse than money released a step early.
-        if to_status in (Order.Status.DELIVERED, Order.Status.COMPLETED):
+        # This runs at DELIVERED only. Release is immediate if the delivery
+        # code was verified; otherwise the settlement is parked HELD behind a
+        # dispute-window timer (SettlementService.run_auto_release sweeps it
+        # once the window passes).
+        #
+        # Deliberately NOT re-run at COMPLETED. COMPLETED is an owner action
+        # reachable straight from DELIVERED with no further proof required, so
+        # treating it as automatic confirmation let an owner mark DELIVERED
+        # with no code and immediately click Complete to force an instant
+        # release and payout -- skipping the dispute window entirely. Money
+        # release must depend only on `order.delivery_confirmed_by_code` or
+        # the dispute window elapsing, never on which lifecycle button the
+        # owner happened to press.
+        if to_status == Order.Status.DELIVERED:
             from payments.services.settlement_service import SettlementService
-            SettlementService.release_for_order(
-                order, confirmed=order.delivery_confirmed_by_code
+            SettlementService.release_for_order(order, confirmed=bool(order.delivery_confirmed_by_code))
+
+        if to_status == Order.Status.COMPLETED and getattr(order, 'payment_method', '') != Order.PaymentMethod.CASH:
+            from payments.services.payout_service import PayoutService
+            laundry_id = order.laundry_id
+            transaction.on_commit(
+                lambda: PayoutService.execute_automatic_payout_for_laundry(laundry_id)
             )
+
 
         # Create history record
         OrderStatusHistory.objects.create(

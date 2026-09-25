@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from config.throttling import COUPON_THROTTLES, GeneralThrottle
+from config.throttling import COUPON_THROTTLES, GeneralThrottle, OrderDisputeThrottle
 from rest_framework import mixins, viewsets, permissions, status
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
@@ -431,6 +431,110 @@ class OrderViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
             "status": "success",
             "message": "Order tracking snapshot.",
             "data": payload,
+        })
+
+    @action(detail=True, methods=['post'], url_path='report-problem', throttle_classes=[GeneralThrottle, OrderDisputeThrottle])
+    def report_problem(self, request, pk=None):
+        """
+        "Report a problem" on the customer's own delivered order.
+
+        Holds the laundry's payment for this order until support resolves it.
+        A repeat report returns the existing one; it never opens a second hold.
+        """
+        from payments.services.dispute_service import DisputeError, open_dispute
+        from .tracking_view import build_tracking_payload
+
+        order = self.get_object()
+        try:
+            dispute, created = open_dispute(
+                order,
+                request.user,
+                reason=str(request.data.get('reason') or '').strip().upper(),
+                details=str(request.data.get('details') or ''),
+                request=request,
+            )
+        except DisputeError as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
+
+        order.refresh_from_db()
+        return Response({
+            "status": "success",
+            "message": (
+                "Thanks for letting us know. Payment is on hold while our support team looks into it."
+                if created else "You've already reported this order. Our support team is on it."
+            ),
+            "data": build_tracking_payload(order, request=request),
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='confirm-received')
+    def confirm_received(self, request, pk=None):
+        """
+        The customer's one-tap alternative to reading the delivery code out
+        to the laundry: "I've received my order."
+
+        Goes through the exact same trusted confirmation as a verified
+        handover code (`handover.mark_confirmed_by_code`) -- releases escrow
+        immediately and is idempotent. `get_queryset` already scopes every
+        order in this viewset to `user=request.user`, so this can only ever
+        confirm the caller's own order; no separate ownership check needed.
+        """
+        from django.db import transaction
+        from .tracking_view import build_tracking_payload
+        from ..services.handover import mark_confirmed_by_code
+        from ..services.order_state_machine import OrderStateMachine
+
+        target = self.get_object()
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=target.pk)
+
+            confirmable = (
+                Order.Status.OUT_FOR_DELIVERY,
+                Order.Status.DELIVERED,
+                Order.Status.COMPLETED,
+            )
+            if order.status not in confirmable:
+                return Response({
+                    "status": "error",
+                    "message": "This order isn't out for delivery yet.",
+                }, status=status.HTTP_409_CONFLICT)
+
+            from payments.services.dispute_service import open_dispute_for
+            if open_dispute_for(order) is not None:
+                return Response({
+                    "status": "error",
+                    "message": "You've reported a problem with this order. Our support team will resolve it.",
+                }, status=status.HTTP_409_CONFLICT)
+
+            if order.delivery_confirmed_by_code:
+                return Response({
+                    "status": "success",
+                    "message": "Delivery already confirmed.",
+                    "data": build_tracking_payload(order, request=request),
+                })
+
+            was_out_for_delivery = order.status == Order.Status.OUT_FOR_DELIVERY
+            mark_confirmed_by_code(order)
+
+            if was_out_for_delivery:
+                # Runs the same DELIVERED transition the owner's code path
+                # uses, so release/history/payout scheduling stay identical.
+                OrderStateMachine.transition(
+                    order.id, Order.Status.DELIVERED, user=request.user,
+                    metadata={'confirmed_by': 'customer'},
+                )
+            else:
+                # Already DELIVERED or COMPLETED with no proof yet -- the
+                # settlement is sitting HELD behind a dispute-window timer.
+                # The customer's own confirmation can release it early.
+                from payments.services.settlement_service import SettlementService
+                SettlementService.release_for_order(order, confirmed=True)
+
+        order.refresh_from_db()
+        return Response({
+            "status": "success",
+            "message": "Delivery confirmed. Thank you!",
+            "data": build_tracking_payload(order, request=request),
         })
 
 class CouponViewSet(viewsets.GenericViewSet):

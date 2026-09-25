@@ -776,3 +776,24 @@ class PaymentRefundView(APIView):
                 "order_id": str(refunded.order_id),
             },
         })
+
+
+class PayoutProvidersView(APIView):
+    """
+    GET /api/v1/payments/payout-providers/
+    List supported payout providers (e.g. Ghana mobile money networks).
+    Available to authenticated users and owners.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        currency = request.query_params.get('currency', 'GHS')
+        provider_type = request.query_params.get('type', 'mobile_money')
+        paystack = PaystackService()
+        result = paystack.list_payout_providers(currency=currency, provider_type=provider_type)
+        return Response({
+            'status': 'success',
+            'data': result.get('data', []),
+            'source': result.get('source', 'fallback'),
+        })
+

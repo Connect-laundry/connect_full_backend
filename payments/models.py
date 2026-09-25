@@ -113,6 +113,8 @@ class Payout(models.Model):
         PROCESSING = 'PROCESSING', _('Processing')
         PAID = 'PAID', _('Paid')
         FAILED = 'FAILED', _('Failed')
+        WAITING_FOR_FUNDS = 'WAITING_FOR_FUNDS', _('Waiting for funds')
+        REVERSED = 'REVERSED', _('Reversed')
 
     class Method(models.TextChoices):
         BANK = 'BANK', _('Bank transfer')
@@ -130,10 +132,13 @@ class Payout(models.Model):
     method = models.CharField(max_length=20, choices=Method.choices, default=Method.MANUAL)
 
     reference = models.CharField(max_length=100, blank=True, default='')
+    paystack_transfer_code = models.CharField(max_length=100, blank=True, default='')
+    recipient_code_used = models.CharField(max_length=100, blank=True, default='')
     period_start = models.DateTimeField(null=True, blank=True)
     period_end = models.DateTimeField(null=True, blank=True)
 
     paid_at = models.DateTimeField(null=True, blank=True)
+    reversed_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.TextField(blank=True, default='')
     notes = models.TextField(blank=True, default='')
 
@@ -146,10 +151,12 @@ class Payout(models.Model):
         verbose_name_plural = _('Payouts')
         indexes = [
             models.Index(fields=['laundry', 'status']),
+            models.Index(fields=['status', 'created_at']),
         ]
 
     def __str__(self):
         return f"Payout {self.amount} {self.currency} to {self.laundry_id} ({self.status})"
+
 
 
 class OrderSettlement(models.Model):
@@ -226,3 +233,61 @@ class OrderSettlement(models.Model):
 
     def __str__(self):
         return f"Settlement {self.net_payable} {self.currency} ({self.status})"
+
+
+class OrderDispute(models.Model):
+    """
+    A customer's "Report a problem" on a delivered order.
+
+    While OPEN it holds the order's settlement: every release path goes
+    through `settlement_service.release_blocker`, which refuses to release
+    money with an open dispute. Only support/admin can resolve it, and the
+    laundry has no endpoint that touches it.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = 'OPEN', _('Open — payment on hold')
+        RESOLVED_RELEASED = 'RESOLVED_RELEASED', _('Resolved — paid to laundry')
+        RESOLVED_REFUNDED = 'RESOLVED_REFUNDED', _('Resolved — customer refunded')
+        # The money had already left the hold (or could not be refunded
+        # automatically). Nothing is reversed silently; finance decides.
+        MANUAL_REVIEW = 'MANUAL_REVIEW', _('Needs manual financial review')
+
+    class Reason(models.TextChoices):
+        NOT_RECEIVED = 'NOT_RECEIVED', _('I did not receive my order')
+        ITEMS_MISSING = 'ITEMS_MISSING', _('Items are missing')
+        ITEMS_DAMAGED = 'ITEMS_DAMAGED', _('Items are damaged')
+        POOR_QUALITY = 'POOR_QUALITY', _('Not cleaned properly')
+        OTHER = 'OTHER', _('Something else')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey('ordering.Order', on_delete=models.PROTECT, related_name='disputes')
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='order_disputes'
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    details = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN, db_index=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='resolved_order_disputes',
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Order dispute')
+        verbose_name_plural = _('Order disputes')
+        constraints = [
+            # A duplicate report can never open a second hold on one order.
+            models.UniqueConstraint(
+                fields=['order'], condition=models.Q(status='OPEN'),
+                name='one_open_dispute_per_order',
+            ),
+        ]
+
+    def __str__(self):
+        return f"Dispute on {self.order_id} ({self.status})"

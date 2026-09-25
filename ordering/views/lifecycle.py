@@ -15,6 +15,7 @@ from ..serializers.lifecycle import OrderStatusHistorySerializer, OrderTransitio
 from ..serializers.order import OrderDetailSerializer
 # pyre-ignore[missing-module]
 from ..permissions import IsOrderParticipant, CanManageLifecycle
+from config.throttling import HANDOVER_CODE_THROTTLES
 import logging
 from decimal import Decimal
 
@@ -185,7 +186,10 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         """IN_PROCESS -> OUT_FOR_DELIVERY (Rider/Laundry)"""
         return self._handle_transition(request, Order.Status.OUT_FOR_DELIVERY)
 
-    @decorators.action(detail=True, methods=['patch'], url_path='mark-delivered')
+    @decorators.action(
+        detail=True, methods=['patch'], url_path='mark-delivered',
+        throttle_classes=HANDOVER_CODE_THROTTLES,
+    )
     def mark_delivered(self, request, pk=None):
         """
         OUT_FOR_DELIVERY -> DELIVERED (Laundry)
@@ -204,6 +208,28 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
 
         submitted = request.data.get('handover_code')
         order = self.get_order()
+
+        # Check eligibility before touching the code at all. Verifying (and
+        # recording) a correct code against an order that can't actually
+        # reach DELIVERED from here -- CANCELLED, REJECTED, still PENDING --
+        # used to set delivery_confirmed_by_code/delivered_at as a side
+        # effect even though the transition below then failed with 400,
+        # silently corrupting an order that was never delivered.
+        #
+        # Already-DELIVERED is deliberately let through: OrderStateMachine
+        # treats DELIVERED->DELIVERED as a no-op success (the idempotent
+        # retry-after-a-dropped-response case), and marking the code again
+        # there is harmless -- mark_confirmed_by_code is itself idempotent.
+        already_delivered = order.status == Order.Status.DELIVERED
+        if not already_delivered and not OrderStateMachine.can_transition(order.status, Order.Status.DELIVERED):
+            return Response({
+                "status": "error",
+                "message": "Invalid state transition",
+                "data": {
+                    "current_status": order.status,
+                    "target_status": Order.Status.DELIVERED,
+                },
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         if submitted:
             if not verify_handover_code(order, submitted):

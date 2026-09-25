@@ -77,6 +77,50 @@ def format_phone_for_display(e164):
     return e164 or ''
 
 
+def to_ghana_momo_account_number(raw):
+    """
+    Return the 10-digit Ghana Mobile Money account number (e.g. '0551057139')
+    expected by Paystack's transfer recipient API for type='mobile_money'.
+
+    Accepts:
+      - 0551057139
+      - +233551057139
+      - 233551057139
+      - 055 105 7139
+      - +233 55 105 7139
+    """
+    e164 = normalize_phone(raw)
+    digits = e164.lstrip('+')
+    if digits.startswith(GHANA_CALLING_CODE):
+        national = digits[len(GHANA_CALLING_CODE):]
+        return f"0{national}"
+    raise PhoneValidationError('Only Ghanaian phone numbers can be used for Mobile Money payouts.')
+
+
+def mask_phone_number(phone):
+    """
+    Mask a phone number for secure display, e.g. '055 *** 7139' or '+233 55 *** 7139'.
+    Never discloses the full sensitive account digits in UI / logs.
+    """
+    if not phone:
+        return ''
+    cleaned = re.sub(r'[\s\-().]', '', str(phone))
+    try:
+        e164 = normalize_phone(cleaned)
+        digits = e164.lstrip('+')
+        if digits.startswith(GHANA_CALLING_CODE):
+            nat = digits[len(GHANA_CALLING_CODE):]
+            # nat is 9 digits, e.g. 551057139 -> '055 *** 7139'
+            return f"0{nat[:2]} *** {nat[5:]}"
+    except PhoneValidationError:
+        pass
+
+    # Generic masking fallback
+    if len(cleaned) >= 7:
+        return f"{cleaned[:3]} *** {cleaned[-4:]}"
+    return '***'
+
+
 def _validate_e164(e164):
     digits = e164[1:]
     if not digits.isdigit():
@@ -92,3 +136,4 @@ def _validate_e164(e164):
     # Generic E.164 bounds for other regions (ITU: up to 15 digits).
     if not (8 <= len(digits) <= 15):
         raise PhoneValidationError('Enter a valid phone number.')
+

@@ -44,6 +44,9 @@ class TestOrderTrackingEndpoint:
         assert data['order']['otp'] == derive_otp(order_with_item)
         assert data['order']['is_terminal'] is False
         assert data['order']['estimated_completion'] is not None
+        assert data['order']['delivery_confirmed'] is False
+        # Too early to confirm receipt -- PENDING never reached OUT_FOR_DELIVERY.
+        assert data['order']['can_confirm_received'] is False
 
         # Timeline contains the canonical 6 milestones with PENDING current.
         labels = [m['label'] for m in data['timeline']]
@@ -78,6 +81,22 @@ class TestOrderTrackingEndpoint:
         response = api_client.get(url)
 
         # OrderViewSet.get_queryset filters by request.user, so foreign orders 404.
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_laundry_owner_cannot_fetch_the_customers_tracking_snapshot(self, api_client, order_with_item):
+        # The delivery code lives in this payload (`order.otp`). If the
+        # laundry owner could reach it through this endpoint they could read
+        # the customer's own code back, submit it themselves, and falsely
+        # prove a delivery they never made. OrderViewSet.get_queryset scopes
+        # strictly to `user=request.user` (the customer), so the owner --
+        # despite legitimately managing this exact order -- gets a 404 here,
+        # the same as any other stranger.
+        owner = order_with_item.laundry.owner
+        api_client.force_authenticate(user=owner)
+
+        url = reverse('order-tracking', kwargs={'pk': order_with_item.id})
+        response = api_client.get(url)
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_unauthenticated_gets_401(self, api_client, order_with_item):

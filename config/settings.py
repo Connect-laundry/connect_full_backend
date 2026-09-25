@@ -350,13 +350,24 @@ THROTTLE_RATE_DEFAULTS = {
     'coupon_validate_daily': ('COUPON_VALIDATE_DAILY_RATE', '50/d'),
     'referral_apply': ('REFERRAL_APPLY_RATE', '5/h'),
     'media_upload': ('UPLOAD_RATE', '20/h'),
+    # AI price-list scan uploads per owner (burst guard; the per-laundry
+    # daily cap PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY is the cost control).
+    'price_import_upload': ('PRICE_IMPORT_UPLOAD_RATE', '10/h'),
     'review': ('THROTTLE_REVIEW', '5/h'),
     'feedback': ('THROTTLE_FEEDBACK', '3/h'),
+    'order_dispute': ('THROTTLE_ORDER_DISPUTE', '10/h'),
     'legal_public': ('THROTTLE_LEGAL_PUBLIC', '300/h'),
     'admin_search': ('THROTTLE_ADMIN_SEARCH', '120/m'),
     'notif_track': ('THROTTLE_NOTIF_TRACK', '120/m'),
     'test_push': ('THROTTLE_TEST_PUSH', '5/h'),
     'places': ('THROTTLE_PLACES', '60/m'),
+    # Handover-code verification: a 4-digit code is a 10,000-value space, and
+    # the laundry owner is otherwise only bounded by the generous general API
+    # budget (120/m), which is enough to exhaust it in under 90 minutes. Keyed
+    # primarily on the order (stops grinding one customer's code) and
+    # secondarily on the owner account (stops grinding across many orders).
+    'handover_code_order': ('HANDOVER_CODE_ORDER_RATE', '5/10m'),
+    'handover_code_owner': ('HANDOVER_CODE_OWNER_RATE', '20/h'),
 }
 
 
@@ -838,8 +849,68 @@ GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', '')
 
-# OCR provider for AI-assisted price-list import. '' / 'null' = stub (no extraction).
-OCR_PROVIDER = os.getenv('OCR_PROVIDER', '').lower()
+# --- AI-assisted price-list import (laundries/services/price_import) ---------
+# Server-side only. Keys must never be exposed to any frontend bundle.
+# Extraction only ever produces drafts; the owner confirms before anything is
+# saved. Manual pricing endpoints do not depend on any of this.
+def _env_bool(name, default='false'):
+    return os.getenv(name, default).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+PRICE_LIST_AI_ENABLED = _env_bool('PRICE_LIST_AI_ENABLED')
+# Comma-separated laundry UUIDs. Empty = every owner (once enabled). Used for
+# the production canary: enable the flag with only the QA laundry listed.
+PRICE_LIST_AI_LAUNDRY_ALLOWLIST = [
+    v.strip() for v in os.getenv('PRICE_LIST_AI_LAUNDRY_ALLOWLIST', '').split(',') if v.strip()
+]
+PRICE_LIST_PRIMARY_PROVIDER = os.getenv('PRICE_LIST_PRIMARY_PROVIDER', 'gemini').strip().lower()
+PRICE_LIST_FALLBACK_PROVIDER = os.getenv('PRICE_LIST_FALLBACK_PROVIDER', 'ocr_space').strip().lower()
+PRICE_LIST_GEMINI_ENABLED = _env_bool('PRICE_LIST_GEMINI_ENABLED', 'true')
+PRICE_LIST_OCR_ENABLED = _env_bool('PRICE_LIST_OCR_ENABLED', 'true')
+# Shadow cross-check: run OCR.space alongside Gemini for the first N imports
+# (counted globally from the DB) and compare prices. 0 = conditional only.
+PRICE_LIST_SHADOW_CROSSCHECK = _env_bool('PRICE_LIST_SHADOW_CROSSCHECK', 'true')
+PRICE_LIST_SHADOW_CROSSCHECK_LIMIT = int(os.getenv('PRICE_LIST_SHADOW_CROSSCHECK_LIMIT', 200))
+PRICE_LIST_UPLOAD_MAX_MB = int(os.getenv('PRICE_LIST_UPLOAD_MAX_MB', 10))
+PRICE_LIST_MAX_PIXELS = int(os.getenv('PRICE_LIST_MAX_PIXELS', 40_000_000))
+PRICE_LIST_GEMINI_LONG_EDGE = int(os.getenv('PRICE_LIST_GEMINI_LONG_EDGE', 2560))
+PRICE_LIST_OCR_MAX_BYTES = int(os.getenv('PRICE_LIST_OCR_MAX_BYTES', 950 * 1024))
+PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY = int(os.getenv('PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY', 15))
+PRICE_LIST_MAX_PRICE = os.getenv('PRICE_LIST_MAX_PRICE', '5000')
+PRICE_LIST_IMAGE_RETENTION_DAYS = int(os.getenv('PRICE_LIST_IMAGE_RETENTION_DAYS', 30))
+# Whole-request budget for synchronous extraction (no worker required). Must
+# stay well under gunicorn's --timeout (120s in the Dockerfile).
+PRICE_LIST_TOTAL_BUDGET_SECONDS = int(os.getenv('PRICE_LIST_TOTAL_BUDGET_SECONDS', 75))
+# Extraction holds a sync gunicorn worker for its whole duration and prod runs
+# 2 workers, so cap simultaneous scans across all laundries to keep the rest
+# of the API responsive. Raise together with GUNICORN_WORKERS.
+PRICE_LIST_MAX_CONCURRENT = int(os.getenv('PRICE_LIST_MAX_CONCURRENT', 1))
+# 'thread': ?async=1 uploads return 202 and extract in a background thread
+# (no Celery). 'inline': extract before responding (tests; emergency switch).
+PRICE_LIST_BACKGROUND_MODE = os.getenv('PRICE_LIST_BACKGROUND_MODE', 'thread').strip().lower()
+
+# Canonical Gemini credential. The google-genai SDK would prefer
+# GOOGLE_API_KEY from the environment over GEMINI_API_KEY; we always pass the
+# key explicitly, and the health/diagnostic command flags a stray
+# GOOGLE_API_KEY so an old key can never silently take over.
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '').strip()
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.8-flash').strip()
+# Tried once when the primary model is overloaded (503) or missing (404).
+GEMINI_FALLBACK_MODEL = os.getenv('GEMINI_FALLBACK_MODEL', 'gemini-3.6-flash').strip()
+GEMINI_TIMEOUT_SECONDS = int(os.getenv('GEMINI_TIMEOUT_SECONDS', 45))
+GEMINI_THINKING_LEVEL = os.getenv('GEMINI_THINKING_LEVEL', 'low').strip().lower()
+
+OCR_SPACE_API_KEY = os.getenv('OCR_SPACE_API_KEY', '').strip()
+OCR_SPACE_ENDPOINT = os.getenv('OCR_SPACE_ENDPOINT', 'https://api.ocr.space/parse/image').strip()
+OCR_SPACE_ENGINE = os.getenv('OCR_SPACE_ENGINE', '3').strip()
+OCR_SPACE_TIMEOUT_SECONDS = int(os.getenv('OCR_SPACE_TIMEOUT_SECONDS', 30))
+# Engine 3 gets this long before hopping once to the fallback engine (Engine 2
+# has a separate 25k/month free quota). Engine 3 was observed timing out
+# server side (E563) under load. Empty fallback = Engine 3 only.
+OCR_SPACE_FALLBACK_ENGINE = os.getenv('OCR_SPACE_FALLBACK_ENGINE', '2').strip()
+OCR_SPACE_PRIMARY_ENGINE_TIMEOUT_SECONDS = int(os.getenv('OCR_SPACE_PRIMARY_ENGINE_TIMEOUT_SECONDS', 20))
+# Free plan: 2,500 Engine 3 calls/month. Stop calling at this internal cap.
+OCR_SPACE_MONTHLY_LIMIT = int(os.getenv('OCR_SPACE_MONTHLY_LIMIT', 2300))
 
 # Rainy-day promo weather feed.  Founder-approved; enabled by default.
 # Set WEATHER_PROMO_ENABLED=False to silence without a code change.

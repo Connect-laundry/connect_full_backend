@@ -166,22 +166,28 @@ class TestMyLaundryUpdateStorageResilience:
         assert not laundry.image
 
 
-# --- required file: OCR price-import must 503, not 500 ----------------------
+# --- price-list scan image is optional: storage outage must not cost the extraction
 
 @pytest.mark.django_db
 class TestPriceImportStorageResilience:
     URL = 'dashboard-price-imports-list'
 
-    def test_storage_failure_returns_503_and_no_orphan_job(self):
+    def test_storage_failure_still_returns_drafts_without_stored_image(self, monkeypatch):
+        from django.test import override_settings
+        from laundries.tests.price_import_helpers import (
+            AI_SETTINGS, GeminiScript, extraction, fake_gemini_response, item, upload,
+        )
         owner = _owner()
         _laundry(owner)
-        with failing_storage():
+        GeminiScript(fake_gemini_response(extraction([item('Shirt', '15')]))).install(monkeypatch)
+        with override_settings(**AI_SETTINGS), failing_storage():
             resp = _client(owner).post(
-                reverse(self.URL), {'source_image': _png('list.png')}, format='multipart'
+                reverse(self.URL), {'source_image': upload()}, format='multipart'
             )
-        assert resp.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, resp.data
-        # The transaction rolled back — no half-created job left behind.
-        assert PriceListImportJob.objects.count() == 0
+        assert resp.status_code == status.HTTP_201_CREATED, resp.data
+        job = PriceListImportJob.objects.get()
+        assert job.status == 'READY' and not job.source_image
+        assert job.draft_items.count() == 1
 
 
 # --- optional media across other write paths -------------------------------

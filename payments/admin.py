@@ -5,7 +5,7 @@ from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
-from .models import OrderSettlement, Payment, Payout, WebhookEvent
+from .models import OrderDispute, OrderSettlement, Payment, Payout, WebhookEvent
 from django.utils.html import format_html
 
 
@@ -276,11 +276,33 @@ class OrderSettlementAdmin(ModelAdmin):
 class PayoutAdmin(ModelAdmin):
     """Batched payments out to laundries."""
 
-    list_display = ('created_at', 'laundry', 'display_amount', 'method', 'display_status', 'paid_at')
+    list_display = (
+        'reference',
+        'laundry',
+        'display_amount',
+        'method',
+        'recipient_code_masked',
+        'display_status',
+        'created_at',
+        'paid_at',
+    )
     list_filter = ('status', 'method', 'created_at')
-    search_fields = ('laundry__name', 'reference')
-    readonly_fields = ('amount', 'currency', 'period_start', 'period_end', 'paid_at', 'created_at', 'updated_at')
-    actions = ['mark_paid']
+    search_fields = ('laundry__name', 'reference', 'paystack_transfer_code', 'recipient_code_used')
+    readonly_fields = (
+        'amount',
+        'currency',
+        'reference',
+        'paystack_transfer_code',
+        'recipient_code_used',
+        'period_start',
+        'period_end',
+        'paid_at',
+        'reversed_at',
+        'failure_reason',
+        'created_at',
+        'updated_at',
+    )
+    actions = ['send_or_retry_payouts', 'mark_paid']
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('laundry')
@@ -289,17 +311,46 @@ class PayoutAdmin(ModelAdmin):
     def display_amount(self, obj):
         return f"{obj.currency} {obj.amount}"
 
+    @display(description='Recipient')
+    def recipient_code_masked(self, obj):
+        code = obj.recipient_code_used or (obj.laundry.paystack_recipient_code if obj.laundry_id else '')
+        if not code:
+            return "—"
+        return f"{code[:8]}..." if len(code) > 8 else code
+
     @display(
         description='Status',
         label={
             Payout.Status.DRAFT: 'warning',
             Payout.Status.PROCESSING: 'info',
+            Payout.Status.WAITING_FOR_FUNDS: 'warning',
             Payout.Status.PAID: 'success',
             Payout.Status.FAILED: 'danger',
+            Payout.Status.REVERSED: 'danger',
         },
     )
     def display_status(self, obj):
         return obj.status
+
+    @admin.action(description='Send or retry selected payouts via Paystack')
+    def send_or_retry_payouts(self, request, queryset):
+        from .services.payout_service import PayoutError, PayoutService
+
+        sent = 0
+        failed = 0
+        for payout in queryset.filter(status__in=[Payout.Status.DRAFT, Payout.Status.FAILED, Payout.Status.WAITING_FOR_FUNDS]):
+            try:
+                PayoutService.send(payout)
+                sent += 1
+            except PayoutError as exc:
+                failed += 1
+                self.message_user(request, f"Payout {payout.reference} failed: {exc}", level=messages.ERROR)
+
+        self.message_user(
+            request,
+            f"Submitted {sent} payout(s) to Paystack. {failed} failed.",
+            level=messages.SUCCESS if sent else messages.WARNING,
+        )
 
     @admin.action(description='Mark selected payouts as paid')
     def mark_paid(self, request, queryset):
@@ -315,3 +366,70 @@ class PayoutAdmin(ModelAdmin):
             f"Marked {settled} payout(s) as paid.",
             level=messages.SUCCESS if settled else messages.WARNING,
         )
+
+
+@admin.register(OrderDispute)
+class OrderDisputeAdmin(ModelAdmin):
+    """Support's review queue. Resolving is the only way to lift the hold."""
+
+    list_display = ('order', 'display_status', 'reason', 'raised_by', 'created_at', 'resolved_by', 'resolved_at')
+    list_filter = ('status', 'reason', 'created_at')
+    search_fields = ('order__order_no', 'raised_by__email')
+    readonly_fields = (
+        'order', 'raised_by', 'reason', 'details', 'status',
+        'resolved_by', 'resolved_at', 'resolution_note', 'created_at', 'updated_at',
+    )
+    actions = ['resolve_release', 'resolve_refund']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @display(
+        description='Status',
+        label={
+            OrderDispute.Status.OPEN: 'warning',
+            OrderDispute.Status.RESOLVED_RELEASED: 'success',
+            OrderDispute.Status.RESOLVED_REFUNDED: 'info',
+            OrderDispute.Status.MANUAL_REVIEW: 'danger',
+        },
+    )
+    def display_status(self, obj):
+        return obj.status
+
+    @admin.action(description='Resolve: release payment to the laundry')
+    def resolve_release(self, request, queryset):
+        from .services.dispute_service import DisputeError, resolve_release
+
+        done = 0
+        for dispute in queryset.filter(status=OrderDispute.Status.OPEN):
+            try:
+                resolved, _ = resolve_release(dispute, request.user, note='Resolved in admin', request=request)
+                done += 1
+                if resolved.status == OrderDispute.Status.MANUAL_REVIEW:
+                    self.message_user(
+                        request,
+                        f"{resolved.order.order_no}: could not release automatically; sent to manual financial review.",
+                        level=messages.WARNING,
+                    )
+            except DisputeError as exc:
+                self.message_user(request, str(exc), level=messages.ERROR)
+        self.message_user(request, f"Resolved {done} dispute(s).", level=messages.SUCCESS if done else messages.WARNING)
+
+    @admin.action(description='Resolve: refund the customer (one dispute at a time)')
+    def resolve_refund(self, request, queryset):
+        from .services.dispute_service import DisputeError, resolve_refund
+
+        # Refunds move money irreversibly, so never in bulk.
+        if queryset.count() != 1:
+            self.message_user(request, 'Select exactly one dispute to refund.', level=messages.ERROR)
+            return
+        try:
+            resolved, _ = resolve_refund(queryset.get(), request.user, note='Resolved in admin', request=request)
+        except DisputeError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+            return
+        level = messages.WARNING if resolved.status == OrderDispute.Status.MANUAL_REVIEW else messages.SUCCESS
+        self.message_user(request, f"{resolved.order.order_no}: {resolved.get_status_display()}", level=level)

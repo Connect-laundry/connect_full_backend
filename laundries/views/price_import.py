@@ -1,51 +1,66 @@
 """AI-assisted price-list import endpoints (owner-facing).
 
-Flow:
-1. ``POST price-imports/`` — upload a price-list image. A job is created and the
-   configured OCR provider proposes candidate items (the default stub proposes
-   none). Returns the job + unconfirmed draft items.
-2. ``GET price-imports/{id}/`` — fetch a job and its drafts for review.
-3. ``POST price-imports/{id}/confirm/`` — the owner submits the reviewed rows.
-   Each becomes a ``LaundryPricingItem``. Existing items (same name) are never
-   overwritten; they are skipped and reported.
+Flow (see docs/PRICE_LIST_IMPORT_API.md):
+1. ``GET  price-imports/availability/``: whether scanning is available to
+   this owner right now (feature flag, rollout allowlist, provider config,
+   daily allowance).
+2. ``POST price-imports/`` (multipart ``source_image``): the image is hardened
+   and extracted *synchronously*; the response carries the finished job.
+   No Celery/Redis involved.
+3. ``GET  price-imports/{id}/``: fetch the job and its drafts (survives a
+   browser refresh).
+4. ``POST price-imports/{id}/confirm/``: owner-edited rows; revalidated
+   server side, applied atomically, idempotent.
+5. ``POST price-imports/{id}/cancel/``: discard drafts.
+
+The laundry is always resolved from the authenticated owner, never from the
+request body. Manual pricing endpoints are independent of all of this.
 """
 import logging
 
 # pyre-ignore[missing-module]
-from django.db import transaction
-# pyre-ignore[missing-module]
-from django.utils import timezone
+from django.conf import settings
 # pyre-ignore[missing-module]
 from rest_framework import permissions, status, viewsets
 # pyre-ignore[missing-module]
 from rest_framework.decorators import action
 # pyre-ignore[missing-module]
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 # pyre-ignore[missing-module]
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
-from ..models.pricing import LaundryPricingItem
-from ..models.price_import import PriceListDraftItem, PriceListImportJob
+from config.throttling import UserThrottle
+from ..models.price_import import PriceListImportJob
+from ..permissions import IsOwnerRole
 from ..renderers import StandardResponseRenderer
 from ..serializers.price_import import (
     PriceImportConfirmSerializer,
     PriceImportCreateSerializer,
     PriceListImportJobSerializer,
 )
-from ..services.ocr import get_ocr_provider
-from ..permissions import IsOwnerRole
+from ..services.price_import import service
+from ..services.price_import.errors import ImageRejected
+from ..services.price_import.image import prepare_image
 from .pricing import get_owner_laundry
-from utils.media import MediaStorageError, write_media_file
 
 logger = logging.getLogger(__name__)
 
+MANUAL_HINT = 'You can always add your services manually.'
 
-from rest_framework.throttling import UserRateThrottle
-from PIL import Image as PILImage
 
-class PriceImportRateThrottle(UserRateThrottle):
-    rate = '60/hour'
+class PriceImportUploadThrottle(UserThrottle):
+    """Per owner account, shared across workers (DB/Redis-backed). The per-laundry
+    daily cap in the service is the real cost control; this stops bursts."""
+    scope = 'price_import_upload'
+
+
+def _error(code, message, http_status, data=None):
+    return Response(
+        {'status': 'error', 'code': code, 'message': message, 'data': data},
+        status=http_status,
+    )
+
 
 class PriceImportViewSet(viewsets.GenericViewSet):
     queryset = PriceListImportJob.objects.none()
@@ -53,184 +68,120 @@ class PriceImportViewSet(viewsets.GenericViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     renderer_classes = [StandardResponseRenderer]
     serializer_class = PriceListImportJobSerializer
-    throttle_classes = [PriceImportRateThrottle]
+
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.action == 'create':
+            throttles.append(PriceImportUploadThrottle())
+        return throttles
 
     def get_queryset(self):
-        return PriceListImportJob.objects.filter(
-            laundry__owner=self.request.user
-        ).prefetch_related('draft_items')
+        return service.owner_jobs(self.request.user).prefetch_related('draft_items__matched_item')
 
-    def _require_laundry(self):
-        laundry = get_owner_laundry(self.request.user)
-        if laundry is None:
-            return None, Response(
-                {'status': 'error',
-                 'message': 'Register a laundry before importing a price list.',
-                 'data': None},
-                 status=status.HTTP_400_BAD_REQUEST,
-            )
-        return laundry, None
+    @extend_schema(responses=None)
+    @action(detail=False, methods=['get'])
+    def availability(self, request):
+        # Owners still onboarding have no laundry yet; they can scan too.
+        laundry = get_owner_laundry(request.user)
+        available, reason = service.ai_available_for(laundry, request.user)
+        used = service.imports_last_24h(laundry, request.user)
+        return Response({
+            'status': 'success',
+            'message': 'Price-list scanning availability.',
+            'data': {
+                'available': available,
+                'reason': reason or None,
+                'daily_limit': settings.PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY,
+                'used_last_24h': used,
+                'max_upload_mb': settings.PRICE_LIST_UPLOAD_MAX_MB,
+                'accepted_types': ['image/jpeg', 'image/png', 'image/webp'],
+                'manual_entry_available': True,
+            },
+        })
 
     @extend_schema(request=PriceImportCreateSerializer, responses=PriceListImportJobSerializer)
     def create(self, request, *args, **kwargs):
-        laundry, error = self._require_laundry()
-        if error is not None:
-            return error
-        image_file = request.data.get('source_image')
-        if not image_file:
-            return Response(
-                {'status': 'error', 'message': 'No image file provided.', 'data': None},
-                status=status.HTTP_400_BAD_REQUEST
+        laundry = get_owner_laundry(request.user)   # None while onboarding
+        available, _reason = service.ai_available_for(laundry, request.user)
+        if not available:
+            return _error(
+                'AI_IMPORT_NOT_AVAILABLE',
+                f"Price-list scanning isn't available right now. {MANUAL_HINT}", 403,
             )
-
-        # 1. Enforce max file size of 10MB (checked before parsing to prevent memory fatigue)
-        MAX_SIZE = 10 * 1024 * 1024
-        if hasattr(image_file, 'size') and image_file.size > MAX_SIZE:
-            return Response(
-                {'status': 'error', 'message': 'Image file size exceeds the 10MB limit.', 'data': None},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 2. Enforce standard web image file extensions
-        if hasattr(image_file, 'name'):
-            filename = image_file.name.lower()
-            valid_extensions = ('.png', '.jpg', '.jpeg', '.webp')
-            if not filename.endswith(valid_extensions):
-                return Response(
-                    {'status': 'error', 'message': 'Unsupported image format. Allowed formats: PNG, JPG, JPEG, WEBP.', 'data': None},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        # 3. Decode verification using Pillow (SSRF/Zip-bomb/Malicious upload checks)
+        upload = request.FILES.get('source_image')
+        if upload is None:
+            return _error('NO_FILE', 'Please choose a photo of your price list.', 400)
         try:
-            if hasattr(image_file, 'seek'):
-                image_file.seek(0)
-            with PILImage.open(image_file) as img:
-                img.verify()
-            if hasattr(image_file, 'seek'):
-                image_file.seek(0)
-        except Exception as e:
-            logger.error("Malicious or corrupted image upload blocked: %s", str(e))
-            return Response(
-                {'status': 'error', 'message': 'Invalid or corrupted image file.', 'data': None},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        payload = PriceImportCreateSerializer(data=request.data)
-        payload.is_valid(raise_exception=True)
-        image = payload.validated_data['source_image']
+            prepared = prepare_image(upload)
+        except ImageRejected as exc:
+            return _error(exc.code, exc.message, exc.http_status)
 
-
-        provider = get_ocr_provider()
-        # The source image *is* the payload here, so a storage failure can't be
-        # degraded away — return a clean 503. Writing the image inside the
-        # transaction means a storage failure rolls the job back (no orphan).
+        # ?async=1: return 202 at once and extract in the background; the client
+        # polls GET {id}/. Keeps proxies/browsers from holding a request open
+        # for up to a minute. Default stays synchronous for existing clients.
+        wants_async = str(request.query_params.get('async', '')).lower() in ('1', 'true', 'yes')
+        background = wants_async and settings.PRICE_LIST_BACKGROUND_MODE == 'thread'
         try:
-            with transaction.atomic():
-                job = PriceListImportJob.objects.create(
-                    laundry=laundry,
-                    provider=provider.name,
-                    status=PriceListImportJob.Status.PROCESSING,
-                )
-                write_media_file(
-                    job, 'source_image', image, request=request,
-                    laundry_id=str(laundry.id),
-                )
-        except MediaStorageError:
-            return Response(
-                {'status': 'error',
-                 'message': 'Image storage is temporarily unavailable. Please try again later.',
-                 'data': None},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        import sys
-        if 'test' in sys.argv or 'pytest' in sys.modules:
-            from laundries.tasks import process_ocr_import
-            process_ocr_import(job.id)
+            outcome = service.start_import(laundry=laundry, user=request.user, image=prepared,
+                                           request=request, background=background)
+        except service.ImportRefused as exc:
+            return _error(exc.code, f'{exc.message}', exc.http_status)
+
+        job = self.get_queryset().get(pk=outcome.job.pk)
+        data = PriceListImportJobSerializer(job).data
+        data['deduplicated'] = outcome.deduplicated
+        if not outcome.created:
+            code = status.HTTP_200_OK
+        elif wants_async:
+            code = status.HTTP_202_ACCEPTED
         else:
-            from laundries.tasks import process_ocr_import
-            from utils.tasks import safe_task_delay
-
-            def _dispatch_ocr(job_id=job.id):
-                # Broker outage: mark the job failed instead of crashing the
-                # request post-commit; the owner can retry the upload.
-                if not safe_task_delay(process_ocr_import, job_id):
-                    PriceListImportJob.objects.filter(id=job_id).update(
-                        status=PriceListImportJob.Status.FAILED,
-                        error='Processing queue unavailable. Please try again later.',
-                    )
-
-            transaction.on_commit(_dispatch_ocr)
-
-        job.refresh_from_db()
-        return Response(
-            PriceListImportJobSerializer(job).data, status=status.HTTP_201_CREATED
-        )
-
+            code = status.HTTP_201_CREATED
+        return Response(data, status=code)
 
     @extend_schema(responses=PriceListImportJobSerializer)
     def retrieve(self, request, pk=None):
+        service.expire_stale(service.owner_jobs(request.user).filter(id=pk))
         job = self.get_queryset().filter(id=pk).first()
         if job is None:
-            return Response(
-                {'status': 'error', 'message': 'Import job not found.', 'data': None},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return _error('NOT_FOUND', 'Import job not found.', 404)
         return Response(PriceListImportJobSerializer(job).data)
 
     @extend_schema(request=PriceImportConfirmSerializer, responses=PriceListImportJobSerializer)
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
-        job = self.get_queryset().filter(id=pk).first()
-        if job is None:
-            return Response(
-                {'status': 'error', 'message': 'Import job not found.', 'data': None},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if job.status == PriceListImportJob.Status.CONFIRMED:
-            return Response(
-                {'status': 'error', 'message': 'This import was already confirmed.',
-                 'data': None},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         payload = PriceImportConfirmSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        rows = payload.validated_data['items']
-
-        existing_names = set(
-            LaundryPricingItem.objects.filter(laundry=job.laundry)
-            .values_list('item_name', flat=True)
-        )
-        created, skipped = [], []
-        with transaction.atomic():
-            next_order = (
-                LaundryPricingItem.objects.filter(laundry=job.laundry).count()
+        try:
+            result, replayed = service.confirm_import(
+                job_id=pk, owner=request.user,
+                rows=[dict(r) for r in payload.validated_data['items']],
+                currency_confirmed=payload.validated_data.get('currency_confirmed'),
             )
-            for row in rows:
-                name = row['item_name'].strip()
-                # Never overwrite live pricing; skip duplicates instead.
-                if name in existing_names:
-                    skipped.append(name)
-                    continue
-                LaundryPricingItem.objects.create(
-                    laundry=job.laundry,
-                    item_name=name,
-                    unit_price=row['unit_price'],
-                    category=row.get('category', ''),
-                    display_order=next_order,
-                )
-                existing_names.add(name)
-                created.append(name)
-                next_order += 1
-            job.status = PriceListImportJob.Status.CONFIRMED
-            job.confirmed_at = timezone.now()
-            job.save(update_fields=['status', 'confirmed_at', 'updated_at'])
-
+        except service.ConfirmRejected as exc:
+            return _error(exc.code, exc.message, exc.http_status, {'errors': exc.errors} if exc.errors else None)
+        job = self.get_queryset().get(pk=pk)
+        created, updated, skipped = result['created'], result.get('updated', []), result['skipped']
+        message = f'Imported {len(created)} item(s)'
+        if updated:
+            message += f', updated {len(updated)}'
+        message += f'; skipped {len(skipped)} duplicate(s).'
         return Response({
             'status': 'success',
-            'message': f'Imported {len(created)} item(s); skipped {len(skipped)} duplicate(s).',
+            'message': message,
             'data': {
                 'created': created,
+                'updated': updated,
                 'skipped': skipped,
+                'already_confirmed': replayed,
                 'job': PriceListImportJobSerializer(job).data,
             },
         })
+
+    @extend_schema(request=None, responses=PriceListImportJobSerializer)
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        try:
+            service.cancel_import(job_id=pk, owner=request.user)
+        except service.ConfirmRejected as exc:
+            return _error(exc.code, exc.message, exc.http_status)
+        return Response(PriceListImportJobSerializer(self.get_queryset().get(pk=pk)).data)

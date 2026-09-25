@@ -7,6 +7,7 @@ from .views import (
     PaymentAnalyticsView,
     PaymentOwnerStatsView,
     PaymentRefundView,
+    PayoutProvidersView,
     payment_callback,
 )
 from .webhooks import paystack_webhook
@@ -20,6 +21,8 @@ urlpatterns = [
     path('refund/<str:reference>/', PaymentRefundView.as_view(), name='payment_refund'),
     path('analytics/', PaymentAnalyticsView.as_view(), name='payment_analytics'),
     path('owner-stats/', PaymentOwnerStatsView.as_view(), name='payment_owner_stats'),
+    path('payout-providers/', PayoutProvidersView.as_view(), name='payout_providers'),
     path('webhook/', paystack_webhook, name='paystack_webhook'),
     path('paystack/webhook/', paystack_webhook, name='paystack_webhook_alt'),
 ]
+
