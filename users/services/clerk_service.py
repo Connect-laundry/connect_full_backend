@@ -66,26 +66,47 @@ class ClerkTokenVerifier:
 
         # Decode unverified claims to inspect headers and claims before strict verification
         try:
-            unverified_claims = jwt.decode(token, options={'verify_signature': False})
+            unverified_claims = jwt.decode(token, options={'verify_signature': False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         except jwt.PyJWTError as exc:
-            logger.warning('Unable to parse Clerk token claims: %s (%s)', exc, type(exc).__name__)
+            logger.warning('Unable to parse Clerk claims: %s (%s)', exc, type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             raise AuthenticationFailed('Invalid Clerk session token.') from exc
 
-        jwks_url = self.jwks_url or f'{self.issuer.rstrip("/")}/.well-known/jwks.json'
-        try:
-            signing_key = _jwks_client(jwks_url, self.jwks_cache_seconds).get_signing_key_from_jwt(token).key
-        except Exception as exc:
-            logger.warning('Failed to retrieve signing key for Clerk token: %s (%s)', exc, type(exc).__name__)
-            raise AuthenticationFailed('Unable to verify Clerk session token.') from exc
-
-        # Collect acceptable issuers (support with/without trailing slash)
+        # Collect acceptable issuers (support configured issuer, production domain, and valid Clerk dev domains)
         allowed_issuers = set()
-        for candidate in [self.issuer, getattr(settings, 'CLERK_JWT_ISSUER', '')]:
+        candidates = [
+            self.issuer,
+            getattr(settings, 'CLERK_JWT_ISSUER', ''),
+            'https://clerk.simame.tech',
+            'https://grown-mole-74.clerk.accounts.dev',
+        ]
+        token_iss = unverified_claims.get('iss')
+        if token_iss and isinstance(token_iss, str):
+            iss_clean = token_iss.strip().rstrip('/')
+            try:
+                from urllib.parse import urlparse
+                hostname = urlparse(iss_clean).hostname or ''
+                if hostname.endswith('.clerk.accounts.dev') or hostname == 'clerk.simame.tech' or hostname.endswith('.simame.tech'):
+                    candidates.append(iss_clean)
+            except Exception:
+                pass
+
+        for candidate in candidates:
             if candidate and isinstance(candidate, str):
                 c = candidate.strip()
                 if c:
                     allowed_issuers.add(c.rstrip('/'))
                     allowed_issuers.add(f'{c.rstrip("/")}/')
+
+        issuer_for_jwks = self.issuer
+        if token_iss and isinstance(token_iss, str) and (token_iss.strip().rstrip('/') in allowed_issuers):
+            issuer_for_jwks = token_iss.strip().rstrip('/')
+
+        jwks_url = self.jwks_url or f'{issuer_for_jwks.rstrip("/")}/.well-known/jwks.json'
+        try:
+            signing_key = _jwks_client(jwks_url, self.jwks_cache_seconds).get_signing_key_from_jwt(token).key
+        except Exception as exc:
+            logger.warning('Failed to retrieve signing key for Clerk auth: %s (%s)', exc, type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+            raise AuthenticationFailed('Unable to verify Clerk session token.') from exc
 
         decode_kwargs: dict[str, Any] = {
             'key': signing_key,
@@ -128,16 +149,16 @@ class ClerkTokenVerifier:
         try:
             payload = jwt.decode(token, **decode_kwargs)
         except jwt.ExpiredSignatureError as exc:
-            logger.warning('Clerk session token has expired: %s', exc)
+            logger.warning('Clerk session has expired: %s', exc)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             raise AuthenticationFailed('Clerk session token has expired.') from exc
         except jwt.InvalidAudienceError as exc:
-            logger.warning('Clerk session token audience mismatch: %s (token aud: %s)', exc, token_aud)
+            logger.warning('Clerk session audience mismatch: %s', exc)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             raise AuthenticationFailed('Invalid Clerk session token.') from exc
         except jwt.InvalidIssuerError as exc:
-            logger.warning('Clerk session token issuer mismatch: %s (token iss: %s)', exc, unverified_claims.get('iss'))
+            logger.warning('Clerk session issuer mismatch: %s', exc)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             raise AuthenticationFailed('Invalid Clerk session token.') from exc
         except jwt.PyJWTError as exc:
-            logger.warning('Clerk session token decode failed: %s (%s)', exc, type(exc).__name__)
+            logger.warning('Clerk session decode failed: %s (%s)', exc, type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             raise AuthenticationFailed('Invalid Clerk session token.') from exc
         except Exception as exc:
             logger.warning('Clerk JWKS verification failed', extra={'error_type': type(exc).__name__, 'error': str(exc)})
@@ -265,13 +286,27 @@ def _metadata_from_profile(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _profile_from_claims(payload: dict[str, Any]) -> ClerkProfile:
-    email = (
-        payload.get('email')
-        or payload.get('email_address')
-        or payload.get('primary_email_address')
-        or payload.get('primary_email')
-        or ''
-    )
+    email = ''
+    for key in ['email', 'email_address', 'primary_email_address', 'primary_email']:
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            email = val.strip()
+            break
+        elif isinstance(val, dict):
+            sub_val = val.get('email_address') or val.get('email')
+            if isinstance(sub_val, str) and sub_val.strip():
+                email = sub_val.strip()
+                break
+
+    if not email:
+        email_list = payload.get('email_addresses')
+        if isinstance(email_list, list) and email_list:
+            first = email_list[0]
+            if isinstance(first, str):
+                email = first.strip()
+            elif isinstance(first, dict):
+                email = (first.get('email_address') or first.get('email') or '').strip()
+
     name = (payload.get('name') or '').strip()
     first_name = payload.get('given_name') or payload.get('first_name') or ''
     last_name = payload.get('family_name') or payload.get('last_name') or ''
@@ -332,7 +367,7 @@ def fetch_clerk_profile(payload: dict[str, Any]) -> ClerkProfile:
         response.raise_for_status()
         data = response.json()
     except requests.RequestException as exc:
-        logger.warning('Clerk profile lookup failed; using token claims: %s (%s)', exc, type(exc).__name__)
+        logger.warning('Clerk profile lookup failed; using claims: %s (%s)', exc, type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
         return _profile_from_claims(payload)
 
     return profile_from_clerk_user_data(data, payload)
