@@ -3,7 +3,6 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.safestring import mark_safe
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action, display
 
@@ -188,24 +187,28 @@ class LaundryAdmin(ModelAdmin):
         """
         if obj is None or obj.pk is None:
             return "—"
-        # Fixed text only below; anything from the database goes through format_html.
         if not obj.is_active:
-            return mark_safe('<strong style="color:#dc2626">Closed</strong>: the laundry is deactivated (Live is off).')
+            return self._availability('#dc2626', 'Closed', 'the laundry is deactivated (Live is off).')
         if obj.vacation_mode:
-            return mark_safe(
-                '<strong style="color:#dc2626">Closed, and customers cannot book</strong>: '
+            return self._availability(
+                '#dc2626',
+                'Closed, and customers cannot book',
                 'vacation mode is ON, which overrides the opening hours. Untick '
-                '"Vacation mode" under Business Information and save to reopen.'
+                '"Vacation mode" under Business Information and save to reopen.',
             )
         try:
             status = get_laundry_opening_status(obj)
         except Exception:
             return "Could not evaluate opening status"
         if status['is_open_now']:
-            return mark_safe('<strong style="color:#16a34a">Open now</strong> (Ghana time)')
+            return self._availability('#16a34a', 'Open now', '(Ghana time)')
         if status['next_open_at']:
             return format_html('Closed now (Ghana time). Opens {}.', status['next_open_at'][:16].replace('T', ' '))
         return "Closed now, with no opening in the next 7 days (check the hours and holiday overrides)."
+
+    @staticmethod
+    def _availability(color, headline, detail):
+        return format_html('<strong style="color:{}">{}</strong>: {}', color, headline, detail)
 
     # ------------------------------------------------------- review summaries
 
