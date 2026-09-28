@@ -10,7 +10,7 @@ from .review import ReviewSerializer
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from ..models.opening_hours import OpeningHours
-from utils.media import SafeMediaModelSerializer, safe_media_url
+from utils.media import SafeMediaModelSerializer, cloudinary_resized, safe_media_url
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
@@ -106,11 +106,14 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
-        return safe_media_url(obj.image, self.context.get('request'))
+        return cloudinary_resized(safe_media_url(obj.image, self.context.get('request')), 1200)
 
     @extend_schema_field(LaundryServiceSerializer(many=True))
     def get_services(self, obj):
-        services = obj.laundry_services.filter(is_available=True).select_related('item', 'service_type')
+        if hasattr(obj, '_prefetched_objects_cache') and 'laundry_services' in obj._prefetched_objects_cache:
+            services = [s for s in obj.laundry_services.all() if s.is_available]
+        else:
+            services = obj.laundry_services.filter(is_available=True).select_related('item__item_category', 'service_type')
         data = LaundryServiceSerializer(services, many=True, context=self.context).data
         
         if hasattr(obj, 'pricing_items'):
@@ -159,11 +162,15 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
         return False
 
     def _get_opening_status(self, obj):
+        cached = getattr(obj, '_cached_opening_status', None)
+        if cached is not None:
+            return cached
         cache_key = f"laundry_opening_status_{obj.id}"
         status_data = cache.get(cache_key)
         if status_data is None:
             status_data = get_laundry_opening_status(obj)
             cache.set(cache_key, status_data, 60)
+        obj._cached_opening_status = status_data
         return status_data
 
     @extend_schema_field(OpenApiTypes.BOOL)

@@ -378,6 +378,84 @@ class TestClerkSocialAuth:
         payload = verifier.verify(f'Bearer {token}')
         assert payload['sub'] == 'user_bearer_123'
 
+    def test_clerk_token_verifier_routes_alternate_issuer_to_its_own_jwks_even_with_configured_jwks_url(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        settings.CLERK_JWKS_URL = 'https://clerk.simame.tech/.well-known/jwks.json'
+        settings.CLERK_JWT_AUDIENCE = 'connect_backend'
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        token = jwt.encode(
+            {'sub': 'user_dev_123', 'iss': 'https://grown-mole-74.clerk.accounts.dev', 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+            pem_priv,
+            algorithm='RS256',
+            headers={'kid': 'test-kid'},
+        )
+
+        requested_jwks_urls = []
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+        def fake_jwks_client(jwks_url, cache_seconds):
+            requested_jwks_urls.append(jwks_url)
+            return mock_client
+
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', fake_jwks_client)
+
+        verifier = ClerkTokenVerifier()
+        payload = verifier.verify(token)
+
+        assert payload['sub'] == 'user_dev_123'
+        assert payload['iss'] == 'https://grown-mole-74.clerk.accounts.dev'
+        assert requested_jwks_urls == ['https://grown-mole-74.clerk.accounts.dev/.well-known/jwks.json']
+
+    def test_clerk_token_verifier_rejects_untrusted_issuer_and_does_not_fetch_its_jwks(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        settings.CLERK_JWKS_URL = 'https://clerk.simame.tech/.well-known/jwks.json'
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        token = jwt.encode(
+            {'sub': 'user_evil_123', 'iss': 'https://evil-attacker.clerk.accounts.dev', 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+            pem_priv,
+            algorithm='RS256',
+            headers={'kid': 'test-kid'},
+        )
+
+        requested_jwks_urls = []
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+        def fake_jwks_client(jwks_url, cache_seconds):
+            requested_jwks_urls.append(jwks_url)
+            return mock_client
+
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', fake_jwks_client)
+
+        verifier = ClerkTokenVerifier()
+        with pytest.raises(AuthenticationFailed, match='Invalid Clerk session token.'):
+            verifier.verify(token)
+
+        assert 'https://evil-attacker.clerk.accounts.dev/.well-known/jwks.json' not in requested_jwks_urls
+
+    def test_clerk_token_verifier_rejects_malformed_token_cleanly(self, settings):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        verifier = ClerkTokenVerifier()
+        with pytest.raises(AuthenticationFailed, match='Invalid Clerk session token.'):
+            verifier.verify('not.a.valid.jwt')
+
     def test_provider_normalization_handles_clerk_strategies(self):
         assert normalize_provider('from_oauth_google') == 'oauth_google'
         assert normalize_provider('from_oauth_apple') == 'oauth_apple'

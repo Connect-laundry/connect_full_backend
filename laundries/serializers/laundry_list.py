@@ -8,7 +8,7 @@ from ..models.favorite import Favorite
 from ..services.opening_status import is_laundry_open_now, get_laundry_opening_status
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
-from utils.media import SafeMediaModelSerializer, safe_media_url
+from utils.media import SafeMediaModelSerializer, cloudinary_resized, safe_media_url
 
 class LaundryListSerializer(SafeMediaModelSerializer):
     location = serializers.CharField(source='address')
@@ -72,7 +72,7 @@ class LaundryListSerializer(SafeMediaModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
-        return safe_media_url(obj.image, self.context.get('request'))
+        return cloudinary_resized(safe_media_url(obj.image, self.context.get('request')), 800)
 
     @extend_schema_field(OpenApiTypes.FLOAT)
     def get_distance(self, obj):
@@ -89,11 +89,15 @@ class LaundryListSerializer(SafeMediaModelSerializer):
         return None
 
     def _get_opening_status(self, obj):
+        cached = getattr(obj, '_cached_opening_status', None)
+        if cached is not None:
+            return cached
         cache_key = f"laundry_opening_status_{obj.id}"
         status_data = cache.get(cache_key)
         if status_data is None:
             status_data = get_laundry_opening_status(obj)
             cache.set(cache_key, status_data, 60)
+        obj._cached_opening_status = status_data
         return status_data
 
     @extend_schema_field(OpenApiTypes.BOOL)
