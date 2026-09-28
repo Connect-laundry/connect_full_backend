@@ -269,7 +269,21 @@ class ToggleVacationModeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        laundry.vacation_mode = not laundry.vacation_mode
+        # An explicit {"vacation_mode": bool} sets the state, so a double tap or
+        # a retried request cannot flip it back. With no body the endpoint still
+        # toggles, for clients that predate the explicit form.
+        requested = request.data.get('vacation_mode') if hasattr(request.data, 'get') else None
+        if requested is None:
+            laundry.vacation_mode = not laundry.vacation_mode
+        elif isinstance(requested, bool):
+            laundry.vacation_mode = requested
+        elif str(requested).strip().lower() in ('true', 'false'):
+            laundry.vacation_mode = str(requested).strip().lower() == 'true'
+        else:
+            return Response(
+                {'status': 'error', 'message': 'vacation_mode must be true or false.', 'data': None},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         laundry.save(update_fields=['vacation_mode', 'updated_at'])
         
         OwnerAuditLog.objects.create(
