@@ -89,11 +89,15 @@ class LaundryListSerializer(SafeMediaModelSerializer):
         return None
 
     def _get_opening_status(self, obj):
+        cached = getattr(obj, '_cached_opening_status', None)
+        if cached is not None:
+            return cached
         cache_key = f"laundry_opening_status_{obj.id}"
         status_data = cache.get(cache_key)
         if status_data is None:
             status_data = get_laundry_opening_status(obj)
             cache.set(cache_key, status_data, 60)
+        obj._cached_opening_status = status_data
         return status_data
 
     @extend_schema_field(OpenApiTypes.BOOL)

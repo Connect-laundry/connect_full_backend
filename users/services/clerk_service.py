@@ -393,9 +393,17 @@ def profile_from_clerk_user_data(data: dict[str, Any], payload: dict[str, Any] |
 
 
 def fetch_clerk_profile(payload: dict[str, Any]) -> ClerkProfile:
+    # If the verified token already contains user email and identity claims
+    # (e.g. from connect_backend template, standard Clerk tokens, or social providers),
+    # construct the profile directly from claims to avoid a slow synchronous
+    # transatlantic HTTP network request to api.clerk.com.
+    profile = _profile_from_claims(payload)
+    if profile.email:
+        return profile
+
     secret_key = getattr(settings, 'CLERK_SECRET_KEY', '')
     if not secret_key:
-        return _profile_from_claims(payload)
+        return profile
 
     api_base_url = getattr(settings, 'CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
     timeout = getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5)
@@ -410,9 +418,10 @@ def fetch_clerk_profile(payload: dict[str, Any]) -> ClerkProfile:
         data = response.json()
     except requests.RequestException as exc:
         logger.warning('Clerk profile lookup failed; using claims: %s (%s)', exc, type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
-        return _profile_from_claims(payload)
+        return profile
 
     return profile_from_clerk_user_data(data, payload)
+
 
 
 def fetch_clerk_profile_by_user_id(clerk_user_id: str) -> ClerkProfile:

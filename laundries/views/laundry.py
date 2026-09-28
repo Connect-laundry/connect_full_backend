@@ -6,16 +6,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 # pyre-ignore[missing-module]
 from django.db import models
-# pyre-ignore[missing-module]
-from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, Min, Q, Prefetch
-# pyre-ignore[missing-module]
+from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, IntegerField, Min, Q, Prefetch, OuterRef, Subquery
+from django.db.models.functions import Coalesce
+from django.core.cache import cache
 from django.utils import timezone
-# pyre-ignore[missing-module]
 from django_filters.rest_framework import DjangoFilterBackend
-# pyre-ignore[missing-module]
 from rest_framework.filters import SearchFilter
 import logging
 import os
+from ordering.models import Order
 
 # Check if PostGIS is enabled
 from django.conf import settings
@@ -99,33 +98,66 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
+        # Action methods that don't need aggregated signals or heavy annotations
+        if getattr(self, 'action', None) in ['deactivate', 'favorite', 'services']:
+            return Laundry.objects.all().select_related('owner')
+
         try:
-            # 1. Base queryset with essential annotations
+            rating_sq = Subquery(
+                Review.objects.filter(laundry=OuterRef('pk'))
+                .values('laundry')
+                .annotate(avg_r=Avg('rating'))
+                .values('avg_r')[:1],
+                output_field=FloatField()
+            )
+            reviews_count_sq = Coalesce(
+                Subquery(
+                    Review.objects.filter(laundry=OuterRef('pk'))
+                    .values('laundry')
+                    .annotate(c=Count('id'))
+                    .values('c')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            )
+            active_order_sq = Coalesce(
+                Subquery(
+                    Order.objects.filter(
+                        laundry=OuterRef('pk'),
+                        status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']
+                    )
+                    .values('laundry')
+                    .annotate(c=Count('id'))
+                    .values('c')[:1],
+                    output_field=IntegerField()
+                ),
+                0
+            )
+            avg_price_sq = Subquery(
+                LaundryService.objects.filter(laundry=OuterRef('pk'), is_available=True)
+                .values('laundry')
+                .annotate(avg_p=Avg('price'))
+                .values('avg_p')[:1],
+                output_field=FloatField()
+            )
+            min_price_sq = Subquery(
+                LaundryService.objects.filter(laundry=OuterRef('pk'), is_available=True)
+                .values('laundry')
+                .annotate(min_p=Min('price'))
+                .values('min_p')[:1],
+                output_field=FloatField()
+            )
+
+            # 1. Base queryset with non-blocking scalar subquery annotations (eliminates Cartesian explosion)
             queryset = Laundry.objects.filter(
                 status=Laundry.ApprovalStatus.APPROVED,
                 is_active=True
             ).select_related('owner').annotate(
-                rating=Avg('reviews__rating'),
-                # distinct=True is required: joining reviews, orders and
-                # laundry_services in one annotate() fans the rows out, so a
-                # plain Count would report reviews x orders x services.
-                reviewsCount=Count('reviews', distinct=True),
-                active_order_count=Count(
-                    'orders',
-                    filter=models.Q(orders__status__in=['PENDING', 'PICKED_UP', 'IN_PROCESS', 'OUT_FOR_DELIVERY']),
-                    distinct=True,
-                ),
-                # Price signals for the discovery cards. Avg/Min are unaffected
-                # by the row fan-out above (every service row is duplicated the
-                # same number of times), so they stay correct.
-                avg_price=Avg(
-                    'laundry_services__price',
-                    filter=Q(laundry_services__is_available=True),
-                ),
-                min_service_price=Min(
-                    'laundry_services__price',
-                    filter=Q(laundry_services__is_available=True),
-                ),
+                rating=rating_sq,
+                reviewsCount=reviews_count_sq,
+                active_order_count=active_order_sq,
+                avg_price=avg_price_sq,
+                min_service_price=min_price_sq,
             ).order_by('-created_at')
         except Exception as e:
             logger.error(f"Error in Laundry base queryset: {e}", exc_info=True)
@@ -174,7 +206,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 prefetch_items.extend([
                     Prefetch(
                         'laundry_services',
-                        queryset=LaundryService.objects.filter(is_available=True).select_related('service_type', 'item')
+                        queryset=LaundryService.objects.filter(is_available=True).select_related('service_type', 'item__item_category')
                     ),
                     'reviews__user',
                 ])
@@ -298,9 +330,15 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """
-        Dedicated endpoint for featured laundries.
+        Dedicated endpoint for featured laundries with short-term caching.
         """
         try:
+            user_id = request.user.id if request.user.is_authenticated else 'anon'
+            cache_key = f"featured_laundries_response_{user_id}"
+            cached_payload = cache.get(cache_key)
+            if cached_payload is not None:
+                return Response(cached_payload)
+
             queryset = self.get_queryset().filter(is_featured=True)
             
             page = self.paginate_queryset(queryset)
@@ -309,11 +347,13 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
                 return self.get_paginated_response(serializer.data)
 
             serializer = self.get_serializer(queryset, many=True)
-            return Response({
+            payload = {
                 "status": "success",
                 "message": "Featured laundries retrieved successfully.",
                 "data": serializer.data
-            })
+            }
+            cache.set(cache_key, payload, 60)
+            return Response(payload)
         except Exception as e:
             logger.error(f"Critical error in featured laundries endpoint: {e}", exc_info=True)
             return Response({
@@ -391,7 +431,7 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             results = []
 
             # 1. Fetch LaundryService items (if any exist)
-            qs = laundry.laundry_services.select_related('item', 'service_type').all()
+            qs = laundry.laundry_services.select_related('item__item_category', 'service_type').all()
             if not request.user.is_staff and laundry.owner != request.user:
                 qs = qs.filter(is_available=True)
             svc_serializer = LaundryServiceSerializer(qs, many=True, context={'request': request})
