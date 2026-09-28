@@ -16,6 +16,7 @@ from .models.pricing import (
 )
 from .models.price_import import PriceListImportJob, PriceListDraftItem
 from .services.approval import InvalidTransition, LaundryApprovalService
+from .services.opening_status import get_laundry_opening_status
 
 
 class OpeningHoursInline(TabularInline):
@@ -55,18 +56,19 @@ class LaundryAdmin(ModelAdmin):
         'city',
         'pricing_model',
         'display_active',
+        'display_vacation',
         'submitted_at',
         'payout_status',
         'created_at',
     )
-    list_filter = ('status', 'payout_status', 'is_featured', 'is_active', 'price_range', 'pricing_model', 'city')
+    list_filter = ('status', 'payout_status', 'is_featured', 'is_active', 'vacation_mode', 'price_range', 'pricing_model', 'city')
     search_fields = ('name', 'description', 'address', 'owner__email', 'payout_phone')
     inlines = [OpeningHoursInline, LaundryPricingItemInline]
     readonly_fields = (
         'id', 'created_at', 'updated_at', 'submitted_at', 'approved_at',
         'promo_campaign_id', 'promo_last_notified_at',
         'rejected_at', 'changes_requested_at', 'reviewed_by', 'status_reason',
-        'logo_preview', 'owner_contact', 'hours_summary',
+        'logo_preview', 'owner_contact', 'hours_summary', 'customer_availability',
         'payout_phone_normalized', 'payout_confirmed_at', 'payout_confirmed_by',
         'recipient_created_at',
     )
@@ -87,7 +89,7 @@ class LaundryAdmin(ModelAdmin):
     fieldsets = (
         ("Review Summary", {
             "fields": (
-                'logo_preview', 'owner_contact', 'hours_summary',
+                'logo_preview', 'owner_contact', 'customer_availability', 'hours_summary',
             ),
         }),
         ("Approval", {
@@ -171,6 +173,43 @@ class LaundryAdmin(ModelAdmin):
     def display_active(self, obj):
         return obj.is_active
 
+    @display(description="Vacation", boolean=True, ordering='vacation_mode')
+    def display_vacation(self, obj):
+        return obj.vacation_mode
+
+    @display(description="What customers see now")
+    def customer_availability(self, obj):
+        """The app's open/closed badge for this laundry, with the reason.
+
+        Vacation mode overrides the hours and blocks bookings, but it lives in
+        a checkbox far from the hours table, so a laundry could show Closed
+        all day with nothing on this page explaining why.
+        """
+        if obj is None or obj.pk is None:
+            return "—"
+        if not obj.is_active:
+            return self._availability('#dc2626', 'Closed', 'the laundry is deactivated (Live is off).')
+        if obj.vacation_mode:
+            return self._availability(
+                '#dc2626',
+                'Closed, and customers cannot book',
+                'vacation mode is ON, which overrides the opening hours. Untick '
+                '"Vacation mode" under Business Information and save to reopen.',
+            )
+        try:
+            status = get_laundry_opening_status(obj)
+        except Exception:
+            return "Could not evaluate opening status"
+        if status['is_open_now']:
+            return self._availability('#16a34a', 'Open now', '(Ghana time)')
+        if status['next_open_at']:
+            return format_html('Closed now (Ghana time). Opens {}.', status['next_open_at'][:16].replace('T', ' '))
+        return "Closed now, with no opening in the next 7 days (check the hours and holiday overrides)."
+
+    @staticmethod
+    def _availability(color, headline, detail):
+        return format_html('<strong style="color:{}">{}</strong>: {}', color, headline, detail)
+
     # ------------------------------------------------------- review summaries
 
     @display(description="Logo")
@@ -220,7 +259,14 @@ class LaundryAdmin(ModelAdmin):
                 if oh.is_closed:
                     time_str = "Closed"
                 elif oh.opening_time and oh.closing_time:
-                    time_str = f"{oh.opening_time:%H:%M} – {oh.closing_time:%H:%M}" + (" (+1 day)" if oh.is_overnight else "")
+                    # Match the opening-status engine, which decides by the
+                    # times, not the is_overnight flag: 08:30-22:00 is a day
+                    # shift even when the flag is ticked.
+                    time_str = f"{oh.opening_time:%H:%M} – {oh.closing_time:%H:%M}"
+                    if oh.opening_time == oh.closing_time:
+                        time_str = "Open 24 hours"
+                    elif oh.closing_time < oh.opening_time:
+                        time_str += " (closes next day)"
                 else:
                     time_str = "Hours unconfigured"
                 formatted_rows.append((oh.get_day_display(), time_str))
