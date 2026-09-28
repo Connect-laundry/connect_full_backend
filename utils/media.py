@@ -16,6 +16,7 @@ This module provides two layers:
   (required media) instead of an unhandled 500.
 """
 import logging
+import re
 
 # pyre-ignore[missing-module]
 from django.conf import settings
@@ -59,6 +60,25 @@ def safe_media_url(file, request=None):
             )
             return url
     return url
+
+
+_CLOUDINARY_UPLOAD = re.compile(r'^(https://res\.cloudinary\.com/[^/]+/image/upload/)(v\d+/.+)$')
+
+
+def cloudinary_resized(url, width):
+    """Serve a Cloudinary upload scaled down to ``width`` in an efficient format.
+
+    Owners upload phone photos as-is; a laundry card was downloading a 2 MB
+    PNG where the resized image is ~110 KB. ``c_limit`` never upscales.
+    Anything that is not a plain versioned upload URL (other hosts, URLs that
+    already carry a transformation) is returned unchanged.
+    """
+    if not url:
+        return url
+    match = _CLOUDINARY_UPLOAD.match(url)
+    if not match:
+        return url
+    return f'{match.group(1)}c_limit,w_{int(width)},q_auto,f_auto/{match.group(2)}'
 
 
 class _SafeUrlRepresentationMixin:

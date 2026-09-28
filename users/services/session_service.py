@@ -118,7 +118,10 @@ def issue_tokens_for_user(user: User, request):
     # nothing is persisted. Callers may nest this inside a wider transaction
     # (e.g. registration); transaction.atomic() handles nesting via savepoints.
     with transaction.atomic():
-        session = DeviceSession.objects.create(
+        # The session's ids default client-side, so the refresh token can be
+        # minted first and the session inserted once with its jti/expiry
+        # (login and signup used to insert it, then update it immediately).
+        session = DeviceSession(
             user=user,
             device_id=device_context['device_id'],
             platform=device_context['platform'],
@@ -132,8 +135,10 @@ def issue_tokens_for_user(user: User, request):
 
         refresh_jti = str(refresh[api_settings.JTI_CLAIM])
         refresh_exp = _exp_to_datetime(refresh.get('exp'))
+        session.current_refresh_jti = refresh_jti
+        session.current_refresh_expires_at = refresh_exp
+        session.save(force_insert=True)
         _create_refresh_record(session, jti=refresh_jti, exp=refresh_exp)
-        _touch_session(session, jti=refresh_jti, exp=refresh_exp, request=request)
 
     return {
         'access': str(refresh.access_token),

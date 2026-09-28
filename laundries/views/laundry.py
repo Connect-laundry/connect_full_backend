@@ -49,7 +49,7 @@ from ..models.review import Review
 from ..serializers.laundry_list import LaundryListSerializer
 # pyre-ignore[missing-module]
 from ..serializers.laundry_detail import LaundryDetailSerializer
-from ..services.opening_status import get_open_laundry_ids
+from ..services.opening_status import get_open_laundry_ids, holiday_override_prefetch
 # pyre-ignore[missing-module]
 from ..pagination import StandardResultsSetPagination
 # pyre-ignore[missing-module]
@@ -162,7 +162,10 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception as e:
             logger.error(f"Error in Laundry base queryset: {e}", exc_info=True)
             # Fallback must include same annotations to avoid Serializer errors
-            queryset = Laundry.objects.all().select_related('owner').annotate(
+            queryset = Laundry.objects.filter(
+                status=Laundry.ApprovalStatus.APPROVED,
+                is_active=True,
+            ).select_related('owner').annotate(
                 rating=Avg('reviews__rating'),
                 reviewsCount=Count('reviews', distinct=True),
                 active_order_count=models.Value(0, output_field=models.IntegerField()),
@@ -178,28 +181,11 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
 
         # 2. Prefetch reviews and services for detail view to avoid N+1
         if self.action == 'retrieve' or self.action == 'list' or self.action == 'featured':
-            # Production logic: Owners and Admins can see "Pending" services as drafts.
-            # Customers only see "Approved" services.
-            user = self.request.user
-            laundry_id = self.kwargs.get('pk')
-            
-            # Simple permission check for the prefetch filter
-            show_all_services = False
-            if user.is_authenticated:
-                if user.is_staff:
-                    show_all_services = True
-                elif laundry_id:
-                    # Check if user owns the laundry being retrieved
-                    laundry_owner_exists = Laundry.objects.filter(id=laundry_id, owner=user).exists()
-                    show_all_services = laundry_owner_exists
-
-            service_filter = Q(is_active=True)
-            if not show_all_services:
-                # Note: LaundryService model uses 'is_available', not 'is_approved'
-                service_filter &= Q(is_available=True)
-
+            # Opening status reads hours and holiday overrides for every card;
+            # without these prefetches that was one query per laundry.
             prefetch_items = [
                 'opening_hours',
+                holiday_override_prefetch(),
             ]
 
             if self.action == 'retrieve':
@@ -257,7 +243,6 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
         # 4. Recommended Sorting Logic
         recommended = self.request.query_params.get('recommended') == 'true'
         if recommended:
-            from django.db.models.functions import Coalesce
             queryset = queryset.annotate(
                 safe_rating=Coalesce('rating', 0.0, output_field=FloatField()),
                 score=ExpressionWrapper(F('safe_rating') * F('reviewsCount'), output_field=FloatField())

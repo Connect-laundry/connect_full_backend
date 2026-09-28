@@ -392,13 +392,13 @@ def profile_from_clerk_user_data(data: dict[str, Any], payload: dict[str, Any] |
     )
 
 
-def fetch_clerk_profile(payload: dict[str, Any]) -> ClerkProfile:
-    # If the verified token already contains user email and identity claims
-    # (e.g. from connect_backend template, standard Clerk tokens, or social providers),
-    # construct the profile directly from claims to avoid a slow synchronous
-    # transatlantic HTTP network request to api.clerk.com.
+def fetch_clerk_profile(payload: dict[str, Any], *, prefer_claims: bool = False) -> ClerkProfile:
+    # prefer_claims skips the api.clerk.com round trip when the verified token
+    # already carries an email. Only safe for users already linked by Clerk id:
+    # a first sign-in may link to an existing account by email, and that needs
+    # Clerk's authoritative verification status, which claims may not carry.
     profile = _profile_from_claims(payload)
-    if profile.email:
+    if prefer_claims and profile.email:
         return profile
 
     secret_key = getattr(settings, 'CLERK_SECRET_KEY', '')
@@ -593,5 +593,6 @@ def deactivate_user_from_clerk(clerk_user_id: str, *, request=None, reason: str 
 
 def authenticate_clerk_token(token: str, *, requested_role: str | None = None, request=None):
     payload = ClerkTokenVerifier().verify(token)
-    profile = fetch_clerk_profile(payload)
+    already_linked = User.objects.filter(clerk_user_id=payload['sub']).exists()
+    profile = fetch_clerk_profile(payload, prefer_claims=already_linked)
     return sync_user_from_clerk(profile=profile, requested_role=requested_role, request=request)

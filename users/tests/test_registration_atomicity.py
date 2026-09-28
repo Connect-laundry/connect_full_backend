@@ -68,11 +68,14 @@ class TestRegistrationAtomicity:
         _assert_no_orphans()
 
     def test_failure_after_refresh_token_rolls_back_everything(self, monkeypatch):
-        def boom(*args, **kwargs):
-            raise RuntimeError('session touch failed')
+        real_create = session_service._create_refresh_record
 
-        # _touch_session runs AFTER the SessionRefreshToken row is created.
-        monkeypatch.setattr(session_service, '_touch_session', boom)
+        def boom(*args, **kwargs):
+            real_create(*args, **kwargs)
+            raise RuntimeError('failed after the refresh record was written')
+
+        # Writes the SessionRefreshToken row, then fails.
+        monkeypatch.setattr(session_service, '_create_refresh_record', boom)
         resp = APIClient().post(reverse('auth_register'), _payload(), format='json')
         assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         _assert_no_orphans()

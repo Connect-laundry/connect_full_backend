@@ -193,9 +193,13 @@ default_db_url = f"{db_scheme}://{os.getenv('DB_USER', 'postgres')}:{os.getenv('
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', default_db_url),
-        # Supabase / Neon connection poolers drop idle SSL connections well before 600s.
-        # Use 0 (fresh connection per request) in production; keep a short-lived pool in dev.
-        conn_max_age=int(os.getenv('CONN_MAX_AGE', '0' if not DEBUG else '60')),
+        # Reuse connections for up to 60s. Opening a new TLS connection to the
+        # pooler cost ~0.7s per request in production (measured 2026-09-28:
+        # /live/ 0.31s vs /health/ 1.03s). Poolers do drop idle connections,
+        # but conn_health_checks below pings a reused connection first and
+        # reconnects if it is gone. Set CONN_MAX_AGE=0 to go back to one
+        # connection per request.
+        conn_max_age=int(os.getenv('CONN_MAX_AGE', '60')),
         conn_health_checks=True,
         ssl_require=not DEBUG
     )
@@ -228,6 +232,16 @@ REDIS_URL = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL')
 # Expo Push Notifications — access token for enhanced push security.
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 
+
+# Same pbkdf2_sha256 format as Django's default, at a cheaper iteration count.
+# The stock hashers stay listed so any other stored format still verifies.
+PASSWORD_HASHERS = [
+    'users.hashers.TunedPBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

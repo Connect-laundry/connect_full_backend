@@ -6,6 +6,7 @@ independent of server host or test environment timezones.
 """
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.core.cache import cache
 
@@ -13,6 +14,11 @@ from laundries.models.laundry import Laundry
 from laundries.models.opening_hours import HolidayOverride, OpeningHours
 
 GHANA_TZ = ZoneInfo("Africa/Accra")
+
+# Attribute set by holiday_override_prefetch(). Status checks read overrides
+# from it instead of querying once per laundry, which made every discovery
+# page cost one extra database round trip per card.
+PREFETCHED_OVERRIDES_ATTR = "prefetched_holiday_overrides"
 
 
 def _normalize_now(now=None) -> datetime:
@@ -22,6 +28,34 @@ def _normalize_now(now=None) -> datetime:
     if timezone.is_naive(now):
         return timezone.make_aware(now, GHANA_TZ)
     return now.astimezone(GHANA_TZ)
+
+
+def holiday_override_prefetch(now=None) -> Prefetch:
+    """Prefetch the overrides status checks need: yesterday through a week out.
+
+    The window has a day of slack on each side, so a request that crosses
+    midnight between the query and the status check is still covered.
+    """
+    today = _normalize_now(now).date()
+    return Prefetch(
+        "holiday_overrides",
+        queryset=HolidayOverride.objects.filter(
+            date__gte=today - timedelta(days=2),
+            date__lte=today + timedelta(days=9),
+        ),
+        to_attr=PREFETCHED_OVERRIDES_ATTR,
+    )
+
+
+def _overrides_by_date(laundry, start, end) -> dict:
+    """Overrides for ``start``..``end`` inclusive, keyed by date."""
+    prefetched = getattr(laundry, PREFETCHED_OVERRIDES_ATTR, None)
+    if prefetched is not None:
+        return {ho.date: ho for ho in prefetched if start <= ho.date <= end}
+    return {
+        ho.date: ho
+        for ho in HolidayOverride.objects.filter(laundry=laundry, date__gte=start, date__lte=end)
+    }
 
 
 def is_laundry_open_now(laundry, now=None) -> bool:
@@ -49,8 +83,11 @@ def is_laundry_open_now(laundry, now=None) -> bool:
     else:
         hours = list(OpeningHours.objects.filter(laundry=laundry))
 
+    yesterday_date = current_date - timedelta(days=1)
+    overrides = _overrides_by_date(laundry, yesterday_date, current_date)
+
     # --- 1. Check Today's Hours & Overrides ---
-    today_override = HolidayOverride.objects.filter(laundry=laundry, date=current_date).first()
+    today_override = overrides.get(current_date)
     if today_override:
         if today_override.is_closed or not today_override.opening_time or not today_override.closing_time:
             today_open = False
@@ -84,10 +121,9 @@ def is_laundry_open_now(laundry, now=None) -> bool:
                     return True
 
     # --- 2. Check Yesterday's Overnight Spillover ---
-    yesterday_date = current_date - timedelta(days=1)
     yesterday_day = 7 if current_day == 1 else current_day - 1
 
-    yesterday_override = HolidayOverride.objects.filter(laundry=laundry, date=yesterday_date).first()
+    yesterday_override = overrides.get(yesterday_date)
     if yesterday_override:
         if (
             not yesterday_override.is_closed
@@ -124,14 +160,7 @@ def get_next_open_at(laundry, now=None) -> datetime | None:
     else:
         hours = list(OpeningHours.objects.filter(laundry=laundry))
 
-    overrides = {
-        ho.date: ho
-        for ho in HolidayOverride.objects.filter(
-            laundry=laundry,
-            date__gte=current_date,
-            date__lte=current_date + timedelta(days=7),
-        )
-    }
+    overrides = _overrides_by_date(laundry, current_date, current_date + timedelta(days=7))
 
     for day_offset in range(8):
         target_date = current_date + timedelta(days=day_offset)
@@ -194,7 +223,9 @@ def get_laundry_opening_status(laundry, now=None) -> dict:
 
 def get_open_laundry_ids(now=None) -> set:
     """Return set of laundry IDs that are open right now."""
-    laundries = Laundry.objects.filter(is_active=True, vacation_mode=False).prefetch_related("opening_hours")
+    laundries = Laundry.objects.filter(is_active=True, vacation_mode=False).prefetch_related(
+        "opening_hours", holiday_override_prefetch(now)
+    )
     return {laundry.id for laundry in laundries if is_laundry_open_now(laundry, now=now)}
 
 

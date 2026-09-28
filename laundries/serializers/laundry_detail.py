@@ -10,7 +10,7 @@ from .review import ReviewSerializer
 # pyre-ignore[missing-module]
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from ..models.opening_hours import OpeningHours
-from utils.media import SafeMediaModelSerializer, safe_media_url
+from utils.media import SafeMediaModelSerializer, cloudinary_resized, safe_media_url
 
 class LaundryServiceSerializer(serializers.ModelSerializer):
     itemName = serializers.CharField(source='item.name', read_only=True)
@@ -106,7 +106,7 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_imageUrl(self, obj):
-        return safe_media_url(obj.image, self.context.get('request'))
+        return cloudinary_resized(safe_media_url(obj.image, self.context.get('request')), 1200)
 
     @extend_schema_field(LaundryServiceSerializer(many=True))
     def get_services(self, obj):
