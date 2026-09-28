@@ -4,8 +4,12 @@ import hashlib
 import hmac
 import json
 import time
+from unittest.mock import MagicMock
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from django.contrib import admin
 from django.urls import reverse
 from rest_framework import status
@@ -15,7 +19,14 @@ from rest_framework.test import APIClient
 from users.admin import UserAdmin
 from users.checks import clerk_production_configuration_check
 from users.models import ClerkWebhookEvent, DeviceSession, User
-from users.services.clerk_service import ClerkProfile, fetch_clerk_profile, sync_user_from_clerk
+from users.services.clerk_service import (
+    ClerkProfile,
+    ClerkTokenVerifier,
+    fetch_clerk_profile,
+    normalize_provider,
+    sync_user_from_clerk,
+    _claim_email_verified,
+)
 
 
 def _profile(
@@ -260,6 +271,126 @@ class TestClerkSocialAuth:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert not User.objects.exists()
+
+    def test_clerk_token_verifier_accepts_standard_session_token_without_aud(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        settings.CLERK_JWT_AUDIENCE = 'connect_backend'
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        token = jwt.encode(
+            {'sub': 'user_std_123', 'iss': 'https://clerk.simame.tech', 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+            pem_priv,
+            algorithm='RS256',
+            headers={'kid': 'test-kid'},
+        )
+
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', lambda *args: mock_client)
+
+        verifier = ClerkTokenVerifier()
+        payload = verifier.verify(token)
+        assert payload['sub'] == 'user_std_123'
+        assert payload['iss'] == 'https://clerk.simame.tech'
+
+    def test_clerk_token_verifier_accepts_template_tokens_with_various_audiences(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        settings.CLERK_JWT_AUDIENCE = 'connect_backend'
+        settings.CLERK_APPLICATION_ID = 'app_3F19AAMpEcsq16S1tqBqiyTwrUI'
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', lambda *args: mock_client)
+
+        verifier = ClerkTokenVerifier()
+        for aud in ('connect_backend', 'connect-backend', 'app_3F19AAMpEcsq16S1tqBqiyTwrUI'):
+            token = jwt.encode(
+                {'sub': 'user_aud_123', 'iss': 'https://clerk.simame.tech', 'aud': aud, 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+                pem_priv,
+                algorithm='RS256',
+                headers={'kid': 'test-kid'},
+            )
+            payload = verifier.verify(token)
+            assert payload['sub'] == 'user_aud_123'
+
+    def test_clerk_token_verifier_rejects_untrusted_audience(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        settings.CLERK_JWT_AUDIENCE = 'connect_backend'
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        token = jwt.encode(
+            {'sub': 'user_bad_aud', 'iss': 'https://clerk.simame.tech', 'aud': 'attacker_app', 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+            pem_priv,
+            algorithm='RS256',
+            headers={'kid': 'test-kid'},
+        )
+
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', lambda *args: mock_client)
+
+        verifier = ClerkTokenVerifier()
+        with pytest.raises(AuthenticationFailed, match='Invalid Clerk session token.'):
+            verifier.verify(token)
+
+    def test_clerk_token_verifier_handles_bearer_prefix_and_slash_issuer(self, settings, monkeypatch):
+        settings.CLERK_ISSUER = 'https://clerk.simame.tech'
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem_priv = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        token = jwt.encode(
+            {'sub': 'user_bearer_123', 'iss': 'https://clerk.simame.tech/', 'exp': int(time.time()) + 3600, 'iat': int(time.time())},
+            pem_priv,
+            algorithm='RS256',
+            headers={'kid': 'test-kid'},
+        )
+
+        mock_client = MagicMock()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = private_key.public_key()
+        mock_client.get_signing_key_from_jwt.return_value = mock_signing_key
+        monkeypatch.setattr('users.services.clerk_service._jwks_client', lambda *args: mock_client)
+
+        verifier = ClerkTokenVerifier()
+        payload = verifier.verify(f'Bearer {token}')
+        assert payload['sub'] == 'user_bearer_123'
+
+    def test_provider_normalization_handles_clerk_strategies(self):
+        assert normalize_provider('from_oauth_google') == 'oauth_google'
+        assert normalize_provider('from_oauth_apple') == 'oauth_apple'
+        assert normalize_provider('google') == 'oauth_google'
+        assert normalize_provider('apple') == 'oauth_apple'
+        assert normalize_provider('oauth_google') == 'oauth_google'
+        assert normalize_provider('google_oauth2') == 'oauth_google'
+
+    def test_claim_email_verified_recognizes_oauth_and_email_presence(self):
+        assert _claim_email_verified({'provider': 'oauth_google', 'email': 'test@gmail.com'}) is True
+        assert _claim_email_verified({'social_provider': 'from_oauth_apple', 'primary_email_address': 'relay@apple.com'}) is True
+        assert _claim_email_verified({'email': 'someone@example.com'}) is True
+        assert _claim_email_verified({'email_verified': False}) is False
 
     def test_clerk_bearer_token_can_authenticate_default_drf_views(self, monkeypatch):
         def fake_auth(token, *, requested_role=None, request=None):
