@@ -134,6 +134,7 @@ INSTALLED_APPS = [
     'payments',
     'laundries',
     'analytics',
+    'admin_notifications',
     'django_celery_results',
     'cloudinary',
     'cloudinary_storage',
@@ -224,8 +225,24 @@ MIGRATION_MODULES = {
     'logistics': None,
     'payments': None,
     'laundries': None,
+    'admin_notifications': None,
     'django_celery_results': None,
 }
+
+# Admin order notifications: off by default like production; tests that
+# exercise them enable the flags and mock the providers. No background
+# threads (a thread cannot see a test's uncommitted rows).
+ADMIN_ORDER_NOTIFICATIONS_ENABLED = False
+ADMIN_SMS_NOTIFICATIONS_ENABLED = False
+ADMIN_WHATSAPP_NOTIFICATIONS_ENABLED = False
+ADMIN_NOTIFICATION_DISPATCH_IN_THREAD = False
+ADMIN_NOTIFICATION_SWEEP_ENABLED = False
+ADMIN_NOTIFICATION_ENVIRONMENT = 'test'
+ARKESEL_API_KEY = ''
+ARKESEL_WHATSAPP_API_TOKEN = ''
+ADMIN_TELEGRAM_NOTIFICATIONS_ENABLED = False
+ADMIN_TELEGRAM_CHAT_IDS = ''
+TELEGRAM_BOT_TOKEN = ''
 
 from datetime import timedelta
 SIMPLE_JWT = {

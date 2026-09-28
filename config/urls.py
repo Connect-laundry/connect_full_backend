@@ -99,6 +99,8 @@ urlpatterns = [
     path('api/v1/logistics/', include('logistics.urls')),
     path('api/v1/payments/', include('payments.urls')),
     path('api/v1/analytics/', include('analytics.urls')),
+    # Provider callbacks (Arkesel SMS delivery reports); secret-in-path, no login.
+    path('api/v1/integrations/', include('admin_notifications.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),

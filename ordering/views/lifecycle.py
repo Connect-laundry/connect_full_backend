@@ -53,103 +53,23 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
         reason = serializer.validated_data.get('reason')
         metadata = serializer.validated_data.get('metadata', {})
         
-        from payments.models import Payment
+        from ..services.lifecycle_transitions import INVALID_TRANSITION, perform_transition
 
-        with transaction.atomic():
-            order = Order.objects.select_for_update().get(id=order.id)
-            payment = (
-                Payment.objects.select_for_update()
-                .filter(order_id=order.id)
-                .first()
-            )
-
-            if (
-                to_status == Order.Status.COMPLETED
-                and order.payment_method == Order.PaymentMethod.CASH
-                and order.payment_status != Order.PaymentStatus.PAID
-            ):
-                return Response({
-                    'status': 'error',
-                    'message': 'Confirm cash collection before completing this COD order.',
-                }, status=status.HTTP_409_CONFLICT)
-
-            if to_status == Order.Status.CONFIRMED:
-                accepts_before_payment = (
-                    order.payment_method == Order.PaymentMethod.CASH
-                    or order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
-                )
-                if (
-                    not accepts_before_payment
-                    and (payment is None or payment.status != Payment.Status.SUCCESS)
-                ):
-                    return Response({
-                        "status": "error",
-                        "message": "Payment must be confirmed before this order can be accepted.",
-                    }, status=status.HTTP_409_CONFLICT)
-
-            if payment and payment.payment_method != Payment.Method.CASH:
-                if to_status in {Order.Status.CANCELLED, Order.Status.REJECTED}:
-                    if payment.status == Payment.Status.SUCCESS:
-                        from payments.services.refund import refund_payment, RefundError, RefundOutcomeUnknown
-                        try:
-                            refund_payment(
-                                payment,
-                                reason=reason or f'Order {to_status.lower()}',
-                                actor=request.user,
-                                request=request,
-                            )
-                        except (RefundError, RefundOutcomeUnknown) as e:
-                            logger.error(
-                                "Refund failed during order transition",
-                                extra={"order_id": str(order.id), "error": str(e)},
-                            )
-                            return Response({
-                                "status": "error",
-                                "message": f"Unable to process refund: {str(e)}. Please contact support to cancel.",
-                            }, status=status.HTTP_409_CONFLICT)
-                    elif payment.status == Payment.Status.PENDING and payment.transaction_reference:
-                        from payments.services.paystack import PaystackService
-                        from payments.services.refund import refund_payment, RefundError, RefundOutcomeUnknown
-                        try:
-                            verify_data = PaystackService().verify_transaction(payment.transaction_reference)
-                            if verify_data.get('status') and verify_data.get('data', {}).get('status') == 'success':
-                                payment.transition_to(Payment.Status.SUCCESS)
-                                order.payment_status = Order.PaymentStatus.PAID
-                                order.save(update_fields=['payment_status', 'updated_at'])
-                                refund_payment(
-                                    payment,
-                                    reason=reason or f'Order {to_status.lower()}',
-                                    actor=request.user,
-                                    request=request,
-                                )
-                            else:
-                                payment.transition_to(Payment.Status.FAILED)
-                        except Exception as e:
-                            logger.warning(f"Verification during cancel failed: {e}")
-                            payment.transition_to(Payment.Status.FAILED)
-                    elif payment.status == Payment.Status.PENDING:
-                        payment.transition_to(Payment.Status.FAILED)
-
-            # The state machine reuses the surrounding transaction and locks
-            # the order before validating the transition.
-            updated_order, success = OrderStateMachine.transition(
-                order_id=order.id,
-                to_status=to_status,
-                user=request.user,
-                metadata=metadata,
-                reason=reason
-            )
-        
-        if not success:
+        # Shared with Django admin so no status change skips refunds,
+        # settlement rules or operations alerts.
+        result = perform_transition(
+            order.id, to_status, user=request.user, reason=reason, metadata=metadata, request=request,
+        )
+        if result.error == INVALID_TRANSITION:
             return Response({
                 "status": "error",
                 "message": "Invalid state transition",
-                "data": {
-                    "current_status": order.status,
-                    "target_status": to_status
-                }
+                "data": result.data,
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+        if not result.ok:
+            return Response({"status": "error", "message": result.message}, status=result.http_status)
+        updated_order = result.order
+
         logger.info(f"Order {order.order_no} transitioned to {to_status} by {request.user.email}")
         
         return Response({
@@ -374,6 +294,9 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
 
             order.payment_status = Order.PaymentStatus.PAID
             order.save(update_fields=['payment_status', 'updated_at'])
+            # Cash genuinely recorded as collected: tell operations.
+            from admin_notifications.services.outbox import emit_payment_confirmed
+            emit_payment_confirmed(order)
             record_audit(
                 action="CASH_COLLECTED",
                 actor=request.user,
@@ -482,6 +405,8 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
                 )
             # Freeze the invoice so later reads and settlement use these figures.
             FinanceService.freeze_price_breakdown(order, coupon=order.coupon)
+            from admin_notifications.services.outbox import emit_order_price_finalized
+            emit_order_price_finalized(order)
 
         NotificationService.notify_user(
             user=order.user,

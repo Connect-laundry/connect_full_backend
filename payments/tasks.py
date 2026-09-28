@@ -74,6 +74,9 @@ def reconcile_pending_payments(self):
                             
                             # Transition status using OrderStateMachine to trigger signals/notifications
                             OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=None)
+
+                            from admin_notifications.services.outbox import emit_payment_confirmed
+                            emit_payment_confirmed(order)
                             
                             # Trigger push notification
                             notify_customer_event(

@@ -543,6 +543,9 @@ class PaymentVerifyView(APIView):
                     
                     # Transition order using OrderStateMachine to trigger signal pipeline
                     OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=request.user)
+
+                    from admin_notifications.services.outbox import emit_payment_confirmed
+                    emit_payment_confirmed(order)
                     
                     record_audit(
                         action="PAYMENT_VERIFIED",

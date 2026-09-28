@@ -135,13 +135,19 @@ class PaymentAdmin(ModelAdmin):
 
     @admin.action(description="Force Reconcile via Paystack")
     def force_reconcile(self, request, queryset):
-        """Manually force reconciliation of selected payments against Paystack."""
+        """Manually force reconciliation of selected payments against Paystack.
+
+        A success goes through ``apply_verified_paystack_success``, the same
+        steps as the customer verify endpoint, so a reconciled payment gets
+        its settlement (what the laundry is owed), order confirmation, audit
+        record and ops alert exactly like any other verified payment. It used
+        to mark the order PAID without recording the settlement, leaving the
+        laundry owed nothing. Paystack is called before any row is locked.
+        """
         from payments.services.paystack import PaystackService
-        from ordering.services.order_state_machine import OrderStateMachine
+        from payments.services.verified_payment import APPLIED, REJECTED, apply_verified_paystack_success
         from marketplace.services.notification_service import NotificationService
         from marketplace.models import Notification
-        from django.utils import timezone
-        from payments.views import _validate_verified_payment, _sanitize_payment_response
         from django.db import transaction
 
         paystack = PaystackService()
@@ -149,50 +155,42 @@ class PaymentAdmin(ModelAdmin):
         failed_count = 0
 
         for payment in queryset:
-            if payment.status != Payment.Status.PENDING:
+            if payment.status != Payment.Status.PENDING or not payment.transaction_reference:
                 continue
 
             try:
-                with transaction.atomic():
-                    # lock row
-                    locked_payment = Payment.objects.select_for_update().filter(id=payment.id).first()
-                    if not locked_payment or locked_payment.status != Payment.Status.PENDING:
-                        continue
+                verify_data = paystack.verify_transaction(payment.transaction_reference)
+                if not verify_data.get('status'):
+                    continue
+                gateway_data = verify_data.get('data') if isinstance(verify_data.get('data'), dict) else {}
+                status_val = gateway_data.get('status')
 
-                    verify_data = paystack.verify_transaction(locked_payment.transaction_reference)
-                    if verify_data.get('status'):
-                        gateway_data = verify_data.get('data', {})
-                        status_val = gateway_data.get('status')
-
-                        if status_val == 'success':
-                            is_valid, validation_error = _validate_verified_payment(locked_payment, gateway_data)
-                            if is_valid:
-                                locked_payment.transition_to(Payment.Status.SUCCESS, save=False)
-                                locked_payment.raw_response = _sanitize_payment_response(gateway_data, locked_payment.transaction_reference)
-                                locked_payment.paid_at = timezone.now()
-                                locked_payment.save()
-
-                                order = locked_payment.order
-                                order.payment_status = order.PaymentStatus.PAID
-                                order.save(update_fields=['payment_status', 'updated_at'])
-
-                                OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=request.user)
-
-                                NotificationService.notify_user(
-                                    user=locked_payment.user,
-                                    title="Payment Reconciled",
-                                    body=f"Your payment of GHS {locked_payment.amount} for order {order.order_no} has been verified.",
-                                    type=Notification.Type.ORDER,
-                                    category="PAYMENT_SUCCESS",
-                                    related_order=order,
-                                    dedup_key=f"payment_success_user:{locked_payment.id}"
-                                )
-                                reconciled_count += 1
-                            else:
-                                locked_payment.transition_to(Payment.Status.FAILED, save=False)
-                                locked_payment.save(update_fields=['status', 'updated_at'])
-                                failed_count += 1
-                        elif status_val in ['failed', 'abandoned']:
+                if status_val == 'success':
+                    with transaction.atomic():
+                        outcome, _reason = apply_verified_paystack_success(
+                            payment.id, gateway_data, actor=request.user, request=request,
+                            audit_action='PAYMENT_ADMIN_RECONCILED',
+                        )
+                    if outcome == APPLIED:
+                        payment.refresh_from_db()
+                        NotificationService.notify_user(
+                            user=payment.user,
+                            title="Payment Reconciled",
+                            body=f"Your payment of GHS {payment.amount} for order {payment.order.order_no} has been verified.",
+                            type=Notification.Type.ORDER,
+                            category="PAYMENT_SUCCESS",
+                            related_order=payment.order,
+                            dedup_key=f"payment_success_user:{payment.id}"
+                        )
+                        reconciled_count += 1
+                    elif outcome == REJECTED:
+                        failed_count += 1
+                elif status_val in ['failed', 'abandoned']:
+                    with transaction.atomic():
+                        locked_payment = Payment.objects.select_for_update().filter(
+                            id=payment.id, status=Payment.Status.PENDING,
+                        ).first()
+                        if locked_payment:
                             locked_payment.transition_to(Payment.Status.FAILED, save=False)
                             locked_payment.save(update_fields=['status', 'updated_at'])
                             failed_count += 1

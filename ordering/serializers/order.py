@@ -32,6 +32,55 @@ def _as_uuid(value):
         return None
 
 
+def _redeem_coupon(user, coupon_obj, order):
+    """Count a coupon against its limits, once, for every pricing mode.
+
+    Must run inside the booking transaction. Only itemised orders used to
+    reach this, so by-weight and pay-after-quote bookings got the discount
+    without being counted, and max_usage / per-customer limits could be
+    exceeded through them.
+    """
+    if not coupon_obj:
+        return
+    from django.utils import timezone
+    from ..models.coupons import Coupon, CouponUsage
+    # Lock the coupon row to enforce usage limits atomically and
+    # prevent concurrent redemptions from exceeding max_usage.
+    locked_coupon = Coupon.objects.select_for_update().get(pk=coupon_obj.pk)
+    now = timezone.now()
+    if not locked_coupon.is_active or (locked_coupon.valid_to and locked_coupon.valid_to < now):
+        raise serializers.ValidationError({"coupon_code": "Coupon is no longer valid."})
+    if (
+        locked_coupon.max_usage is not None
+        and locked_coupon.current_usage >= locked_coupon.max_usage
+    ):
+        raise serializers.ValidationError(
+            {"coupon_code": "Coupon has reached its usage limit."}
+        )
+    # Re-check the per-customer limit under the coupon lock: the
+    # earlier is_valid() check is unlocked, so two orders placed at
+    # the same moment could both redeem a one-per-customer code.
+    if CouponUsage.objects.filter(user=user, coupon=locked_coupon).count() >= locked_coupon.user_limit:
+        raise serializers.ValidationError(
+            {"coupon_code": "You have reached your usage limit for this coupon."}
+        )
+    CouponUsage.objects.create(user=user, coupon=locked_coupon, order=order)
+    Coupon.objects.filter(pk=locked_coupon.pk).update(
+        current_usage=F('current_usage') + 1
+    )
+
+
+def _notify_operations_of_booking(order):
+    """Record the admin NEW_ORDER alert inside the booking transaction.
+
+    Called only once the order is fully built (lines, frozen price, coupon
+    usage) and every validation that can still reject it has passed. It
+    never raises: an alerting problem must not cost a customer their booking.
+    """
+    from admin_notifications.services.outbox import emit_new_order
+    emit_new_order(order)
+
+
 class LaunderableItemSerializer(SafeMediaModelSerializer):
     item_category_name = serializers.CharField(source='item_category.name', read_only=True)
 
@@ -423,6 +472,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                             "code": "STALE_QUOTE",
                             "updated_total": str(order.total_amount),
                         })
+                _redeem_coupon(user, coupon_obj, order)
+                _notify_operations_of_booking(order)
                 return order
 
 
@@ -432,6 +483,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             # deliberately not frozen, so the later quote is what the customer
             # sees rather than a zero.
             if pricing_mode == Order.PricingMode.CUSTOM_QUOTE:
+                # The coupon is attached now and discounts the quote later, so
+                # it is redeemed now: otherwise its limits would not count it.
+                _redeem_coupon(user, coupon_obj, order)
+                _notify_operations_of_booking(order)
                 return order
 
             from laundries.models.service import LaundryService
@@ -514,30 +569,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         "updated_total": str(order.total_amount),
                     })
 
-            if coupon_obj:
-
-                # pyre-ignore[missing-module]
-                from ..models.coupons import Coupon, CouponUsage
-                # Lock the coupon row to enforce usage limits atomically and
-                # prevent concurrent redemptions from exceeding max_usage.
-                locked_coupon = Coupon.objects.select_for_update().get(pk=coupon_obj.pk)
-                if (
-                    locked_coupon.max_usage is not None
-                    and locked_coupon.current_usage >= locked_coupon.max_usage
-                ):
-                    raise serializers.ValidationError(
-                        {"coupon_code": "Coupon has reached its usage limit."}
-                    )
-                # Re-check the per-customer limit under the coupon lock: the
-                # earlier is_valid() check is unlocked, so two orders placed at
-                # the same moment could both redeem a one-per-customer code.
-                if CouponUsage.objects.filter(user=user, coupon=locked_coupon).count() >= locked_coupon.user_limit:
-                    raise serializers.ValidationError(
-                        {"coupon_code": "You have reached your usage limit for this coupon."}
-                    )
-                CouponUsage.objects.create(user=user, coupon=locked_coupon, order=order)
-                Coupon.objects.filter(pk=locked_coupon.pk).update(
-                    current_usage=F('current_usage') + 1
-                )
-
+            _redeem_coupon(user, coupon_obj, order)
+            _notify_operations_of_booking(order)
             return order

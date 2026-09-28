@@ -51,7 +51,44 @@ class OrderAdmin(ModelAdmin):
         'pricing_mode', 'estimated_weight_kg',
     )
     list_filter_sheet = True
-    actions = ['send_quote']
+    actions = ['send_quote', 'cancel_orders', 'reject_orders']
+
+    # Status, money and ownership of an existing order change only through
+    # the lifecycle (OrderStateMachine via perform_transition). Editing them
+    # as raw fields skipped refunds, settlement release, dispute rules and
+    # the operations alerts, and could move an order between laundries.
+    LOCKED_ON_EXISTING = ('status', 'total_amount', 'user', 'laundry')
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = tuple(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            fields += tuple(f for f in self.LOCKED_ON_EXISTING if f not in fields)
+        return fields
+
+    def _transition_selected(self, request, queryset, to_status, reason):
+        from django.contrib import messages
+        from .services.lifecycle_transitions import perform_transition
+
+        done, refused = 0, []
+        for order in queryset:
+            result = perform_transition(order.pk, to_status, user=request.user, reason=reason, request=request)
+            if result.ok:
+                done += 1
+            else:
+                refused.append(f"{order.order_no}: {result.message}")
+        if done:
+            self.message_user(request, f"{done} order(s) moved to {to_status} (refunds and alerts applied).",
+                              level=messages.SUCCESS)
+        for line in refused:
+            self.message_user(request, line, level=messages.ERROR)
+
+    @admin.action(description="Cancel selected orders (refunds paid online orders)", permissions=['change'])
+    def cancel_orders(self, request, queryset):
+        self._transition_selected(request, queryset, Order.Status.CANCELLED, 'Cancelled by Simame operations')
+
+    @admin.action(description="Reject selected orders on the laundry's behalf", permissions=['change'])
+    def reject_orders(self, request, queryset):
+        self._transition_selected(request, queryset, Order.Status.REJECTED, 'Rejected by Simame operations')
 
     fieldsets = (
         ('Order info', {
@@ -97,6 +134,8 @@ class OrderAdmin(ModelAdmin):
 
             with transaction.atomic():
                 FinanceService.freeze_price_breakdown(order, coupon=order.coupon)
+                from admin_notifications.services.outbox import emit_order_price_finalized
+                emit_order_price_finalized(order)
 
             NotificationService.notify_user(
                 user=order.user,
