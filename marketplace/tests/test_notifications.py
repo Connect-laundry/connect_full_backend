@@ -504,6 +504,10 @@ class CampaignTests(APITestCase):
             email="pending@example.com", phone="233700000011", password="pw", role='CUSTOMER')
         self.idle_user = User.objects.create_user(
             email="idle@example.com", phone="233700000012", password="pw", role='CUSTOMER')
+        # Marketing is opt-in (App Store Guideline 4.5.4).
+        for user in (self.pending_user, self.idle_user):
+            NotificationPreference.objects.update_or_create(
+                user=user, defaults={'promotions': True, 'campaigns': True})
         Order.objects.create(
             user=self.pending_user, laundry=self.laundry, total_amount=10,
             pickup_date=timezone.now(), address="A", status='PENDING')
@@ -529,6 +533,33 @@ class CampaignTests(APITestCase):
         self.assertEqual(skipped, 1)     # pending_user opted out
         self.assertFalse(Notification.objects.filter(
             user=self.pending_user, dedup_key__startswith='test_campaign').exists())
+
+    @patch('marketplace.tasks.send_real_push.delay')
+    def test_campaign_skips_user_who_never_opted_in(self, _push):
+        never_asked = User.objects.create_user(
+            email="never@example.com", phone="233700000013", password="pw", role='CUSTOMER')
+
+        delivered, skipped = CampaignService.deliver(
+            recipients=[never_asked], title="Deal", body="10% off",
+            category='CAMPAIGN', dedup_prefix='never_asked')
+
+        self.assertEqual((delivered, skipped), (0, 1))
+        self.assertFalse(Notification.objects.filter(user=never_asked).exists())
+
+    def test_promo_opt_in_segment_excludes_users_without_explicit_opt_in(self):
+        never_asked = User.objects.create_user(
+            email="never2@example.com", phone="233700000014", password="pw", role='CUSTOMER')
+        recipients = set(CampaignService.resolve_recipients(
+            NotificationCampaign.Segment.PROMO_OPT_IN))
+        self.assertIn(self.idle_user, recipients)
+        self.assertNotIn(never_asked, recipients)
+
+    def test_new_preferences_leave_marketing_off(self):
+        pref = NotificationService.get_preferences(
+            User.objects.create_user(email="fresh@example.com", phone="233700000015", password="pw"))
+        self.assertTrue(pref.order_updates and pref.payment_updates)
+        self.assertFalse(pref.promotions or pref.campaigns or pref.referrals or pref.weekly_tips)
+        self.assertFalse(pref.allows_push(type=Notification.Type.PROMO, category='PROMO'))
 
     @patch('marketplace.tasks.send_real_push.delay')
     def test_campaign_frequency_cap_dedup(self, _push):
@@ -830,6 +861,8 @@ class RetentionSystemTests(APITestCase):
         from users.models import Address
         self.accra = User.objects.create_user(
             email="accra@example.com", phone="233700000061", password="pw", role='CUSTOMER')
+        NotificationPreference.objects.update_or_create(
+            user=self.accra, defaults={'promotions': True, 'campaigns': True})
         self.kumasi = User.objects.create_user(
             email="kumasi@example.com", phone="233700000062", password="pw", role='CUSTOMER')
         Address.objects.create(user=self.accra, label='Home', address_line1='1 St', city='Accra')

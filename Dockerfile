@@ -56,9 +56,11 @@ EXPOSE 8000
 # the whole service) queued the ~9 calls the app makes when Home opens. Each
 # thread keeps its own database connection (CONN_MAX_AGE), so workers x threads
 # is the connection count; keep it within the database pooler's pool size.
+# --max-requests recycles each worker after ~2000 requests so slow memory
+# growth cannot build up on a 512 MB instance.
 CMD bash -c "\
   if [ \"${RUN_MIGRATIONS_ON_START:-true}\" = \"true\" ]; then \
     python manage.py migrate_safely || exit 1; \
   fi && \
   python manage.py collectstatic --noinput && \
-  gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-2} --worker-class gthread --threads ${GUNICORN_THREADS:-4} --timeout 120 config.wsgi:application"
+  gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-2} --worker-class gthread --threads ${GUNICORN_THREADS:-4} --timeout 120 --max-requests ${GUNICORN_MAX_REQUESTS:-2000} --max-requests-jitter 200 config.wsgi:application"

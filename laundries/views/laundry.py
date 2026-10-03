@@ -8,10 +8,12 @@ from rest_framework.response import Response
 from django.db import models
 from django.db.models import Avg, Count, F, ExpressionWrapper, FloatField, IntegerField, Min, Q, Prefetch, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.utils import timezone
+from django.utils.connection import ConnectionProxy
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+import hashlib
 import logging
 import os
 from ordering.models import Order
@@ -56,6 +58,7 @@ from ..pagination import StandardResultsSetPagination
 from ..filters import LaundryFilter
 
 logger = logging.getLogger(__name__)
+response_cache = ConnectionProxy(caches, 'responses')
 
 
 def annotate_haversine_distance(queryset, user_lat, user_lng, radius_km):
@@ -302,7 +305,10 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             open_ids = get_open_laundry_ids()
             queryset = queryset.filter(id__in=open_ids).exclude(vacation_mode=True)
 
-        queryset = queryset.distinct()
+        # Only apply expensive DISTINCT if many-to-many service pricing filter was applied
+        if min_price or max_price:
+            queryset = queryset.distinct()
+
         if not queryset.ordered:
             queryset = queryset.order_by('-created_at')
         return queryset
@@ -312,33 +318,47 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             return LaundryListSerializer
         return LaundryDetailSerializer
 
+    def _cached_page(self, request, build_queryset):
+        """
+        A paginated page, cached for 60 s per exact query string.
+
+        The key is the full path, not a global key: the app sends the user's
+        lat/lng, which drives distance and estimatedDelivery and is echoed in
+        the next/previous links, so a page must never reach another location.
+        isFavorite is the only per-user field and is applied after the cache
+        read.
+        """
+        cache_key = f'laundry_page_v1:{self.action}:' + hashlib.sha256(
+            request.get_full_path().encode()).hexdigest()
+        payload = response_cache.get(cache_key)
+        if payload is None:
+            page = self.paginate_queryset(build_queryset())
+            serializer = self.get_serializer(page, many=True)
+            payload = self.get_paginated_response(serializer.data).data
+            response_cache.set(cache_key, payload, 60)
+
+        favorite_ids = set()
+        if request.user.is_authenticated:
+            # On a cache miss the serializer has already loaded them.
+            fav_ids = getattr(request, '_cached_favorite_laundry_ids', None)
+            if fav_ids is None:
+                fav_ids = Favorite.objects.filter(user=request.user).values_list('laundry_id', flat=True)
+            favorite_ids = {str(fid) for fid in fav_ids}
+        data = payload['data']
+        results = [
+            {**item, 'isFavorite': str(item.get('id')) in favorite_ids}
+            for item in data['results']
+        ]
+        return Response({**payload, 'data': {**data, 'results': results}})
+
+    def list(self, request, *args, **kwargs):
+        return self._cached_page(request, lambda: self.filter_queryset(self.get_queryset()))
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
-        """
-        Dedicated endpoint for featured laundries with short-term caching.
-        """
+        """Featured laundries, paginated and cached like the list endpoint."""
         try:
-            user_id = request.user.id if request.user.is_authenticated else 'anon'
-            cache_key = f"featured_laundries_response_{user_id}"
-            cached_payload = cache.get(cache_key)
-            if cached_payload is not None:
-                return Response(cached_payload)
-
-            queryset = self.get_queryset().filter(is_featured=True)
-            
-            page = self.paginate_queryset(queryset)
-            if page is not None:
-                serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response(serializer.data)
-
-            serializer = self.get_serializer(queryset, many=True)
-            payload = {
-                "status": "success",
-                "message": "Featured laundries retrieved successfully.",
-                "data": serializer.data
-            }
-            cache.set(cache_key, payload, 60)
-            return Response(payload)
+            return self._cached_page(request, lambda: self.get_queryset().filter(is_featured=True))
         except Exception as e:
             logger.error(f"Critical error in featured laundries endpoint: {e}", exc_info=True)
             return Response({
@@ -511,3 +531,16 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.AllowAny]
+
+    def list(self, request, *args, **kwargs):
+        cache_key = "laundry_categories_list_v1"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            response = Response(cached_data)
+            response['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=1200'
+            return response
+        response = super().list(request, *args, **kwargs)
+        if response.status_code == 200:
+            cache.set(cache_key, response.data, 600)
+            response['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=1200'
+        return response

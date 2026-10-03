@@ -373,11 +373,22 @@ class FinanceService:
             if stored is not None:
                 return stored
 
-        items_total = order.items.aggregate(
-            total=Sum(F('quantity') * F('price'))
-        )['total'] or Decimal('0.00')
+        # Order lists prefetch items; summing those avoids one query per order
+        # for orders without a snapshot. Freezing (use_snapshot=False) always
+        # asks the database, so a price is never frozen from a stale prefetch.
+        prefetch_cache = getattr(order, '_prefetched_objects_cache', None)
+        prefetched = prefetch_cache.get('items') if isinstance(prefetch_cache, dict) else None
+        if use_snapshot and prefetched is not None:
+            items_total = sum((i.quantity * i.price for i in prefetched), Decimal('0.00'))
+        else:
+            items_total = order.items.aggregate(
+                total=Sum(F('quantity') * F('price'))
+            )['total'] or Decimal('0.00')
         discount = FinanceService.coupon_discount(
-            coupon, items_total, user=getattr(order, 'user', None), laundry_id=getattr(order, 'laundry_id', None),
+            coupon, items_total,
+            # Only a coupon needs the user; loading it otherwise cost a query per order.
+            user=getattr(order, 'user', None) if coupon else None,
+            laundry_id=getattr(order, 'laundry_id', None),
         )
         quote = FinanceService.logistics_quote_for(order, items_total=items_total)
         return FinanceService.compose_breakdown(items_total, quote, discount)

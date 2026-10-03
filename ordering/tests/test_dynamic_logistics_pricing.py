@@ -673,6 +673,9 @@ class TestOwnerPromoAndPush:
         Favorite.objects.create(user=opted_out, laundry=laundry)
         NotificationPreference.objects.update_or_create(user=opted_out, defaults={'promotions': False})
         stranger = User.objects.create_user(email='stranger@example.com', phone='233240000013', password='x', role='CUSTOMER')
+        # Promotional pushes are opt-in (App Store Guideline 4.5.4).
+        for user in (fan, customer, stranger):
+            NotificationPreference.objects.update_or_create(user=user, defaults={'promotions': True})
         Order.objects.create(user=customer, laundry=laundry, pickup_date=timezone.now(), total_amount=10)
         return SimpleNamespace(fan=fan, opted_out=opted_out, stranger=stranger, past=customer)
 

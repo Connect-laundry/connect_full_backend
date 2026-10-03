@@ -320,6 +320,8 @@ class Laundry(models.Model):
             models.Index(fields=['is_featured', 'is_active']),
             models.Index(fields=['price_range']),
             models.Index(fields=['name']),
+            models.Index(fields=['status', 'is_active', '-created_at']),
+            models.Index(fields=['status', 'is_active', 'is_featured']),
         ]
 
     def __str__(self):

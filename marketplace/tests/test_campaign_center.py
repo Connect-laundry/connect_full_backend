@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 
-from marketplace.models import Notification, NotificationCampaign, PushDevice
+from marketplace.models import Notification, NotificationCampaign, NotificationPreference, PushDevice
 from marketplace.services.campaign_service import CampaignDispatchResult, CampaignService
 
 User = get_user_model()
@@ -212,6 +212,9 @@ class CampaignSendTests(TestCase):
             email='staff4@example.com', phone='233700004001', password='pw', is_staff=True)
         self.customer = User.objects.create_user(
             email='sendto@example.com', phone='233700004002', password='pw')
+        # Marketing is opt-in (App Store Guideline 4.5.4).
+        NotificationPreference.objects.update_or_create(
+            user=self.customer, defaults={'promotions': True, 'campaigns': True})
         PushDevice.objects.create(
             user=self.customer, token='ExponentPushToken[CENTER]', platform='android')
         self.client.force_login(self.staff)
@@ -366,6 +369,8 @@ class CampaignAdminActionTests(TestCase):
             is_staff=True, role=User.Role.OWNER)
         self.customer = User.objects.create_user(
             email='admintarget@example.com', phone='233700007002', password='pw')
+        NotificationPreference.objects.update_or_create(
+            user=self.customer, defaults={'promotions': True, 'campaigns': True})
         self.admin = NotificationCampaignAdmin(NotificationCampaign, AdminSite())
 
     def _request(self):

@@ -202,6 +202,10 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'connect-test-cache',
     },
+    'responses': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'connect-test-cache',
+    },
 }
 
 PASSWORD_HASHERS = [
