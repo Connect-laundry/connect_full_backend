@@ -37,6 +37,9 @@ class LaundryService(models.Model):
         # A laundry can only define a specific service for a specific item once
         unique_together = ('laundry', 'item', 'service_type')
         ordering = ['laundry', 'item__name']
+        indexes = [
+            models.Index(fields=['laundry', 'is_available', 'price']),
+        ]
 
     def __str__(self):
         item_name = self.item.name if getattr(self, 'item', None) else 'Item'

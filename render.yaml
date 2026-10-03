@@ -39,6 +39,16 @@ services:
         value: ".onrender.com"
       - key: DJANGO_LOG_LEVEL
         value: INFO
+      # workers x threads x instances = open DB connections. Keep it under
+      # the database pooler's limit; a starter instance (512 MB) fits 2 workers.
+      - key: GUNICORN_WORKERS
+        value: "2"
+      - key: GUNICORN_THREADS
+        value: "6"
+      - key: USE_REDIS_CACHE
+        value: "True"
+      - key: CONN_MAX_AGE
+        value: "60"
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: CSRF_TRUSTED_ORIGINS

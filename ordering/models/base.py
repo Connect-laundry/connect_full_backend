@@ -190,6 +190,10 @@ class Order(models.Model):
             models.Index(fields=['order_no']),
             models.Index(fields=['status']),
             models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['laundry', '-created_at']),
+            models.Index(fields=['laundry', 'status', 'payment_status']),
+            models.Index(fields=['status', '-created_at']),
         ]
 
     def save(self, *args, **kwargs):

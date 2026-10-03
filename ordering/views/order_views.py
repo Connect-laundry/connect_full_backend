@@ -42,16 +42,25 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def services(self, request):
         """Returns the list of service types (Wash, Iron, etc)"""
-# pyre-ignore[missing-module]
+        cache_key = "catalog_service_types_v1"
+        cached_results = cache.get(cache_key)
+        if cached_results is not None:
+            resp = Response({"status": "success", "results": cached_results})
+            resp['Cache-Control'] = 'private, max-age=600'
+            return resp
+
         from laundries.models.category import Category
-# pyre-ignore[missing-module]
         from laundries.serializers.category import CategorySerializer
         services = Category.objects.filter(type='SERVICE_TYPE')
         serializer = CategorySerializer(services, many=True)
-        return Response({
+        results = serializer.data
+        cache.set(cache_key, results, 600)
+        resp = Response({
             "status": "success",
-            "results": serializer.data
+            "results": results
         })
+        resp['Cache-Control'] = 'private, max-age=600'
+        return resp
 
     def list(self, request, *args, **kwargs):
         # Alias for backward compatibility if /booking/services/ was pointing to list
@@ -60,12 +69,23 @@ class CatalogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def items(self, request):
         """Returns the actual catalog of items with supported services"""
+        cache_key = "catalog_launderable_items_v1"
+        cached_results = cache.get(cache_key)
+        if cached_results is not None:
+            resp = Response({"status": "success", "results": cached_results})
+            resp['Cache-Control'] = 'private, max-age=600'
+            return resp
+
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
+        results = serializer.data
+        cache.set(cache_key, results, 600)
+        resp = Response({
             "status": "success",
-            "results": serializer.data
+            "results": results
         })
+        resp['Cache-Control'] = 'private, max-age=600'
+        return resp
 
 class BookingViewSet(viewsets.GenericViewSet):
     """Endpoints for booking, scheduling, and creation."""

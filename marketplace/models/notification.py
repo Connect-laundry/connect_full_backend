@@ -101,6 +101,7 @@ class Notification(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'is_read', 'created_at']),
+            models.Index(fields=['user', 'audience', '-created_at']),
             models.Index(fields=['audience', 'is_read', 'created_at']),
             models.Index(fields=['category']),
         ]
@@ -278,13 +279,15 @@ class NotificationPreference(models.Model):
     # Category-level push toggles.
     order_updates = models.BooleanField(default=True)
     payment_updates = models.BooleanField(default=True)
-    promotions = models.BooleanField(default=True)
+    # Marketing categories are opt-in (App Store Guideline 4.5.4): no
+    # promotional push until the customer turns the toggle on in the app.
+    promotions = models.BooleanField(default=False)
     # Re-engagement / marketing campaigns (inactivity win-backs, broadcasts).
-    campaigns = models.BooleanField(default=True)
+    campaigns = models.BooleanField(default=False)
     # Referral programme nudges (invite friends, referral rewards).
-    referrals = models.BooleanField(default=True)
+    referrals = models.BooleanField(default=False)
     # Weekly tips / digest ("your laundry is in motion", care tips).
-    weekly_tips = models.BooleanField(default=True)
+    weekly_tips = models.BooleanField(default=False)
 
     # Quiet hours (local 24h clock). When start == end or either is null the
     # window is disabled. Urgent-priority notifications ignore quiet hours.

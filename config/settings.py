@@ -220,6 +220,22 @@ DATABASES['default']['OPTIONS'].setdefault(
     'connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '10'))
 )
 
+# Optional psycopg 3 connection pool (Django 5.1+), one per gunicorn worker.
+# With CONN_MAX_AGE every gthread thread holds its own connection, so open
+# connections = workers x threads x instances, which can exceed a session-mode
+# pooler's client limit as the service scales out. A pool shares max_size
+# connections between a worker's threads. Django requires CONN_MAX_AGE=0 with
+# a pool. Off unless DB_POOL_MAX_SIZE is set.
+DB_POOL_MAX_SIZE = int(os.getenv('DB_POOL_MAX_SIZE', '0'))
+if DB_POOL_MAX_SIZE > 0:
+    DATABASES['default']['CONN_MAX_AGE'] = 0
+    DATABASES['default']['OPTIONS']['pool'] = {
+        'min_size': min(int(os.getenv('DB_POOL_MIN_SIZE', '1')), DB_POOL_MAX_SIZE),
+        'max_size': DB_POOL_MAX_SIZE,
+        # Seconds a request waits for a free connection before failing.
+        'timeout': int(os.getenv('DB_POOL_TIMEOUT', '10')),
+    }
+
 # Set the appropriate database engine based on verified USE_POSTGIS flag
 if USE_POSTGIS:
     DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
@@ -444,6 +460,13 @@ CLERK_API_TIMEOUT_SECONDS = int(os.getenv('CLERK_API_TIMEOUT_SECONDS', 5))
 CLERK_JWKS_CACHE_SECONDS = int(os.getenv('CLERK_JWKS_CACHE_SECONDS', 300))
 CLERK_WEBHOOK_SECRET = os.getenv('CLERK_WEBHOOK_SECRET', '')
 CLERK_WEBHOOK_TOLERANCE_SECONDS = int(os.getenv('CLERK_WEBHOOK_TOLERANCE_SECONDS', 300))
+# Sign in with Apple token revocation on account deletion (App Store 5.1.1(v)).
+# Use the same Apple key as Clerk's Apple social connection; APPLE_CLIENT_ID is
+# the Services ID that issued the tokens. Unset = revocation skipped (logged).
+APPLE_TEAM_ID = os.getenv('APPLE_TEAM_ID', '')
+APPLE_KEY_ID = os.getenv('APPLE_KEY_ID', '')
+APPLE_PRIVATE_KEY = os.getenv('APPLE_PRIVATE_KEY', '')
+APPLE_CLIENT_ID = os.getenv('APPLE_CLIENT_ID', '')
 CLERK_DASHBOARD_USER_URL_TEMPLATE = os.getenv(
     'CLERK_DASHBOARD_USER_URL_TEMPLATE',
     'https://dashboard.clerk.com/users/{clerk_user_id}',
@@ -525,6 +548,11 @@ if USE_REDIS_CACHE and (CACHE_LOCATION.startswith('redis://') or CACHE_LOCATION.
     DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
     DJANGO_REDIS_LOGGER = 'config.throttling'
     CACHES['throttle'] = CACHES['default']
+    CACHES['responses'] = CACHES['default']
+    # Admin session reads come from Redis; writes still go to Postgres, so a
+    # Redis restart or eviction does not log staff out. (The mobile app uses
+    # JWTs and never touches sessions.)
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 else:
     CACHES = {
         'default': {
@@ -540,7 +568,19 @@ else:
             'TIMEOUT': 86400,
             'OPTIONS': {'MAX_ENTRIES': 100000, 'CULL_FREQUENCY': 10},
         },
+        # Cached API pages (discovery lists). LocMemCache only evicts expired
+        # entries when it hits MAX_ENTRIES, so keep the cap small: a page is
+        # ~20 KB and every worker holds its own copy.
+        'responses': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'connect-response-cache',
+            'TIMEOUT': 60,
+            'OPTIONS': {'MAX_ENTRIES': 1000},
+        },
     }
+    # Keep the default DB session engine here: LocMemCache is per process, so
+    # cached_db would let a session logged out on one worker stay valid on
+    # the others until it expired.
 
 from datetime import timedelta
 SIMPLE_JWT = {

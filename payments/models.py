@@ -34,7 +34,7 @@ class Payment(models.Model):
     # Cash collection never passes through Paystack and therefore has no
     # provider transaction reference. Online payments always populate this.
     transaction_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
-    paystack_reference = models.CharField(max_length=100, null=True, blank=True)
+    paystack_reference = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
     amount_collected = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     collected_by = models.ForeignKey(
@@ -58,6 +58,10 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
 
     def __str__(self):
         return f"Payment for {self.order.order_no} ({self.status})"

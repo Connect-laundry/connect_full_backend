@@ -11,9 +11,11 @@ import pytest
 from django.contrib.auth.hashers import PBKDF2PasswordHasher, check_password, make_password
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from laundries.models.category import Category
+from laundries.models.favorite import Favorite
 from laundries.models.laundry import Laundry
 from laundries.models.opening_hours import HolidayOverride, OpeningHours
 from laundries.models.review import Review
@@ -23,7 +25,7 @@ from laundries.services.opening_status import (
     get_laundry_opening_status,
     holiday_override_prefetch,
 )
-from ordering.models import LaunderableItem
+from ordering.models import LaunderableItem, Order
 from users.hashers import TunedPBKDF2PasswordHasher
 from users.models import DeviceSession, SessionRefreshToken, User
 from users.services import clerk_service
@@ -126,6 +128,83 @@ class TestDiscoveryQueryCounts:
         client.force_authenticate(user=customer)
 
         assert _query_count(client, f'/api/v1/laundries/laundries/{laundry.id}/') <= 9
+
+
+@pytest.mark.django_db
+class TestOrderListQueryCounts:
+    def _orders(self, customer, laundry, count):
+        from ordering.models.base import OrderItem
+        orders = []
+        for i in range(count):
+            order = Order.objects.create(
+                user=customer, laundry=laundry, pickup_date=timezone.now() + timedelta(days=1))
+            OrderItem.objects.create(order=order, name='Shirt', quantity=i + 1, price=Decimal('12.50'))
+            OrderItem.objects.create(order=order, name='Duvet', quantity=1, price=Decimal('40.00'))
+            orders.append(order)
+        return orders
+
+    @pytest.mark.parametrize('url', ['/api/v1/orders/', '/api/v1/orders/active/'])
+    def test_queries_do_not_grow_with_order_count(self, owner, customer, url):
+        laundry = _laundries(owner, customer, 1)[0]
+        client = APIClient()
+        client.force_authenticate(user=customer)
+
+        self._orders(customer, laundry, 2)
+        few = _query_count(client, url)
+        self._orders(customer, laundry, 6)
+        many = _query_count(client, url)
+
+        assert many == few, f'{url}: {few} queries for 2 orders, {many} for 8'
+
+    def test_prefetched_items_give_the_same_breakdown(self, owner, customer):
+        from ordering.services.finance_service import FinanceService
+        laundry = _laundries(owner, customer, 1)[0]
+        order = self._orders(customer, laundry, 3)[-1]
+
+        plain = Order.objects.get(pk=order.pk)
+        prefetched = Order.objects.prefetch_related('items').get(pk=order.pk)
+        assert (FinanceService.calculate_price_breakdown(prefetched)
+                == FinanceService.calculate_price_breakdown(plain))
+
+
+@pytest.mark.django_db
+class TestFeaturedCache:
+    URL = '/api/v1/laundries/featured/'
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def _results(self, user, query=''):
+        client = APIClient()
+        if user is not None:
+            client.force_authenticate(user=user)
+        response = client.get(self.URL + query)
+        assert response.status_code == 200, response.content[:300]
+        body = response.json()['data']
+        assert set(body) >= {'count', 'next', 'previous', 'results'}
+        return {item['id']: item for item in body['results']}
+
+    def test_favorites_are_not_shared_through_the_cache(self, owner, customer):
+        laundry = _laundries(owner, customer, 1)[0]
+        Favorite.objects.create(user=customer, laundry=laundry)
+        other = User.objects.create_user(
+            email='perf-other@example.com', phone='233555950003', password='StrongPass123!')
+
+        assert self._results(customer)[str(laundry.id)]['isFavorite'] is True
+        assert self._results(other)[str(laundry.id)]['isFavorite'] is False
+        assert self._results(None)[str(laundry.id)]['isFavorite'] is False
+
+    def test_location_based_fields_are_cached_per_location(self, owner, customer):
+        laundry = _laundries(owner, customer, 1)[0]
+        near = self._results(customer, '?lat=5.6&lng=-0.18')[str(laundry.id)]
+        far = self._results(customer, '?lat=6.7&lng=-1.6')[str(laundry.id)]
+        assert near['estimatedDelivery'] != far['estimatedDelivery']
+
+    def test_paginates(self, owner, customer):
+        _laundries(owner, customer, 3)
+        assert len(self._results(customer, '?page_size=2')) == 2
 
 
 @pytest.mark.django_db

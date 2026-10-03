@@ -145,12 +145,12 @@ class CampaignService:
             ).exclude(orders__status__in=['CANCELLED', 'REJECTED']).distinct()
 
         if segment == Segment.PROMO_OPT_IN:
+            # Only customers who switched promotions on. No preference row
+            # means they never opted in.
             opted_in_ids = NotificationPreference.objects.filter(
                 promotions=True
             ).values_list('user_id', flat=True)
-            # Users with no preference row default to opted-in.
-            has_pref_ids = NotificationPreference.objects.values_list('user_id', flat=True)
-            return customers.filter(Q(pk__in=opted_in_ids) | ~Q(pk__in=has_pref_ids))
+            return customers.filter(pk__in=opted_in_ids)
 
         if segment == Segment.ABANDONED_BOOKING:
             # Server-side proxy for an abandoned booking: an order placed more
@@ -169,16 +169,17 @@ class CampaignService:
 
     @staticmethod
     def _opted_in(user, *, type, category):
-        """Marketing notifications require an explicit opt-in. Returns False
-        only when the user has a preference row that disables the governing
-        toggle (missing row = opted in by default)."""
+        """Marketing notifications require an explicit opt-in (App Store
+        Guideline 4.5.4): True only when the user turned the governing toggle
+        on. A missing preference row means the user never opted in."""
         try:
             pref = NotificationPreference.objects.filter(user=user).first()
         except Exception:  # pragma: no cover
-            return True
-        if pref is None:
-            return True
+            return False  # no consent on record: never send marketing
         cat = (category or '').upper()
+        is_marketing = cat in ('CAMPAIGN', 'PROMO') or (type or '').upper() == Notification.Type.PROMO
+        if pref is None:
+            return not is_marketing
         if cat == 'CAMPAIGN':
             return pref.campaigns
         if (type or '').upper() == Notification.Type.PROMO or cat == 'PROMO':

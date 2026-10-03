@@ -11,6 +11,7 @@ from ..models import Address
 from ..serializers.profile import ProfileSerializer, AddressSerializer
 from users.serializers.session import RefreshTokenRequestSerializer
 from users.services.account_deletion import anonymize_local_account
+from users.services.apple_revocation import revoke_apple_sign_in
 from users.services.clerk_service import delete_clerk_user
 from users.services.session_service import revoke_current_session
 
@@ -124,6 +125,8 @@ class DeleteAccountView(APIView):
         user = request.user
         reason = request.data.get('reason') or 'self_service_deletion'
         if user.clerk_user_id:
+            # Clerk holds the Apple tokens, so revoke before deleting the Clerk user.
+            revoke_apple_sign_in(user.clerk_user_id)
             delete_clerk_user(user.clerk_user_id)
         result = anonymize_local_account(user, reason=reason, request=request)
         return Response({
