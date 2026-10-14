@@ -107,8 +107,15 @@ def revoke_apple_sign_in(clerk_user_id: str) -> bool:
             if response.status_code == 200:
                 revoked = True
             else:
-                logger.warning('Apple token revocation returned HTTP %s', response.status_code)
+                logger.warning(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+                    'Apple sign-in revocation returned HTTP %s',
+                    response.status_code,
+                )
         return revoked
     except (requests.RequestException, ValueError, jwt.PyJWTError) as exc:
-        logger.warning('Apple token revocation failed: %s (%s)', exc, type(exc).__name__)
+        logger.warning(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+            'Apple sign-in revocation failed: %s (%s)',
+            exc,
+            type(exc).__name__,
+        )
         return False
