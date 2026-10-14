@@ -79,7 +79,8 @@ def apply_verified_paystack_success(payment_id, gateway_data, *, actor=None, req
         processor_fee=_paystack_fee(gateway_data),
         settled_directly=payment.settled_directly,
     )
-    OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=actor)
+    if order.status == Order.Status.PENDING:
+        OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=actor)
 
     from admin_notifications.services.outbox import emit_payment_confirmed
     emit_payment_confirmed(order)

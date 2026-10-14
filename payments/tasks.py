@@ -72,8 +72,9 @@ def reconcile_pending_payments(self):
                                 settled_directly=locked_payment.settled_directly,
                             )
                             
-                            # Transition status using OrderStateMachine to trigger signals/notifications
-                            OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=None)
+                            # Transition status using OrderStateMachine to trigger signals/notifications if pending
+                            if order.status == order.Status.PENDING:
+                                OrderStateMachine.transition(order.id, order.Status.CONFIRMED, user=None)
 
                             from admin_notifications.services.outbox import emit_payment_confirmed
                             emit_payment_confirmed(order)

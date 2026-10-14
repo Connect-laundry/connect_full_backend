@@ -324,7 +324,9 @@ def build_tracking_payload(order: Order, request=None) -> dict:
     is_terminal = order.status in TERMINAL_STATUSES
 
     valid_next = list(OrderStateMachine.VALID_TRANSITIONS.get(order.status, []))
-    customer_can_cancel = Order.Status.CANCELLED in valid_next
+    customer_can_cancel = OrderStateMachine.can_transition(order.status, Order.Status.CANCELLED, order=order)
+    if customer_can_cancel and Order.Status.CANCELLED not in valid_next:
+        valid_next.append(Order.Status.CANCELLED)
 
     from payments.models import OrderDispute
     from payments.services.dispute_service import can_open_dispute

@@ -45,8 +45,15 @@ class OrderStateMachine:
     }
 
     @classmethod
-    def can_transition(cls, from_status, to_status):
+    def can_transition(cls, from_status, to_status, order=None):
         """Check if a transition between two states is permitted."""
+        if from_status == Order.Status.PICKED_UP and to_status == Order.Status.CANCELLED:
+            if order is not None:
+                return (
+                    order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
+                    and order.payment_status != Order.PaymentStatus.PAID
+                )
+            return False
         return to_status in cls.VALID_TRANSITIONS.get(from_status, [])
 
     @classmethod
@@ -63,7 +70,7 @@ class OrderStateMachine:
         if from_status == to_status:
             return order, True
 
-        if not cls.can_transition(from_status, to_status):
+        if not cls.can_transition(from_status, to_status, order=order):
             return order, False
 
         # update timestamps based on status

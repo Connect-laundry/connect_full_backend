@@ -423,8 +423,9 @@ def paystack_webhook(request):
                     settled_directly=payment.settled_directly,
                 )
 
-                # Transition order using OrderStateMachine to trigger audit/history logs & signals
-                OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=None)
+                # Transition order using OrderStateMachine to trigger audit/history logs & signals if pending
+                if order.status == Order.Status.PENDING:
+                    OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=None)
 
                 # Operations alert: this booking is now verified paid.
                 from admin_notifications.services.outbox import emit_payment_confirmed

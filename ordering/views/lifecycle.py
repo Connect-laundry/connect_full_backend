@@ -421,6 +421,7 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
             type=Notification.Type.ORDER,
             category="QUOTE_READY",
             related_order=order,
+            action_url=f"/orders/receipt?orderId={order.id}",
             dedup_key=f"quote_ready_{order.id}",
         )
 

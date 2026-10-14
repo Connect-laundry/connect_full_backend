@@ -77,7 +77,7 @@ def perform_transition(order_id, to_status, *, user, reason=None, metadata=None,
         # refuse (clothes already picked up, delivered, completed) used to
         # start the customer's refund and only then fail with 400. The two
         # gates above keep their original precedence (API contract).
-        if order.status != to_status and not OrderStateMachine.can_transition(order.status, to_status):
+        if order.status != to_status and not OrderStateMachine.can_transition(order.status, to_status, order=order):
             return _invalid(order, to_status)
 
         if payment and payment.payment_method != Payment.Method.CASH and order.status != to_status:

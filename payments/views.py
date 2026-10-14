@@ -220,7 +220,7 @@ class PaymentInitializeView(APIView):
 
             accepted_quote = (
                 order.pricing_mode == Order.PricingMode.CUSTOM_QUOTE
-                and order.status == Order.Status.CONFIRMED
+                and order.status in (Order.Status.CONFIRMED, Order.Status.PICKED_UP)
             )
             if order.status != Order.Status.PENDING and not accepted_quote:
                 return Response({
@@ -541,8 +541,9 @@ class PaymentVerifyView(APIView):
                         settled_directly=payment.settled_directly,
                     )
                     
-                    # Transition order using OrderStateMachine to trigger signal pipeline
-                    OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=request.user)
+                    # Transition order using OrderStateMachine to trigger signal pipeline if pending
+                    if order.status == Order.Status.PENDING:
+                        OrderStateMachine.transition(order.id, Order.Status.CONFIRMED, user=request.user)
 
                     from admin_notifications.services.outbox import emit_payment_confirmed
                     emit_payment_confirmed(order)
