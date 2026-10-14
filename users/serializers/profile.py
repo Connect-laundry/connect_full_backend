@@ -35,6 +35,13 @@ class ProfileSerializer(OptionalMediaWriteMixin, SafeMediaModelSerializer):
         # Avatar is optional: a storage outage must not 500 a profile update.
         optional_media_fields = ['avatar']
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        email = ret.get('email')
+        if email and ('{{' in email or '@' not in email):
+            ret['email'] = ''
+        return ret
+
     def validate_phone(self, value):
         """Normalize to E.164 and enforce uniqueness gracefully.
 

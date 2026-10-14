@@ -292,15 +292,27 @@ def _parse_clerk_datetime(value):
     return None
 
 
+def _is_valid_email_str(val: Any) -> bool:
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    return bool(s and '@' in s and not s.startswith('{{') and not s.endswith('}}') and '{{' not in s)
+
+
 def _primary_email(data: dict[str, Any]) -> tuple[str, bool]:
     primary_email_id = data.get('primary_email_address_id')
     for item in data.get('email_addresses') or []:
-        if item.get('id') == primary_email_id and item.get('email_address'):
-            return item['email_address'], _is_verified_email(item)
+        addr = item.get('email_address')
+        if item.get('id') == primary_email_id and _is_valid_email_str(addr):
+            return addr.strip(), _is_verified_email(item)
     for item in data.get('email_addresses') or []:
-        if item.get('email_address'):
-            return item['email_address'], _is_verified_email(item)
-    return data.get('email') or data.get('email_address') or '', bool(data.get('email_verified'))
+        addr = item.get('email_address')
+        if _is_valid_email_str(addr):
+            return addr.strip(), _is_verified_email(item)
+    cand = data.get('email') or data.get('email_address') or ''
+    if _is_valid_email_str(cand):
+        return cand.strip(), bool(data.get('email_verified'))
+    return '', False
 
 
 def _phone_verified(data: dict[str, Any]) -> bool:
@@ -348,12 +360,12 @@ def _profile_from_claims(payload: dict[str, Any]) -> ClerkProfile:
     email = ''
     for key in ['email', 'email_address', 'primary_email_address', 'primary_email']:
         val = payload.get(key)
-        if isinstance(val, str) and val.strip():
+        if _is_valid_email_str(val):
             email = val.strip()
             break
         elif isinstance(val, dict):
             sub_val = val.get('email_address') or val.get('email')
-            if isinstance(sub_val, str) and sub_val.strip():
+            if _is_valid_email_str(sub_val):
                 email = sub_val.strip()
                 break
 
@@ -361,10 +373,12 @@ def _profile_from_claims(payload: dict[str, Any]) -> ClerkProfile:
         email_list = payload.get('email_addresses')
         if isinstance(email_list, list) and email_list:
             first = email_list[0]
-            if isinstance(first, str):
+            if _is_valid_email_str(first):
                 email = first.strip()
             elif isinstance(first, dict):
-                email = (first.get('email_address') or first.get('email') or '').strip()
+                sub_val = first.get('email_address') or first.get('email')
+                if _is_valid_email_str(sub_val):
+                    email = sub_val.strip()
 
     name = (payload.get('name') or '').strip()
     first_name = payload.get('given_name') or payload.get('first_name') or ''
@@ -415,7 +429,7 @@ def fetch_clerk_profile(payload: dict[str, Any], *, prefer_claims: bool = False)
     # a first sign-in may link to an existing account by email, and that needs
     # Clerk's authoritative verification status, which claims may not carry.
     profile = _profile_from_claims(payload)
-    if prefer_claims and profile.email:
+    if prefer_claims and _is_valid_email_str(profile.email):
         return profile
 
     secret_key = getattr(settings, 'CLERK_SECRET_KEY', '')
@@ -517,7 +531,7 @@ def sync_user_from_clerk(
     source: str = 'auth',
     require_verified_email: bool = True,
 ) -> tuple[User, bool]:
-    if not profile.email or (require_verified_email and not profile.email_verified):
+    if not _is_valid_email_str(profile.email) or (require_verified_email and not profile.email_verified):
         raise ValidationError({'email': ['Clerk did not provide a verified email address.']})
 
     provider = normalize_provider(profile.provider)
@@ -538,9 +552,13 @@ def sync_user_from_clerk(
             if user and user.clerk_user_id and user.clerk_user_id != profile.clerk_user_id:
                 raise ValidationError({'email': ['This email is already linked to a different Clerk account.']})
         elif user.email.lower() != email.lower():
-            conflicting_user = User.objects.select_for_update().filter(email__iexact=email).exclude(id=user.id).first()
-            if conflicting_user:
-                raise ValidationError({'email': ['This email is already used by another account.']})
+            # Heal corrupt legacy email in database (e.g. template syntax {{...}})
+            if user.email and ('{{' in user.email or '@' not in user.email):
+                pass
+            else:
+                conflicting_user = User.objects.select_for_update().filter(email__iexact=email).exclude(id=user.id).first()
+                if conflicting_user:
+                    raise ValidationError({'email': ['This email is already used by another account.']})
 
         now = timezone.now()
         if user is None:

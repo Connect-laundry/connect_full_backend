@@ -11,12 +11,13 @@ from users.services.clerk_service import authenticate_clerk_token
 
 
 def _auth_payload(user, tokens):
+    email = user.email if (user.email and '@' in user.email and '{{' not in user.email) else ''
     return {
         'accessToken': tokens['access'],
         'refreshToken': tokens['refresh'],
         'user': {
             'id': str(user.id),
-            'email': user.email,
+            'email': email,
             'fullName': user.get_full_name(),
             'role': user.role,
         },
