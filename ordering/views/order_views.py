@@ -170,9 +170,11 @@ class BookingViewSet(viewsets.GenericViewSet):
             )
             
         # 1. Create a transient order object (not saved to DB)
+        from rest_framework import serializers
+        laundry_id = serializers.UUIDField().run_validation(laundry_id)
         try:
             from laundries.models.laundry import Laundry
-            laundry = Laundry.objects.get(id=laundry_id)
+            laundry = Laundry.objects.get(id=laundry_id, is_active=True, status="APPROVED", vacation_mode=False)
         except Laundry.DoesNotExist:
             return Response({"status": "error", "message": "Laundry not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -183,30 +185,13 @@ class BookingViewSet(viewsets.GenericViewSet):
         pickup_lat = request.data.get('pickup_lat')
         pickup_lng = request.data.get('pickup_lng')
 
-        total_items_price = Decimal('0.00')
-        errors = []
-        for data in items_data:
-            item_id = data.get('item')
-            service_type_id = data.get('service_type')
-            quantity = data.get('quantity', 1)
-            
-            try:
-                l_svc = LaundryService.objects.get(laundry_id=laundry_id, item_id=item_id, service_type_id=service_type_id)
-                total_items_price += l_svc.price * Decimal(str(quantity))
-            except Exception:
-                try:
-                    from laundries.models.pricing import LaundryPricingItem
-                    p_item = LaundryPricingItem.objects.get(laundry_id=laundry_id, id=item_id, is_active=True)
-                    total_items_price += p_item.unit_price * Decimal(str(quantity))
-                except Exception:
-                    errors.append(f"Price not found for item: {item_id}, service: {service_type_id}")
-                
-        if errors:
-            return Response(
-                {"status": "error", "message": "Invalid item or service type IDs.", "data": {"errors": errors}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-                
+        from ordering.serializers.order import OrderItemCreateSerializer
+        from ordering.services.catalog_pricing import price_lines, make_quote
+        payload = OrderItemCreateSerializer(data=items_data, many=True)
+        payload.is_valid(raise_exception=True)
+        contract = serializers.IntegerField(min_value=1, max_value=2).run_validation(request.data.get('pricing_contract', 1))
+        lines, total_items_price = price_lines(laundry, payload.validated_data, contract=contract, check_revisions=False)
+
         # 3. One authoritative quote and one money formula, shared with order
         # creation, so the total shown here is the total that gets charged.
         from ..services.finance_service import FinanceService
@@ -220,7 +205,19 @@ class BookingViewSet(viewsets.GenericViewSet):
             delivery_lng=request.data.get('delivery_lng'),
             items_total=total_items_price,
         )
-        breakdown = FinanceService.compose_breakdown(total_items_price, quote)
+        discount = Decimal('0.00')
+        if request.data.get('coupon_code'):
+            coupon = Coupon.objects.filter(code=request.data['coupon_code']).first()
+            if coupon is None:
+                raise ValidationError({'coupon_code': 'Invalid coupon code.'})
+            discount = FinanceService.coupon_discount(coupon, total_items_price, user=request.user, laundry_id=laundry.pk)
+        breakdown = FinanceService.compose_breakdown(total_items_price, quote, discount=discount)
+        if str(contract) == '2':
+            from datetime import timedelta
+            from django.conf import settings
+            breakdown['lines'] = [line['pricing_snapshot'] for line in lines]
+            breakdown['quote_token'] = make_quote(laundry, request.user, lines, Decimal(breakdown['total']), breakdown)
+            breakdown['quote_expires_at'] = (timezone.now() + timedelta(seconds=getattr(settings, 'PRICING_QUOTE_TTL_SECONDS', 900))).isoformat()
 
         outside_service_area = False
         warning_msg = None

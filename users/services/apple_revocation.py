@@ -54,13 +54,22 @@ def _client_secret(config) -> str:
 
 
 def _apple_tokens_from_clerk(clerk_user_id: str) -> list[str]:
+    base_url = getattr(settings, 'CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
+    timeout = getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5)
+    headers = {'Authorization': f'Bearer {settings.CLERK_SECRET_KEY}'}
+
     response = requests.get(
-        f"{getattr(settings, 'CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')}"
-        f"/v1/users/{clerk_user_id}/oauth_access_tokens/oauth_apple",
-        headers={'Authorization': f'Bearer {settings.CLERK_SECRET_KEY}'},
-        timeout=getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5),
+        f"{base_url}/v1/users/{clerk_user_id}/oauth_access_tokens/oauth_apple",
+        headers=headers,
+        timeout=timeout,
     )
-    if response.status_code in (404, 422):  # no Apple account linked
+    if response.status_code in (404, 422):
+        response = requests.get(
+            f"{base_url}/v1/users/{clerk_user_id}/oauth_access_tokens/oauth_token_apple",
+            headers=headers,
+            timeout=timeout,
+        )
+    if response.status_code in (404, 422):
         return []
     response.raise_for_status()
     payload = response.json()

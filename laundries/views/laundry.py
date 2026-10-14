@@ -443,17 +443,28 @@ class LaundryViewSet(viewsets.ReadOnlyModelViewSet):
             results.extend(svc_serializer.data)
 
             # 2. Fetch LaundryPricingItem items (owner-managed catalog)
-            pricing_qs = laundry.pricing_items.all()
+            from ordering.services.catalog_pricing import enabled, basket_snapshot
+            contract_v2 = request.query_params.get('pricing_contract') == '2'
+            pricing_qs = laundry.pricing_items.select_related('basket').all()
+            if not contract_v2 or not enabled():
+                pricing_qs = pricing_qs.filter(pricing_basis='PER_ITEM')
             if not request.user.is_staff and laundry.owner != request.user:
                 pricing_qs = pricing_qs.filter(is_active=True)
 
             existing_names = {item.get('itemName') for item in results if isinstance(item, dict)}
 
             for p_item in pricing_qs:
-                if p_item.item_name in existing_names:
+                if not contract_v2 and p_item.item_name in existing_names:
                     continue
                 cat_name = p_item.category or "General"
+                metadata = ({
+                    'service_type_code': p_item.service_type, 'pricing_basis': p_item.pricing_basis,
+                    'description': p_item.description, 'currency': p_item.currency,
+                    'pricing_rules': p_item.pricing_rules, 'revision': p_item.revision,
+                    'basket_details': basket_snapshot(p_item.basket),
+                } if contract_v2 else {})
                 results.append({
+                    **metadata,
                     "id": str(p_item.id),
                     "itemName": p_item.item_name,
                     "itemId": str(p_item.id),

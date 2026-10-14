@@ -96,6 +96,16 @@ def normalise_candidate(row: ServiceCandidate) -> DraftCandidate:
         pricing_method=row.pricing_method,
         source_text=clean_text(row.source_text, 300),
         confidence=round(float(row.confidence), 3),
+        pricing_details={
+            'service_type': row.service_type,
+            'basket_name': clean_text(row.basket_name, 120) or None,
+            'basket_capacity': clean_text(row.basket_capacity, 500) or None,
+            'weight_min': clean_text(row.weight_min, 20) or None,
+            'weight_max': clean_text(row.weight_max, 20) or None,
+            'inclusions': [clean_text(v, 200) for v in row.inclusions[:30]],
+            'restrictions': [clean_text(v, 200) for v in row.restrictions[:30]],
+            'source_reference': clean_text(row.source_reference, 120) or None,
+        },
     )
     for w in row.warnings or []:
         code = re.sub(r'[^A-Z0-9_]', '', str(w).upper().replace(' ', '_'))[:40]
@@ -109,6 +119,12 @@ def normalise_candidate(row: ServiceCandidate) -> DraftCandidate:
 
     # Pricing-method consistency. Never guess to satisfy the schema.
     method = candidate.pricing_method
+    if method == 'PER_BASKET' and not candidate.pricing_details['basket_capacity']:
+        candidate.add_warning('BASKET_CAPACITY_REQUIRED')
+    if method == 'WEIGHT_TIER':
+        candidate.add_warning('WEIGHT_BOUNDARIES_REVIEW_REQUIRED')
+    if method == 'FIXED_PACKAGE' and not candidate.pricing_details['inclusions']:
+        candidate.add_warning('PACKAGE_CONTENTS_REQUIRED')
     if method == 'PER_KG' and candidate.price_per_kg is None and candidate.price is not None:
         # The amount landed in the wrong field; keep the value, flag the move.
         candidate.price_per_kg, candidate.price = candidate.price, None
@@ -149,7 +165,7 @@ def assign_review_state(candidate: DraftCandidate, *, currency_confirmed: bool, 
         not blocking
         and trusted_source
         and currency_confirmed
-        and candidate.pricing_method in ('PER_ITEM', 'PER_KG')
+        and candidate.pricing_method in ('PER_ITEM', 'PER_KG', 'PER_BASKET', 'WEIGHT_TIER', 'FIXED_PACKAGE')
         and (candidate.confidence or 0) >= MIN_CONFIDENCE_FOR_GOOD
     )
     candidate.review_state = LOOKS_GOOD if good else CHECK
@@ -158,7 +174,7 @@ def assign_review_state(candidate: DraftCandidate, *, currency_confirmed: bool, 
 def _dedupe(candidates: list[DraftCandidate]) -> None:
     seen: dict[tuple, DraftCandidate] = {}
     for c in candidates:
-        key = (c.item_name.lower(), c.pricing_method)
+        key = (c.item_name.lower(), c.pricing_method, c.pricing_details.get('service_type'), c.category.lower())
         if not c.item_name:
             continue
         if key in seen:

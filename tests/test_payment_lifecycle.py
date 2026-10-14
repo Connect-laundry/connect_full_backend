@@ -39,6 +39,61 @@ class TestPaymentAwareOrderLifecycle:
         assert order.status == order.Status.CANCELLED
         assert payment.status == Payment.Status.FAILED
 
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_cancel_keeps_order_and_payment_pending_when_verification_fails(self, mock_verify):
+        mock_verify.side_effect = TimeoutError('provider unavailable')
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-VERIFY-TIMEOUT')
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}), {}, format='json',
+        )
+        assert response.status_code == status.HTTP_409_CONFLICT
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.PENDING
+        assert payment.status == Payment.Status.PENDING
+
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_cancel_keeps_unknown_gateway_response_pending(self, mock_verify):
+        mock_verify.return_value = {'status': False, 'message': 'Temporary gateway error'}
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-VERIFY-UNKNOWN')
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}), {}, format='json',
+        )
+        assert response.status_code == status.HTTP_409_CONFLICT
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.PENDING
+        assert payment.status == Payment.Status.PENDING
+
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_cancel_keeps_nonterminal_gateway_payment_pending(self, mock_verify):
+        mock_verify.return_value = {'status': True, 'data': {'status': 'pending'}}
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-VERIFY-PENDING')
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}), {}, format='json',
+        )
+        assert response.status_code == status.HTTP_409_CONFLICT
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.PENDING
+        assert payment.status == Payment.Status.PENDING
+
+    @patch('payments.services.refund.PaystackService.refund_transaction')
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_verified_charge_cannot_cancel_if_refund_is_rejected(self, mock_verify, mock_refund):
+        mock_verify.return_value = {'status': True, 'data': {'status': 'success'}}
+        mock_refund.return_value = {'status': False, 'message': 'Refund rejected'}
+        customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-REFUND-BLOCK')
+        response = _auth_client(customer).patch(
+            reverse('order-lifecycle-cancel', kwargs={'pk': order.id}), {}, format='json',
+        )
+        assert response.status_code == status.HTTP_409_CONFLICT
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == order.Status.PENDING
+        assert order.payment_status == order.PaymentStatus.PAID
+        assert payment.status == Payment.Status.SUCCESS
+
     def test_customer_can_cancel_pending_order_without_reference(self):
         customer, order, payment = _build_pending_payment('ORD-LIFECYCLE-CANCEL-NOREF')
         payment.transaction_reference = None

@@ -212,6 +212,9 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
 
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order.pk)
+            from ordering.views.pricing_adjustments import pending_adjustment
+            if pending_adjustment(order):
+                return Response({'message': 'The customer must respond to the proposed price before cash collection.'}, status=409)
             if order.payment_method != Order.PaymentMethod.CASH:
                 return Response(
                     {"status": "error", "message": "This order is not cash on delivery."},

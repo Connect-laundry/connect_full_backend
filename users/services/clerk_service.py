@@ -49,7 +49,10 @@ class ClerkDeletionUnavailable(APIException):
 
 
 ALLOWED_SOCIAL_ROLES = {User.Role.CUSTOMER, User.Role.OWNER}
-ALLOWED_SOCIAL_PROVIDERS = {'oauth_google', 'oauth_facebook', 'oauth_apple', 'google', 'facebook', 'apple'}
+ALLOWED_SOCIAL_PROVIDERS = {
+    'oauth_google', 'oauth_facebook', 'oauth_apple', 'google', 'facebook', 'apple',
+    'oauth_token_apple', 'from_oauth_token_apple', 'token_apple',
+}
 
 
 @dataclass(frozen=True)
@@ -224,11 +227,16 @@ def _is_verified_email(item: dict[str, Any]) -> bool:
     verification = item.get('verification') or {}
     status = verification.get('status')
     strategy = verification.get('strategy') or ''
+    # An explicit negative status from Clerk must not be overridden by the
+    # OAuth provider name when an account is linked by email.
+    if status in {'unverified', 'failed', 'expired'}:
+        return False
     return (
         item.get('verified') is True
         or item.get('email_verified') is True
         or status == 'verified'
-        or (strategy.startswith('from_oauth_') and status in {'verified', 'transferable', None, ''})
+        or (strategy.startswith(('from_oauth_', 'oauth_token_')) and status in {'verified', 'transferable', None, ''})
+        or strategy in {'oauth_apple', 'oauth_token_apple', 'apple'}
     )
 
 
@@ -242,7 +250,12 @@ def _is_verified_phone(item: dict[str, Any]) -> bool:
 
 
 def _claim_email_verified(payload: dict[str, Any]) -> bool:
-    value = payload.get('email_verified') or payload.get('email_verified_at')
+    # Preserve explicit False/None; `or` would fall through to the provider
+    # heuristic and mark an unverified Apple email as verified.
+    if 'email_verified' in payload:
+        value = payload['email_verified']
+    else:
+        value = payload.get('email_verified_at')
     if isinstance(value, str):
         normalized = value.strip().lower()
         if normalized in {'false', '0', 'no', ''}:
@@ -253,7 +266,11 @@ def _claim_email_verified(payload: dict[str, Any]) -> bool:
     if value is not None:
         return bool(value)
     provider = payload.get('social_provider') or payload.get('provider') or ''
-    if provider in {'google', 'oauth_google', 'apple', 'oauth_apple', 'from_oauth_google', 'from_oauth_apple'}:
+    if provider in {
+        'google', 'oauth_google', 'apple', 'oauth_apple',
+        'from_oauth_google', 'from_oauth_apple',
+        'oauth_token_apple', 'from_oauth_token_apple', 'token_apple',
+    }:
         return True
     return bool(payload.get('email') or payload.get('email_address') or payload.get('primary_email_address'))
 
@@ -485,6 +502,9 @@ def normalize_provider(provider: str) -> str:
         'oauth_google': 'oauth_google',
         'oauth_apple': 'oauth_apple',
         'oauth_facebook': 'oauth_facebook',
+        'oauth_token_apple': 'oauth_apple',
+        'from_oauth_token_apple': 'oauth_apple',
+        'token_apple': 'oauth_apple',
     }
     return aliases.get(provider, provider)
 
@@ -595,4 +615,7 @@ def authenticate_clerk_token(token: str, *, requested_role: str | None = None, r
     payload = ClerkTokenVerifier().verify(token)
     already_linked = User.objects.filter(clerk_user_id=payload['sub']).exists()
     profile = fetch_clerk_profile(payload, prefer_claims=already_linked)
-    return sync_user_from_clerk(profile=profile, requested_role=requested_role, request=request)
+    user, created = sync_user_from_clerk(profile=profile, requested_role=requested_role, request=request)
+    if not user.is_active:
+        raise AuthenticationFailed('This account is unavailable. Contact support.')
+    return user, created

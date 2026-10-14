@@ -22,6 +22,14 @@ from django.utils.translation import gettext_lazy as _
 from ..utils.validators import validate_file_upload
 
 
+def private_import_storage():
+    """Never expose source documents through MEDIA_URL or public Cloudinary URLs."""
+    from django.core.files.storage import FileSystemStorage
+    return FileSystemStorage(location=getattr(
+        settings, 'PRICE_LIST_PRIVATE_ROOT', settings.BASE_DIR / 'private_uploads' / 'price_imports',
+    ))
+
+
 class PriceListImportJob(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending')
@@ -58,6 +66,8 @@ class PriceListImportJob(models.Model):
         validators=[validate_file_upload],
         blank=True,
     )
+    source_document = models.FileField(storage=private_import_storage, upload_to='', blank=True)
+    source_pages = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(
         max_length=12,
         choices=Status.choices,
@@ -84,6 +94,7 @@ class PriceListImportJob(models.Model):
     result = models.JSONField(default=dict, blank=True)
     # Stored confirm outcome; replayed for an idempotent repeat confirm.
     confirm_result = models.JSONField(default=dict, blank=True)
+    review_draft = models.JSONField(default=dict, blank=True)
     latency_ms = models.PositiveIntegerField(null=True, blank=True)
     served_from_cache = models.BooleanField(default=False)
 
@@ -113,6 +124,9 @@ class PriceListDraftItem(models.Model):
     class PricingMethod(models.TextChoices):
         PER_ITEM = 'PER_ITEM', _('Per item')
         PER_KG = 'PER_KG', _('Per kg')
+        PER_BASKET = 'PER_BASKET', _('Per basket')
+        WEIGHT_TIER = 'WEIGHT_TIER', _('Flat weight bracket')
+        FIXED_PACKAGE = 'FIXED_PACKAGE', _('Fixed package')
         UNKNOWN = 'UNKNOWN', _('Unknown')
 
     class ReviewState(models.TextChoices):
@@ -139,8 +153,9 @@ class PriceListDraftItem(models.Model):
     raw_name = models.CharField(max_length=200, blank=True, default='')
     variant = models.CharField(max_length=80, blank=True, default='')
     pricing_method = models.CharField(
-        max_length=10, choices=PricingMethod.choices, default=PricingMethod.UNKNOWN
+        max_length=16, choices=PricingMethod.choices, default=PricingMethod.UNKNOWN
     )
+    pricing_details = models.JSONField(default=dict, blank=True)
     # Per-item price (PER_ITEM). Null when unreadable/absent.
     suggested_price = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True

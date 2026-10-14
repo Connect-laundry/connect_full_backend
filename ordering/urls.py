@@ -12,7 +12,11 @@ router.register(r'', OrderViewSet, basename='order')
 router.register(r'lifecycle', OrderLifecycleViewSet, basename='order-lifecycle')
 router.register(r'coupons', CouponViewSet, basename='coupon')
 
+from .views.pricing_adjustments import PricingAdjustmentView, PricingAdjustmentResponseView
+
 urlpatterns = [
+    path('<uuid:pk>/pricing-adjustments/', PricingAdjustmentView.as_view(), name='pricing-adjustments'),
+    path('<uuid:pk>/pricing-adjustments/<uuid:adjustment_id>/respond/', PricingAdjustmentResponseView.as_view(), name='pricing-adjustment-respond'),
     # Catalog endpoints
     path('services/', CatalogViewSet.as_view({'get': 'list'}), name='catalog-services'),
     path('items/', CatalogViewSet.as_view({'get': 'items'}), name='catalog-items'),

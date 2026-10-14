@@ -5,7 +5,7 @@ from .review import Review
 from .favorite import Favorite
 from .opening_hours import OpeningHours, HolidayOverride
 from .pricing import (
-    LaundryPricingItem, LaundryWeightPricing,
+    BasketDefinition, LaundryPricingItem, LaundryWeightPricing,
     PricingCatalogVersion, ScheduledPriceChange, DeliveryZonePricing
 )
 from .price_import import PriceListImportJob, PriceListDraftItem

@@ -71,6 +71,7 @@ STATIC_ROOT = BASE_DIR / 'test-staticfiles'
 import tempfile
 MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(tempfile.gettempdir()) / 'connect-test-media'
+PRICE_LIST_PRIVATE_ROOT = Path(tempfile.gettempdir()) / 'connect-test-private-price-imports'
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

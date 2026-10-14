@@ -24,8 +24,10 @@ from users.services.clerk_service import (
     ClerkTokenVerifier,
     fetch_clerk_profile,
     normalize_provider,
+    profile_from_clerk_user_data,
     sync_user_from_clerk,
     _claim_email_verified,
+    authenticate_clerk_token,
 )
 
 
@@ -187,6 +189,20 @@ class TestClerkSocialAuth:
         assert synced.role == User.Role.OWNER
         assert synced.clerk_user_id == 'user_google_123'
         assert synced.social_provider == 'oauth_facebook'
+
+    def test_inactive_user_cannot_authenticate_with_valid_clerk_token(self, monkeypatch):
+        user, _ = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        monkeypatch.setattr('users.services.clerk_service.ClerkTokenVerifier.verify',
+                            lambda _self, _token: {'sub': user.clerk_user_id})
+        monkeypatch.setattr('users.services.clerk_service.fetch_clerk_profile',
+                            lambda _payload, prefer_claims=False: _profile())
+
+        with pytest.raises(AuthenticationFailed, match='unavailable'):
+            authenticate_clerk_token('valid-clerk-token')
+        user.refresh_from_db()
+        assert user.is_active is False
 
     def test_social_sync_requires_verified_email(self):
         with pytest.raises(ValidationError):
@@ -469,6 +485,19 @@ class TestClerkSocialAuth:
         assert _claim_email_verified({'social_provider': 'from_oauth_apple', 'primary_email_address': 'relay@apple.com'}) is True
         assert _claim_email_verified({'email': 'someone@example.com'}) is True
         assert _claim_email_verified({'email_verified': False}) is False
+        assert _claim_email_verified({'provider': 'oauth_token_apple', 'email': 'relay@example.com', 'email_verified': False}) is False
+
+    def test_explicitly_unverified_apple_email_is_not_accepted_from_clerk_profile(self):
+        profile = profile_from_clerk_user_data({
+            'id': 'user_apple_unverified',
+            'primary_email_address_id': 'email_apple',
+            'email_addresses': [{
+                'id': 'email_apple',
+                'email_address': 'relay@example.com',
+                'verification': {'status': 'unverified', 'strategy': 'oauth_apple'},
+            }],
+        })
+        assert profile.email_verified is False
 
     def test_clerk_bearer_token_can_authenticate_default_drf_views(self, monkeypatch):
         def fake_auth(token, *, requested_role=None, request=None):
@@ -678,3 +707,23 @@ class TestClerkSocialAuth:
         assert any('CLERK_JWT_AUDIENCE' in message for message in error_messages)
         assert any('CLERK_WEBHOOK_SECRET' in message for message in error_messages)
         assert any('CLERK_JWT_ISSUER or CLERK_ISSUER' in message for message in error_messages)
+
+    def test_sync_user_supports_native_apple_token_and_relay_email(self, db):
+        profile = _profile(
+            clerk_user_id='user_apple_native_999',
+            email='randomrelay123@privaterelay.appleid.com',
+            first_name='',
+            last_name='',
+            provider='oauth_token_apple',
+        )
+
+        user, created = sync_user_from_clerk(profile=profile, requested_role=User.Role.CUSTOMER)
+
+        assert created is True
+        assert user.email == 'randomrelay123@privaterelay.appleid.com'
+        assert user.auth_provider == 'oauth_apple'
+        assert user.social_provider == 'oauth_apple'
+        assert user.is_verified is True
+        assert user.role == User.Role.CUSTOMER
+        # Full name fallback handles empty Apple name gracefully
+        assert user.get_full_name() == 'randomrelay123'

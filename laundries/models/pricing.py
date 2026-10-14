@@ -22,6 +22,39 @@ from django.utils.translation import gettext_lazy as _
 from ..utils.validators import validate_file_upload
 
 
+class BasketDefinition(models.Model):
+    """Business-specific capacity, shared by independently priced services."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    laundry = models.ForeignKey('laundries.Laundry', on_delete=models.CASCADE, related_name='basket_definitions')
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    capacity_description = models.CharField(max_length=500)
+    max_weight_kg = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0.01)])
+    max_pieces = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    dimensions = models.CharField(max_length=250, blank=True)
+    inclusions = models.JSONField(default=list, blank=True)
+    exclusions = models.JSONField(default=list, blank=True)
+    overfill_policy = models.CharField(max_length=1000)
+    container_requirements = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True)
+    revision = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('laundry', 'name')
+        ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        from django.db.models import F
+        if not self._state.adding:
+            self.revision = F('revision') + 1
+            if kwargs.get('update_fields'):
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'revision'}
+        super().save(*args, **kwargs)
+        self.refresh_from_db(fields=['revision'])
+
+
 class LaundryPricingItem(models.Model):
     """A single owner-defined priced item (e.g. "Shirt", "Duvet")."""
 
@@ -48,6 +81,28 @@ class LaundryPricingItem(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(0)],
     )
+    class ServiceType(models.TextChoices):
+        WASH_ONLY = 'WASH_ONLY', 'Wash only'
+        IRON_ONLY = 'IRON_ONLY', 'Iron only'
+        WASH_AND_IRON = 'WASH_AND_IRON', 'Wash and iron'
+        WASH_AND_FOLD = 'WASH_AND_FOLD', 'Wash and fold'
+        DRY_CLEAN = 'DRY_CLEAN', 'Dry clean'
+        CUSTOM = 'CUSTOM', 'Custom'
+
+    class PricingBasis(models.TextChoices):
+        PER_ITEM = 'PER_ITEM', 'Per item'
+        PER_KG = 'PER_KG', 'Per kilogram'
+        WEIGHT_TIER = 'WEIGHT_TIER', 'Flat weight interval'
+        PER_BASKET = 'PER_BASKET', 'Per basket'
+        FIXED_PACKAGE = 'FIXED_PACKAGE', 'Fixed package'
+
+    service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.CUSTOM)
+    pricing_basis = models.CharField(max_length=20, choices=PricingBasis.choices, default=PricingBasis.PER_ITEM)
+    description = models.TextField(blank=True)
+    currency = models.CharField(max_length=3, default='GHS')
+    pricing_rules = models.JSONField(default=dict, blank=True)
+    basket = models.ForeignKey(BasketDefinition, on_delete=models.PROTECT, null=True, blank=True, related_name='offerings')
+    revision = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(_('is active'), default=True)
     display_order = models.PositiveIntegerField(_('display order'), default=0)
 
@@ -64,6 +119,15 @@ class LaundryPricingItem(models.Model):
             models.Index(fields=['laundry', 'is_active']),
             models.Index(fields=['laundry', 'display_order']),
         ]
+
+    def save(self, *args, **kwargs):
+        from django.db.models import F
+        if not self._state.adding:
+            self.revision = F('revision') + 1
+            if kwargs.get('update_fields'):
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'revision'}
+        super().save(*args, **kwargs)
+        self.refresh_from_db(fields=['revision'])
 
     def __str__(self):
         return f"{self.item_name} - {self.unit_price} ({self.laundry_id})"

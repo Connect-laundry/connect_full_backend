@@ -49,6 +49,10 @@ def perform_transition(order_id, to_status, *, user, reason=None, metadata=None,
             .first()
         )
 
+        from ordering.views.pricing_adjustments import pending_adjustment
+        if to_status in {Order.Status.IN_PROCESS, Order.Status.OUT_FOR_DELIVERY, Order.Status.DELIVERED, Order.Status.COMPLETED} and pending_adjustment(order):
+            return TransitionResult(False, order, BLOCKED, 'Wait for the customer to approve or reject the proposed price.', 409)
+
         if (
             to_status == Order.Status.COMPLETED
             and order.payment_method == Order.PaymentMethod.CASH
@@ -97,24 +101,42 @@ def perform_transition(order_id, to_status, *, user, reason=None, metadata=None,
                             f"Unable to process refund: {str(e)}. Please contact support to cancel.", 409)
                 elif payment.status == Payment.Status.PENDING and payment.transaction_reference:
                     from payments.services.paystack import PaystackService
-                    from payments.services.refund import refund_payment
+                    from payments.services.refund import refund_payment, RefundError, RefundOutcomeUnknown
                     try:
                         verify_data = PaystackService().verify_transaction(payment.transaction_reference)
-                        if verify_data.get('status') and verify_data.get('data', {}).get('status') == 'success':
-                            payment.transition_to(Payment.Status.SUCCESS)
-                            order.payment_status = Order.PaymentStatus.PAID
-                            order.save(update_fields=['payment_status', 'updated_at'])
+                    except Exception:
+                        logger.warning('Payment verification unavailable during cancellation',
+                                       extra={'order_id': str(order.id)}, exc_info=True)
+                        return TransitionResult(False, order, BLOCKED,
+                                                'Payment status could not be confirmed. Please try again later or contact support.', 409)
+                    gateway_status = (verify_data.get('data') or {}).get('status') if isinstance(verify_data, dict) else None
+                    if isinstance(verify_data, dict) and verify_data.get('status') and gateway_status == 'success':
+                        payment.transition_to(Payment.Status.SUCCESS)
+                        order.payment_status = Order.PaymentStatus.PAID
+                        order.save(update_fields=['payment_status', 'updated_at'])
+                        try:
                             refund_payment(
                                 payment,
                                 reason=reason or f'Order {to_status.lower()}',
                                 actor=user,
                                 request=request,
                             )
-                        else:
-                            payment.transition_to(Payment.Status.FAILED)
-                    except Exception as e:
-                        logger.warning(f"Verification during cancel failed: {e}")
+                        except (RefundError, RefundOutcomeUnknown):
+                            logger.error('Refund could not be confirmed during cancellation',
+                                         extra={'order_id': str(order.id)}, exc_info=True)
+                            return TransitionResult(False, order, BLOCKED,
+                                                    'Refund could not be confirmed. Please contact support before cancelling.', 409)
+                    elif (
+                        isinstance(verify_data, dict)
+                        and (
+                            (verify_data.get('status') and gateway_status in {'failed', 'abandoned'})
+                            or (not verify_data.get('status') and str(verify_data.get('message', '')).lower() == 'transaction not found')
+                        )
+                    ):
                         payment.transition_to(Payment.Status.FAILED)
+                    else:
+                        return TransitionResult(False, order, BLOCKED,
+                                                'Payment is still pending or could not be verified. Please try again later.', 409)
                 elif payment.status == Payment.Status.PENDING:
                     payment.transition_to(Payment.Status.FAILED)
 

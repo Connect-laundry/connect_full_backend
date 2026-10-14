@@ -27,12 +27,12 @@ from drf_spectacular.utils import extend_schema
 from django.db.models import Q
 from ..models.laundry import Laundry, OwnerAuditLog
 from ..models.pricing import (
-    LaundryPricingItem, LaundryWeightPricing,
+    BasketDefinition, LaundryPricingItem, LaundryWeightPricing,
     PricingCatalogVersion, ScheduledPriceChange, DeliveryZonePricing
 )
 from ..renderers import StandardResponseRenderer
 from ..serializers.pricing import (
-    LaundryPricingItemSerializer,
+    BasketDefinitionSerializer, LaundryPricingItemSerializer,
     LaundryWeightPricingSerializer,
     PricingItemBulkUpdateSerializer,
     PricingItemReorderSerializer,
@@ -60,7 +60,7 @@ class PricingItemViewSet(viewsets.ModelViewSet):
     serializer_class = LaundryPricingItemSerializer
 
     def get_queryset(self):
-        return LaundryPricingItem.objects.filter(laundry__owner=self.request.user)
+        return LaundryPricingItem.objects.filter(laundry__owner=self.request.user).select_related("basket")
 
     def _require_laundry(self):
         laundry = get_owner_laundry(self.request.user)
@@ -94,6 +94,30 @@ class PricingItemViewSet(viewsets.ModelViewSet):
             )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['get'])
+    def capabilities(self, request):
+        from ordering.services.catalog_pricing import enabled
+        return Response({'unified_pricing_enabled': enabled(), 'pricing_contract': 2})
+
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        laundry, error = self._require_laundry()
+        if error is not None:
+            return error
+        rows = request.data.get('items')
+        if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'items': 'Provide between 1 and 100 prices.'})
+        serializer = self.get_serializer(data=rows, many=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                serializer.save(laundry=laundry)
+        except IntegrityError:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'items': 'Each service needs a unique display name.'})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     @extend_schema(request=PricingItemBulkUpdateSerializer, responses=LaundryPricingItemSerializer)
     @action(detail=False, methods=['post'], url_path='bulk-update')
     def bulk_update(self, request):
@@ -113,17 +137,11 @@ class PricingItemViewSet(viewsets.ModelViewSet):
                  'data': None},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        editable = {'item_name', 'category', 'unit_price', 'is_active', 'display_order'}
         with transaction.atomic():
             for row in rows:
-                item = owned[row['id']]
-                changed = []
-                for field in editable:
-                    if field in row:
-                        setattr(item, field, row[field])
-                        changed.append(field)
-                if changed:
-                    item.save(update_fields=changed + ['updated_at'])
+                serializer = self.get_serializer(owned[row['id']], data={k: v for k, v in row.items() if k != 'id'}, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
         data = LaundryPricingItemSerializer(
             self.get_queryset(), many=True, context=self.get_serializer_context()
         ).data
@@ -284,6 +302,9 @@ class PricingItemViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
+        if LaundryPricingItem.objects.filter(laundry=laundry).exclude(pricing_basis='PER_ITEM').exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('Use the services editor or reviewed AI import for a catalog with basket, weight or package pricing.')
         created_count = 0
         updated_count = 0
         
@@ -460,6 +481,10 @@ class PricingCatalogVersionViewSet(viewsets.ModelViewSet):
         if error is not None:
             return error
             
+        if LaundryPricingItem.objects.filter(laundry=laundry).exclude(pricing_basis='PER_ITEM').exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('Legacy catalog rollback cannot restore advanced service rules. Edit services individually.')
+
         version = self.get_queryset().filter(id=pk).first()
         if not version:
             return Response(
@@ -634,3 +659,29 @@ class DeliveryZonePricingViewSet(viewsets.ModelViewSet):
             details={'zone_id': str(instance.id)}
         )
         return super().destroy(request, *args, **kwargs)
+
+
+class BasketDefinitionViewSet(viewsets.ModelViewSet):
+    serializer_class = BasketDefinitionSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerRole]
+    renderer_classes = [StandardResponseRenderer]
+
+    def get_queryset(self):
+        return BasketDefinition.objects.filter(laundry__owner=self.request.user)
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import ValidationError
+        laundry = get_owner_laundry(self.request.user)
+        if laundry is None:
+            raise ValidationError('Register a laundry before defining baskets.')
+        try:
+            with transaction.atomic():
+                serializer.save(laundry=laundry)
+        except IntegrityError:
+            raise ValidationError({'name': 'A basket with this name already exists.'})
+
+    def perform_destroy(self, instance):
+        # Capacity history remains in order snapshots; referenced definitions
+        # should be archived so owners can still inspect existing offerings.
+        instance.is_active = False
+        instance.save(update_fields=['is_active', 'updated_at'])

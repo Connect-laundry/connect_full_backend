@@ -118,7 +118,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
 
     def get_full_name(self):
-        return f"{self.first_name} {self.last_name}".strip()
+        full = f"{self.first_name} {self.last_name}".strip()
+        if full:
+            return full
+        if self.email:
+            return self.email.split('@')[0]
+        return 'Customer'
 
 
 class ClerkWebhookEvent(models.Model):

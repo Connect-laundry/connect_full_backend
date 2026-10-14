@@ -96,14 +96,17 @@ class BookingSlotSerializer(serializers.ModelSerializer):
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ['id', 'item', 'service_type', 'name', 'quantity', 'price']
-        read_only_fields = ['id', 'name', 'price']
+        fields = ['id', 'item', 'service_type', 'name', 'quantity', 'price', 'pricing_snapshot']
+        read_only_fields = ['id', 'name', 'price', 'pricing_snapshot']
 
 
 class OrderItemCreateSerializer(serializers.Serializer):
     item = serializers.CharField(max_length=255)
     service_type = serializers.CharField(max_length=255)
     quantity = serializers.IntegerField(min_value=1, max_value=99)
+    revision = serializers.IntegerField(min_value=1, required=False)
+    weight_kg = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal('0.01'), required=False, allow_null=True)
+    piece_count = serializers.IntegerField(min_value=1, max_value=9999, required=False, allow_null=True)
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
@@ -198,6 +201,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         return FinanceService.calculate_price_breakdown(obj, coupon=obj.coupon)
 
 class OrderCreateSerializer(serializers.ModelSerializer):
+    pricing_contract = serializers.IntegerField(min_value=1, max_value=2, default=1, write_only=True)
+    quote_token = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=50000)
     # Empty is allowed at the field level because by-weight and quote orders
     # carry no items. Whether items are required is decided per pricing mode in
     # validate(), so an itemised order with no items is still rejected.
@@ -233,7 +238,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_address', 'delivery_lat', 'delivery_lng',
             'special_instructions', 'items', 'coupon_code',
             'payment_method', 'pricing_mode', 'estimated_weight_kg',
-            'expected_total',
+            'expected_total', 'pricing_contract', 'quote_token',
         ]
 
     def to_internal_value(self, data):
@@ -373,39 +378,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             items = []
 
         if laundry and items:
-            from laundries.models.service import LaundryService
-            from laundries.models.pricing import LaundryPricingItem
-
-            item_errors = {}
-            for index, item_data in enumerate(items):
-                item_val = item_data['item']
-                service_type_val = item_data['service_type']
-
-                item_uuid = _as_uuid(getattr(item_val, 'id', item_val))
-                service_type_uuid = _as_uuid(getattr(service_type_val, 'id', service_type_val))
-
-                in_service = bool(item_uuid and service_type_uuid) and (
-                    LaundryService.objects.filter(
-                        laundry=laundry,
-                        is_available=True,
-                        item_id=item_uuid,
-                        service_type_id=service_type_uuid
-                    ).exists()
-                )
-
-                in_pricing = bool(item_uuid) and (
-                    LaundryPricingItem.objects.filter(
-                        laundry=laundry,
-                        id=item_uuid,
-                        is_active=True
-                    ).exists()
-                )
-
-                if not in_service and not in_pricing:
-                    item_errors[str(index)] = f"{laundry.name} does not offer pricing for item {item_val}."
-
-            if item_errors:
-                raise serializers.ValidationError({"items": item_errors})
+            from ordering.services.catalog_pricing import price_lines
+            price_lines(laundry, items, contract=data.get('pricing_contract', 1))
 
         coupon_code = data.get('coupon_code')
         if coupon_code:
@@ -428,6 +402,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             coupon_obj = validated_data.pop('coupon_obj', None)
             validated_data.pop('coupon_code', None)
             expected_total = validated_data.pop('expected_total', None)
+            pricing_contract = validated_data.pop('pricing_contract', 1)
+            quote_token = validated_data.pop('quote_token', '')
             pricing_mode = validated_data.get('pricing_mode') or Order.PricingMode.BY_ITEM
             user = self.context['request'].user
 
@@ -489,76 +465,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 _notify_operations_of_booking(order)
                 return order
 
-            from laundries.models.service import LaundryService
-            from laundries.models.pricing import LaundryPricingItem
-            from laundries.models.category import Category
-            from ordering.models import LaunderableItem
-
-            for item_data in items_data:
-                item_val = item_data['item']
-                service_type_val = item_data['service_type']
-                quantity = item_data.get('quantity', 1)
-
-                item_uuid = _as_uuid(getattr(item_val, 'id', item_val))
-                service_type_uuid = _as_uuid(getattr(service_type_val, 'id', service_type_val))
-
-                item_price = None
-                item_name = None
-                db_item = None
-                db_service_type = None
-
-                l_svc = None
-                if item_uuid and service_type_uuid:
-                    l_svc = LaundryService.objects.select_related('item', 'service_type').filter(
-                        laundry=order.laundry,
-                        item_id=item_uuid,
-                        service_type_id=service_type_uuid,
-                        is_available=True,
-                    ).first()
-
-                if l_svc is not None:
-                    item_price = l_svc.price
-                    item_name = l_svc.item.name
-                    db_item = l_svc.item
-                    db_service_type = l_svc.service_type
-                else:
-                    p_item = (
-                        LaundryPricingItem.objects.filter(
-                            laundry=order.laundry,
-                            id=item_uuid,
-                            is_active=True
-                        ).first()
-                        if item_uuid
-                        else None
-                    )
-                    if p_item is None:
-                        raise serializers.ValidationError({
-                            "items": f"{order.laundry.name} does not offer item {item_val}."
-                        })
-                    item_price = p_item.unit_price
-                    item_name = p_item.item_name
-                    # Owner-defined catalogs have no Category row; the service
-                    # label is already captured in the item name snapshot.
-                    db_service_type = (
-                        Category.objects.filter(id=service_type_uuid).first()
-                        if service_type_uuid
-                        else None
-                    )
-
-                OrderItem.objects.create(
-                    order=order,
-                    item=db_item,
-                    service_type=db_service_type,
-                    name=item_name or "Laundry Item",
-                    quantity=quantity,
-                    price=item_price
-                )
+            from ordering.services.catalog_pricing import price_lines, check_quote
+            lines, _subtotal = price_lines(order.laundry, items_data, contract=pricing_contract, lock=True)
+            OrderItem.objects.bulk_create([OrderItem(order=order, **line) for line in lines])
 
             # pyre-ignore[missing-module]
             from ..services.finance_service import FinanceService
             # Freeze the pricing onto the order. Every later read, and the
             # settlement owed to the laundry, uses these stored numbers.
             price_breakdown = FinanceService.freeze_price_breakdown(order, coupon=coupon_obj)
+            if pricing_contract == 2:
+                check_quote(quote_token, order.laundry, user, lines, order.total_amount, price_breakdown)
+
 
             if expected_total is not None:
                 diff = abs(order.total_amount - Decimal(str(expected_total)))

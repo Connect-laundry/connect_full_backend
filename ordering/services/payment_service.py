@@ -46,6 +46,11 @@ class PaymentService:
 
         with transaction.atomic():
             locked_order = type(order).objects.select_for_update().get(pk=order.pk)
+            from ordering.views.pricing_adjustments import pending_adjustment
+            from rest_framework.exceptions import ValidationError
+            if pending_adjustment(locked_order):
+                raise ValidationError({'code': 'ADJUSTMENT_PENDING', 'message': 'Review the proposed laundry price before paying.'})
+            amount = locked_order.total_amount
             existing = Payment.objects.select_for_update().filter(order=locked_order).first()
             if existing and existing.status == Payment.Status.SUCCESS:
                 return {

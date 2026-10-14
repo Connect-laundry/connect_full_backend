@@ -88,7 +88,7 @@ def test_async_upload_extracts_in_a_real_background_thread(settings, monkeypatch
     user = owner()
     laundry_for(user)
     c = client_for(user)
-    resp = c.post(reverse('dashboard-price-imports-list') + '?async=1', {'source_image': upload()}, format='multipart')
+    resp = c.post(reverse('dashboard-price-imports-list') + '?async=1', {'source_image': upload(), 'third_party_processing_consent': 'true'}, format='multipart')
     assert resp.status_code == 202          # returned without waiting for extraction
     detail = reverse('dashboard-price-imports-detail', kwargs={'pk': resp.data['id']})
     for _ in range(100):

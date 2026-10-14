@@ -214,6 +214,7 @@ class OrderItem(models.Model):
     
     # Snapshot fields to preserve history if catalog items change
     name = models.CharField(max_length=100)
+    pricing_snapshot = models.JSONField(default=dict, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -266,3 +267,30 @@ class OrderStatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.order.order_no}: {self.previous_status} -> {self.new_status}"
+
+
+class PriceAdjustment(models.Model):
+    """An explicit owner proposal; never authorizes a provider charge."""
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Awaiting customer'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        EXPIRED = 'EXPIRED', 'Expired'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='pricing_adjustments')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    reason = models.CharField(max_length=1000)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    original_total = models.DecimalField(max_digits=10, decimal_places=2)
+    proposed_total = models.DecimalField(max_digits=10, decimal_places=2)
+    original_lines = models.JSONField(default=list)
+    lines = models.JSONField(default=list)
+    breakdown = models.JSONField(default=dict)
+    expires_at = models.DateTimeField()
+    responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['order'], condition=models.Q(status='PENDING'), name='one_pending_price_adjustment')]

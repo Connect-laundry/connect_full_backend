@@ -40,6 +40,10 @@ def apply_scheduled_pricing_changes(self):
                 laundry = change.laundry
                 logger.info(f"Applying scheduled price change {change.id} for laundry {laundry.name}")
                 
+                if LaundryPricingItem.objects.filter(laundry=laundry).exclude(pricing_basis='PER_ITEM').exists():
+                    logger.warning('Skipped legacy scheduled price change for advanced catalog', extra={'change_id': str(change.id)})
+                    continue
+
                 # items_data snaps current state before update
                 current_items = LaundryPricingItem.objects.filter(laundry=laundry)
                 current_snapshot = [

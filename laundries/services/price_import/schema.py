@@ -17,7 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PricingMethodLiteral = Literal['PER_ITEM', 'PER_KG', 'UNKNOWN']
+PricingMethodLiteral = Literal['PER_ITEM', 'PER_KG', 'PER_BASKET', 'WEIGHT_TIER', 'FIXED_PACKAGE', 'UNKNOWN']
 
 
 class ServiceCandidate(BaseModel):
@@ -35,8 +35,16 @@ class ServiceCandidate(BaseModel):
         description='Service type or size for this price, e.g. "Wash & Iron", "Dry Clean", "King size". Null if none.',
     )
     pricing_method: PricingMethodLiteral = Field(
-        description='PER_ITEM for a price per piece, PER_KG for a price per kilogram, UNKNOWN if not stated or unclear.',
+        description='PER_ITEM, PER_KG, PER_BASKET, flat WEIGHT_TIER, FIXED_PACKAGE, or UNKNOWN when unclear. Never turn a bracket into a per-kg rate.',
     )
+    service_type: Literal['WASH_ONLY', 'IRON_ONLY', 'WASH_AND_IRON', 'WASH_AND_FOLD', 'DRY_CLEAN', 'CUSTOM'] | None = None
+    basket_name: str | None = None
+    basket_capacity: str | None = Field(default=None, description='Exact printed capacity description. Null if absent; never invent dimensions or weight.')
+    weight_min: str | None = Field(default=None, description='Printed lower kg boundary for a flat bracket, or null.')
+    weight_max: str | None = Field(default=None, description='Printed upper kg boundary for a flat bracket, or null.')
+    inclusions: list[str] = Field(default_factory=list)
+    restrictions: list[str] = Field(default_factory=list)
+    source_reference: str | None = None
     price: str | None = Field(
         default=None,
         description='Per-item amount exactly as printed (digits and separators, e.g. "15", "15.00", "1,200"). Null if unreadable or absent.',
@@ -94,6 +102,7 @@ class DraftCandidate:
     matched_item_id: str | None = None
     matched_item_name: str = ''
     matched_item_price: Decimal | None = None
+    pricing_details: dict = field(default_factory=dict)
 
     def add_warning(self, code: str) -> None:
         if code not in self.warnings:
@@ -110,6 +119,7 @@ class DraftCandidate:
             'surcharge_amount': d(self.surcharge_amount), 'source_text': self.source_text,
             'confidence': self.confidence, 'warnings': list(self.warnings),
             'review_state': self.review_state, 'is_selected': self.is_selected,
+            'pricing_details': self.pricing_details,
         }
 
     @classmethod
@@ -127,4 +137,5 @@ class DraftCandidate:
             warnings=list(data.get('warnings') or []),
             review_state=data.get('review_state', 'CHECK'),
             is_selected=data.get('is_selected', True),
+            pricing_details=dict(data.get('pricing_details') or {}),
         )

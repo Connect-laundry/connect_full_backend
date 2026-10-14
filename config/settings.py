@@ -1290,3 +1290,7 @@ IP_DIAGNOSTICS_ENABLED = os.getenv(
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '')
 PUSH_PENDING_DISPATCH_BATCH_SIZE = int(os.getenv('PUSH_PENDING_DISPATCH_BATCH_SIZE', '500'))
 
+
+# New catalogs are opt-in until both customer clients are released.
+UNIFIED_PRICING_ENABLED = os.environ.get('UNIFIED_PRICING_ENABLED', 'false').lower() == 'true'
+PRICING_QUOTE_TTL_SECONDS = int(os.environ.get('PRICING_QUOTE_TTL_SECONDS', '900'))

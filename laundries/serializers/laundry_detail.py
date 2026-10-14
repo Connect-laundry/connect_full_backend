@@ -118,13 +118,23 @@ class LaundryDetailSerializer(SafeMediaModelSerializer):
         
         if hasattr(obj, 'pricing_items'):
             request = self.context.get('request')
-            pricing_qs = obj.pricing_items.filter(is_active=True)
+            from ordering.services.catalog_pricing import enabled, basket_snapshot
+            contract_v2 = bool(request and request.query_params.get('pricing_contract') == '2')
+            pricing_qs = obj.pricing_items.filter(is_active=True).select_related('basket')
+            if not contract_v2 or not enabled():
+                pricing_qs = pricing_qs.filter(pricing_basis='PER_ITEM')
             existing_names = {item.get('itemName') for item in data if isinstance(item, dict)}
             for p_item in pricing_qs:
-                if p_item.item_name in existing_names:
+                if not contract_v2 and p_item.item_name in existing_names:
                     continue
                 cat_name = p_item.category or "General"
                 data.append({
+                    **({
+                        'service_type_code': p_item.service_type, 'pricing_basis': p_item.pricing_basis,
+                        'description': p_item.description, 'currency': p_item.currency,
+                        'pricing_rules': p_item.pricing_rules, 'revision': p_item.revision,
+                        'basket_details': basket_snapshot(p_item.basket),
+                    } if contract_v2 else {}),
                     "id": str(p_item.id),
                     "itemName": p_item.item_name,
                     "itemId": str(p_item.id),

@@ -32,6 +32,8 @@ from .views.location import GeocodeView, HoursTemplateView
 # pyre-ignore[missing-module]
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
+from .views.pricing import BasketDefinitionViewSet
+
 router = DefaultRouter()
 router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
 router.register(r'dashboard/pricing-items', PricingItemViewSet, basename='dashboard-pricing-items')
@@ -44,6 +46,8 @@ router.register(r'laundries', LaundryViewSet, basename='laundry')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'admin/laundries', AdminLaundryViewSet, basename='admin-laundry')
 router.register(r'admin/services', AdminServiceViewSet, basename='admin-service')
+
+router.register(r'dashboard/basket-definitions', BasketDefinitionViewSet, basename='basket-definitions')
 
 urlpatterns = [
     path('featured/', LaundryViewSet.as_view({'get': 'featured'}), name='laundry-featured-top'),

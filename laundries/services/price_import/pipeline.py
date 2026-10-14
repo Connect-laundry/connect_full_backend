@@ -95,9 +95,10 @@ def _shadow_active() -> bool:
     return done < settings.PRICE_LIST_SHADOW_CROSSCHECK_LIMIT
 
 
-def run_extraction(image: PreparedImage, existing_items) -> ExtractionOutcome:
+def run_extraction(image: PreparedImage, existing_items, *, budget_seconds=None) -> ExtractionOutcome:
     started = time.monotonic()
-    deadline = started + settings.PRICE_LIST_TOTAL_BUDGET_SECONDS
+    budget_seconds = settings.PRICE_LIST_TOTAL_BUDGET_SECONDS if budget_seconds is None else budget_seconds
+    deadline = started + budget_seconds
     trace: dict = {'attempts': [], 'skipped': {}}
 
     primary, why_primary = _usable(settings.PRICE_LIST_PRIMARY_PROVIDER)
@@ -107,7 +108,8 @@ def run_extraction(image: PreparedImage, existing_items) -> ExtractionOutcome:
     primary_result = None
     if primary is not None:
         # Leave room for a fallback call inside the overall budget.
-        budget = max(deadline - time.monotonic() - (OCR_MIN_SECONDS + 12), 10)
+        remaining = max(deadline - time.monotonic(), 0.1)
+        budget = min(remaining, max(remaining - (OCR_MIN_SECONDS + 12), 10))
         budget = min(budget, settings.GEMINI_TIMEOUT_SECONDS) if primary.name == 'gemini' else budget
         primary_result = _attempt(primary, image, budget, trace)
 

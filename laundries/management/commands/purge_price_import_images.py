@@ -9,6 +9,7 @@ daily from a cron/Render job; needs no worker.
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Q
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -25,18 +26,21 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         days = opts['days'] if opts['days'] is not None else settings.PRICE_LIST_IMAGE_RETENTION_DAYS
         cutoff = timezone.now() - timedelta(days=days)
-        jobs = PriceListImportJob.objects.filter(created_at__lt=cutoff).exclude(source_image='')
+        jobs = PriceListImportJob.objects.filter(created_at__lt=cutoff).filter(~Q(source_image='') | ~Q(source_document=''))
         removed = failed = 0
         for job in jobs.iterator():
             if opts['dry_run']:
                 removed += 1
                 continue
             try:
-                job.source_image.delete(save=False)
+                if job.source_image:
+                    job.source_image.delete(save=False)
+                if job.source_document:
+                    job.source_document.delete(save=False)
             except Exception:
                 failed += 1
                 continue
-            PriceListImportJob.objects.filter(pk=job.pk).update(source_image='')
+            PriceListImportJob.objects.filter(pk=job.pk).update(source_image='', source_document='', source_pages=0)
             removed += 1
         verb = 'would remove' if opts['dry_run'] else 'removed'
         self.stdout.write(f'{verb} {removed} image(s) older than {days} days; {failed} failed')

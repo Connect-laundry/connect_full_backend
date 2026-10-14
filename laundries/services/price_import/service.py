@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -27,13 +28,18 @@ from django.utils import timezone
 
 from laundries.models.laundry import Laundry, OwnerAuditLog
 from laundries.models.price_import import PriceListDraftItem, PriceListImportJob
-from laundries.models.pricing import LaundryPricingItem, LaundryWeightPricing, PricingCatalogVersion
-from utils.media import save_optional_media
+from laundries.models.pricing import (
+    BasketDefinition,
+    LaundryPricingItem,
+    LaundryWeightPricing,
+    PricingCatalogVersion,
+)
 
 from . import telemetry
 from .image import PreparedImage
 from .matching import match_candidates, normalise_name
-from .pipeline import run_extraction
+from .pipeline import ExtractionOutcome, run_extraction
+from .documents import archive_pages
 from .schema import DraftCandidate
 from .validation import clean_text
 
@@ -114,6 +120,7 @@ def _drafts_from_candidates(job, candidates: list[DraftCandidate]) -> list[Price
             source_text=c.source_text[:300], confidence=c.confidence, review_state=c.review_state,
             warnings=c.warnings[:20], match_type=c.match_type, matched_item_id=c.matched_item_id,
             is_selected=c.is_selected,
+            pricing_details=c.pricing_details,
         ))
     return rows
 
@@ -222,7 +229,16 @@ def _extract_in_background(job_id, image: PreparedImage) -> None:
 
 
 def _extract_into(job, image: PreparedImage, existing_items, request=None) -> None:
-    outcome = run_extraction(image, existing_items)
+    outcome = _extract_document(image, existing_items)
+
+    # Store only sanitized page pixels in a private archive. This is optional:
+    # storage failure cannot discard an otherwise useful editable draft.
+    try:
+        name, content, count = archive_pages(image)
+        job.source_document.save(name, ContentFile(content), save=False)
+        job.source_pages = count
+    except Exception:
+        logger.warning('price_import private source storage unavailable', extra={'job_id': str(job.pk)})
 
     with transaction.atomic():
         job.provider = outcome.provider or 'none'
@@ -246,12 +262,44 @@ def _extract_into(job, image: PreparedImage, existing_items, request=None) -> No
             job.error = outcome.error_message[:255]
         job.save()
 
-    # Sanitised copy for audit/support; optional, so a storage outage cannot
-    # cost the owner their extraction. Purged after the retention window.
-    save_optional_media(
-        job, 'source_image', ContentFile(image.provider_bytes, name=image.storage_name),
-        request=request, laundry_id=str(job.laundry_id or ''),
-    )
+
+def _extract_document(image, existing_items):
+    if not image.pages:
+        return run_extraction(image, existing_items)
+    started = time.monotonic()
+    deadline = started + settings.PRICE_LIST_TOTAL_BUDGET_SECONDS
+    combined = ExtractionOutcome(ok=False, trace={'pages': []})
+    for index, page in enumerate(image.pages, start=1):
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            combined.document_warnings.append(f'PAGE_{index}_NOT_READ')
+            continue
+        budget = remaining / (len(image.pages) - index + 1)
+        outcome = run_extraction(page, existing_items, budget_seconds=budget)
+        combined.trace['pages'].append({'page': index, **outcome.trace})
+        combined.document_warnings.extend(outcome.document_warnings)
+        if not outcome.ok:
+            combined.document_warnings.append(f'PAGE_{index}_NOT_READ')
+            continue
+        combined.ok = True
+        combined.provider, combined.model = outcome.provider, outcome.model
+        if outcome.currency == 'GHS':
+            combined.currency = 'GHS'
+        for candidate in outcome.candidates:
+            candidate.pricing_details['source_page'] = index
+            candidate.pricing_details['source_reference'] = f'Page {index}'
+        combined.candidates.extend(outcome.candidates)
+    combined.document_warnings = list(dict.fromkeys(combined.document_warnings))
+    # Conflicts across pages deserve the same review as conflicts on one page.
+    from .validation import _dedupe, assign_review_state
+    _dedupe(combined.candidates)
+    for candidate in combined.candidates:
+        assign_review_state(candidate, currency_confirmed=bool(combined.currency), trusted_source=True)
+    combined.latency_ms = int((time.monotonic() - started) * 1000)
+    if not combined.ok:
+        combined.error_code = 'NO_PRICES_FOUND'
+        combined.error_message = 'No pages could be read. Try clearer photos or enter your prices manually.'
+    return combined
 
 
 def _serve_from_cache(job, prior, existing_items) -> PriceListImportJob:
@@ -269,6 +317,15 @@ def _serve_from_cache(job, prior, existing_items) -> PriceListImportJob:
         job.document_warnings = prior.document_warnings
         job.result = prior.result
         job.provider_trace = {'cache_hit_of': str(prior.id)}
+        # Independent archive reference; retention can remove either job's file.
+        if prior.source_document:
+            try:
+                import uuid
+                with prior.source_document.open('rb') as source:
+                    job.source_document.save(f'{uuid.uuid4().hex}.zip', ContentFile(source.read()), save=False)
+                job.source_pages = prior.source_pages
+            except Exception:
+                logger.warning('price_import cached source unavailable', extra={'job_id': str(job.pk)})
         job.latency_ms = 0
         job.completed_at = timezone.now()
         job.save()
@@ -309,7 +366,7 @@ def _normalise_rows(rows: list[dict], laundry, drafts: dict) -> tuple[list[dict]
     errors: list[dict] = []
     clean: list[dict] = []
     for index, row in enumerate(rows):
-        legacy = 'action' not in row and 'pricing_method' not in row
+        legacy = 'action' not in row and 'pricing_method' not in row and 'pricing_basis' not in row
         action = (row.get('action') or 'CREATE').upper()
         if action not in ('CREATE', 'UPDATE', 'IGNORE'):
             errors.append({'row': index, 'field': 'action', 'message': 'Choose create, update or ignore.'})
@@ -321,13 +378,15 @@ def _normalise_rows(rows: list[dict], laundry, drafts: dict) -> tuple[list[dict]
         if action == 'IGNORE':
             clean.append({'action': 'IGNORE', 'draft_id': draft_id})
             continue
-        method = 'PER_ITEM' if legacy else (row.get('pricing_method') or '').upper()
-        if method not in ('PER_ITEM', 'PER_KG'):
+        method = 'PER_ITEM' if legacy else (row.get('pricing_basis') or row.get('pricing_method') or '').upper()
+        if method not in ('PER_ITEM', 'PER_KG', 'PER_BASKET', 'WEIGHT_TIER', 'FIXED_PACKAGE'):
             errors.append({'row': index, 'field': 'pricing_method',
-                           'message': 'Choose whether this is priced per item or per kg.'})
+                           'message': 'Choose how this service is priced.'})
             continue
-        entry = {'action': action, 'draft_id': draft_id, 'pricing_method': method}
-        if method == 'PER_ITEM':
+        entry = {'action': action, 'draft_id': draft_id, 'pricing_method': method, 'row': index}
+        unified = 'pricing_basis' in row or method in ('PER_BASKET', 'WEIGHT_TIER', 'FIXED_PACKAGE')
+        entry['unified'] = unified
+        if method != 'PER_KG' or unified:
             name = clean_text(row.get('item_name'), 120)
             if not name:
                 errors.append({'row': index, 'field': 'item_name', 'message': 'Enter a service name.'})
@@ -351,6 +410,19 @@ def _normalise_rows(rows: list[dict], laundry, drafts: dict) -> tuple[list[dict]
                                    'message': 'Choose which of your existing services to update.'})
                     continue
                 entry['target'] = target
+                if not unified and target.pricing_basis != 'PER_ITEM':
+                    errors.append({'row': index, 'field': 'pricing_method', 'message': 'Review this service using its current pricing method before updating it.'})
+                    continue
+            if unified:
+                if not getattr(settings, 'UNIFIED_PRICING_ENABLED', False):
+                    errors.append({'row': index, 'field': 'pricing_method', 'message': 'These pricing options are not available yet. Your draft is saved.'})
+                    continue
+                entry.update({
+                    key: row[key]
+                    for key in ('service_type', 'pricing_rules', 'basket', 'basket_definition', 'description')
+                    if key in row
+                })
+                entry['basket_id'] = row.get('basket')
         else:
             entry['price_per_kg'] = _decimal(
                 row.get('price_per_kg', row.get('unit_price')), 'price_per_kg', index, errors,
@@ -359,12 +431,12 @@ def _normalise_rows(rows: list[dict], laundry, drafts: dict) -> tuple[list[dict]
                 continue
         clean.append(entry)
 
-    per_kg = [r for r in clean if r.get('pricing_method') == 'PER_KG']
+    per_kg = [r for r in clean if r.get('pricing_method') == 'PER_KG' and not r.get('unified')]
     if len(per_kg) > 1:
         errors.append({'row': None, 'field': 'pricing_method',
                        'message': 'Your laundry can have one per-kg price. Keep one per-kg row and ignore the others.'})
     creates = [normalise_name(r['item_name']) for r in clean
-               if r.get('action') == 'CREATE' and r.get('pricing_method') == 'PER_ITEM']
+               if r.get('action') == 'CREATE' and 'item_name' in r]
     dupes = {n for n in creates if creates.count(n) > 1}
     if dupes:
         errors.append({'row': None, 'field': 'item_name',
@@ -387,7 +459,7 @@ def _edit_stats(clean: list[dict], drafts: dict) -> dict:
             edited += 1
         elif r['pricing_method'] == 'PER_ITEM' and (r['item_name'] != d.item_name or r['unit_price'] != d.suggested_price):
             edited += 1
-        elif r['pricing_method'] == 'PER_KG' and r['price_per_kg'] != d.price_per_kg:
+        elif r['pricing_method'] == 'PER_KG' and r.get('price_per_kg', r.get('unit_price')) != d.price_per_kg:
             edited += 1
     return {
         'drafts': len(drafts),
@@ -395,6 +467,85 @@ def _edit_stats(clean: list[dict], drafts: dict) -> dict:
         'added': sum(1 for r in clean if not r.get('draft_id') and r['action'] != 'IGNORE'),
         'ignored': sum(1 for r in clean if r['action'] == 'IGNORE') + len(set(drafts) - submitted),
     }
+
+
+def _basket_for_import(*, laundry, entry: dict, draft) -> BasketDefinition | None:
+    """Resolve an explicitly selected basket or publish the draft's basket metadata.
+
+    Draft extraction is intentionally advisory, so this helper only creates a
+    definition when both a name and capacity were actually extracted. Reusing
+    an existing definition keeps repeated confirmations idempotent and avoids
+    duplicate baskets for multiple imported services.
+    """
+    basket_id = entry.get('basket_id')
+    if basket_id:
+        return BasketDefinition.objects.filter(
+            id=basket_id, laundry=laundry, is_active=True,
+        ).first()
+
+    details = (draft.pricing_details if draft is not None else {}) or {}
+    explicit = entry.get('basket_definition')
+    if explicit is not None:
+        from laundries.serializers.pricing import BasketDefinitionSerializer
+        validator = BasketDefinitionSerializer(data=explicit)
+        if not validator.is_valid():
+            raise ConfirmRejected('VALIDATION_FAILED', 'Check the basket details.', [
+                {'row': entry['row'], 'field': 'basket_definition', 'message': str(validator.errors)},
+            ])
+        basket_data = dict(validator.validated_data)
+    else:
+        basket_data = {
+            'name': clean_text(details.get('basket_name'), 120),
+            'capacity_description': clean_text(details.get('basket_capacity'), 500),
+            'inclusions': list(details.get('inclusions') or []),
+            'exclusions': list(details.get('restrictions') or []),
+            'overfill_policy': 'Any extra charge requires your approval before payment.',
+        }
+    name = basket_data['name']
+    capacity = basket_data['capacity_description']
+    if not name or not capacity:
+        return None
+
+    basket = BasketDefinition.objects.filter(
+        laundry=laundry, name__iexact=name,
+    ).first()
+    if basket is not None:
+        if not basket.is_active or any(getattr(basket, key) != value for key, value in basket_data.items()):
+            raise ConfirmRejected('BASKET_CONFLICT', 'A basket with this name has different details. Select your existing basket or use a new name.', http_status=409)
+        return basket
+
+    return BasketDefinition.objects.create(
+        laundry=laundry,
+        **basket_data,
+    )
+
+
+def _validate_unified_import_entry(entry: dict, laundry) -> list[dict]:
+    """Validate a unified import entry after its basket has been resolved."""
+    from types import SimpleNamespace
+    from laundries.serializers.pricing import LaundryPricingItemSerializer
+
+    data = {
+        key: entry[key]
+        for key in ('service_type', 'pricing_rules', 'basket', 'description')
+        if key in entry
+    }
+    data.update(
+        item_name=entry['item_name'],
+        category=entry['category'],
+        unit_price=str(entry['unit_price']),
+        pricing_basis=entry['pricing_method'],
+    )
+    validator = LaundryPricingItemSerializer(
+        instance=entry.get('target'),
+        data=data,
+        partial=entry['action'] == 'UPDATE',
+        context={'request': SimpleNamespace(user=laundry.owner)},
+    )
+    if not validator.is_valid():
+        return [{'row': entry['row'], 'field': 'pricing_rules', 'message': str(validator.errors)}]
+    entry['serializer'] = validator
+    return []
 
 
 def confirm_import(*, job_id, owner, rows: list[dict], currency_confirmed: bool | None) -> tuple[dict, bool]:
@@ -419,14 +570,40 @@ def confirm_import(*, job_id, owner, rows: list[dict], currency_confirmed: bool 
             if job.status != Status.READY:
                 raise ConfirmRejected('NOT_CONFIRMABLE',
                                       'This import cannot be confirmed. Please start a new scan.', http_status=409)
-            legacy = all('action' not in r and 'pricing_method' not in r for r in rows)
-            unsure_currency = job.currency != 'GHS' or 'FOREIGN_CURRENCY' in (job.document_warnings or [])
+            legacy = all('action' not in r and 'pricing_method' not in r and 'pricing_basis' not in r for r in rows)
+            unsure_currency = job.currency != 'GHS' or bool({'FOREIGN_CURRENCY', 'CURRENCY_UNCONFIRMED'} & set(job.document_warnings or []))
             if unsure_currency and not legacy and not currency_confirmed:
                 raise ConfirmRejected('CURRENCY_CONFIRMATION_REQUIRED',
                                       'Please confirm that these prices are in Ghana cedis (GHS).')
             laundry = job.laundry
+            # All catalog writers serialize on the parent, including imports.
+            Laundry.objects.select_for_update().get(pk=laundry.pk)
             drafts = {str(d.id): d for d in job.draft_items.all()}
             clean, errors = _normalise_rows(rows, laundry, drafts)
+            if errors:
+                raise ConfirmRejected('VALIDATION_FAILED', 'Some rows need attention before importing.', errors)
+            for entry in clean:
+                if not entry.get('unified') or entry['action'] == 'IGNORE':
+                    continue
+                if entry['pricing_method'] == 'PER_BASKET':
+                    basket = _basket_for_import(
+                        laundry=laundry,
+                        entry=entry,
+                        draft=drafts.get(entry.get('draft_id')),
+                    )
+                    if basket is None:
+                        errors.append({
+                            'row': entry['row'],
+                            'field': 'basket',
+                            'message': (
+                                'Select an active basket or provide a readable basket name '
+                                'and capacity before importing this service.'
+                            ),
+                        })
+                    else:
+                        entry['basket'] = basket.id
+                        entry['basket_id'] = basket.id
+                errors.extend(_validate_unified_import_entry(entry, laundry))
             if errors:
                 raise ConfirmRejected('VALIDATION_FAILED', 'Some rows need attention before importing.', errors)
             active = [r for r in clean if r['action'] != 'IGNORE']
@@ -435,7 +612,7 @@ def confirm_import(*, job_id, owner, rows: list[dict], currency_confirmed: bool 
 
             existing = {normalise_name(i.item_name): i for i in LaundryPricingItem.objects.filter(laundry=laundry)}
             weight = LaundryWeightPricing.objects.filter(laundry=laundry).first()
-            if any(r['pricing_method'] == 'PER_KG' and r['action'] == 'CREATE' for r in active) and weight:
+            if any(r['pricing_method'] == 'PER_KG' and not r.get('unified') and r['action'] == 'CREATE' for r in active) and weight:
                 raise ConfirmRejected('VALIDATION_FAILED', 'Some rows need attention before importing.', [{
                     'row': None, 'field': 'price_per_kg',
                     'message': f'You already have a per-kg price (GHS {weight.base_price_per_kg}). '
@@ -445,7 +622,10 @@ def confirm_import(*, job_id, owner, rows: list[dict], currency_confirmed: bool 
             # Snapshot the catalogue before changing it (same as CSV import).
             snapshot = [
                 {'item_name': i.item_name, 'category': i.category, 'unit_price': str(i.unit_price),
-                 'is_active': i.is_active, 'display_order': i.display_order}
+                 'is_active': i.is_active, 'display_order': i.display_order,
+                 'service_type': i.service_type, 'pricing_basis': i.pricing_basis,
+                 'pricing_rules': i.pricing_rules, 'basket': str(i.basket_id) if i.basket_id else None,
+                 'description': i.description, 'currency': i.currency, 'revision': i.revision}
                 for i in LaundryPricingItem.objects.filter(laundry=laundry).order_by('display_order', 'item_name')
             ]
             last = PricingCatalogVersion.objects.filter(laundry=laundry).order_by('-version_number').first()
@@ -456,6 +636,16 @@ def confirm_import(*, job_id, owner, rows: list[dict], currency_confirmed: bool 
             created, skipped, updated = [], [], []
             next_order = LaundryPricingItem.objects.filter(laundry=laundry).count()
             for r in active:
+                if r.get('unified'):
+                    key = normalise_name(r['item_name'])
+                    if r['action'] == 'CREATE' and key in existing:
+                        skipped.append(r['item_name'])
+                        continue
+                    item = r['serializer'].save(laundry=laundry, **({'display_order': next_order} if r['action'] == 'CREATE' else {}))
+                    existing[key] = item
+                    (created if r['action'] == 'CREATE' else updated).append(item.item_name)
+                    next_order += r['action'] == 'CREATE'
+                    continue
                 if r['pricing_method'] == 'PER_KG':
                     if weight is None:
                         weight = LaundryWeightPricing.objects.create(

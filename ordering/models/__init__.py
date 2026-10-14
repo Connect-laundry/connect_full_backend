@@ -1,5 +1,5 @@
 # pyre-ignore[missing-module]
-from .base import LaunderableItem, Order, OrderItem, BookingSlot
+from .base import LaunderableItem, Order, OrderItem, BookingSlot, PriceAdjustment
 # pyre-ignore[missing-module]
 from .coupons import Coupon, CouponUsage
 

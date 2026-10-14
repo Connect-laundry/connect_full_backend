@@ -17,9 +17,13 @@ The laundry is always resolved from the authenticated owner, never from the
 request body. Manual pricing endpoints are independent of all of this.
 """
 import logging
+import json
 
 # pyre-ignore[missing-module]
 from django.conf import settings
+from django.http import HttpResponse
+from django.db import transaction
+from django.core.serializers.json import DjangoJSONEncoder
 # pyre-ignore[missing-module]
 from rest_framework import permissions, status, viewsets
 # pyre-ignore[missing-module]
@@ -41,7 +45,7 @@ from ..serializers.price_import import (
 )
 from ..services.price_import import service
 from ..services.price_import.errors import ImageRejected
-from ..services.price_import.image import prepare_image
+from ..services.price_import.documents import MAX_PAGES, prepare_documents, read_source_page
 from .pricing import get_owner_laundry
 
 logger = logging.getLogger(__name__)
@@ -78,6 +82,31 @@ class PriceImportViewSet(viewsets.GenericViewSet):
     def get_queryset(self):
         return service.owner_jobs(self.request.user).prefetch_related('draft_items__matched_item')
 
+    def list(self, request):
+        jobs = self.get_queryset().order_by('-created_at')
+        page = self.paginate_queryset(jobs)
+        if page is not None:
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        return Response(self.get_serializer(jobs[:25], many=True).data)
+
+    @action(detail=True, methods=['patch'])
+    def draft(self, request, pk=None):
+        """Save owner edits separately from source evidence. Never publishes."""
+        serializer = PriceImportConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = json.dumps(serializer.validated_data, cls=DjangoJSONEncoder)
+        if len(payload.encode('utf-8')) > 200_000:
+            return _error('DRAFT_TOO_LARGE', 'This draft is too large. Keep descriptions short.', 400)
+        with transaction.atomic():
+            job = service.owner_jobs(request.user).select_for_update().filter(pk=pk).first()
+            if job is None:
+                return _error('NOT_FOUND', 'Import job not found.', 404)
+            if job.status != PriceListImportJob.Status.READY:
+                return _error('NOT_EDITABLE', 'This scan cannot be edited in its current state.', 409)
+            job.review_draft = json.loads(payload)
+            job.save(update_fields=['review_draft', 'updated_at'])
+        return Response(self.get_serializer(self.get_queryset().get(pk=pk)).data)
+
     @extend_schema(responses=None)
     @action(detail=False, methods=['get'])
     def availability(self, request):
@@ -94,7 +123,9 @@ class PriceImportViewSet(viewsets.GenericViewSet):
                 'daily_limit': settings.PRICE_LIST_DAILY_LIMIT_PER_LAUNDRY,
                 'used_last_24h': used,
                 'max_upload_mb': settings.PRICE_LIST_UPLOAD_MAX_MB,
-                'accepted_types': ['image/jpeg', 'image/png', 'image/webp'],
+                'accepted_types': ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+                'max_pages': MAX_PAGES,
+                'unified_pricing_enabled': getattr(settings, 'UNIFIED_PRICING_ENABLED', False),
                 'manual_entry_available': True,
             },
         })
@@ -102,17 +133,20 @@ class PriceImportViewSet(viewsets.GenericViewSet):
     @extend_schema(request=PriceImportCreateSerializer, responses=PriceListImportJobSerializer)
     def create(self, request, *args, **kwargs):
         laundry = get_owner_laundry(request.user)   # None while onboarding
+        if request.data.get('third_party_processing_consent') != 'true':
+            return _error('CONSENT_REQUIRED',
+                          'Agree to third-party image processing before scanning your price list.', 400)
         available, _reason = service.ai_available_for(laundry, request.user)
         if not available:
             return _error(
                 'AI_IMPORT_NOT_AVAILABLE',
                 f"Price-list scanning isn't available right now. {MANUAL_HINT}", 403,
             )
-        upload = request.FILES.get('source_image')
-        if upload is None:
+        uploads = request.FILES.getlist('source_images') or request.FILES.getlist('source_image')
+        if not uploads:
             return _error('NO_FILE', 'Please choose a photo of your price list.', 400)
         try:
-            prepared = prepare_image(upload)
+            prepared = prepare_documents(uploads)
         except ImageRejected as exc:
             return _error(exc.code, exc.message, exc.http_status)
 
@@ -137,6 +171,24 @@ class PriceImportViewSet(viewsets.GenericViewSet):
         else:
             code = status.HTTP_201_CREATED
         return Response(data, status=code)
+
+    @action(detail=True, methods=['get'])
+    def source(self, request, pk=None):
+        """Authenticated owner-only pixel preview; never return a storage URL."""
+        job = self.get_object()
+        try:
+            page = int(request.query_params.get('page', '1'))
+        except (TypeError, ValueError):
+            return _error('INVALID_PAGE', 'Choose a valid page number.', 400)
+        try:
+            data = read_source_page(job, page)
+        except (OSError, KeyError, ValueError):
+            return _error('SOURCE_UNAVAILABLE', 'This source preview is no longer available.', 404)
+        response = HttpResponse(data, content_type='image/jpeg')
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Content-Disposition'] = f'inline; filename="price-list-page-{page}.jpg"'
+        return response
 
     @extend_schema(responses=PriceListImportJobSerializer)
     def retrieve(self, request, pk=None):

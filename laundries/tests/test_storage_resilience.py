@@ -182,7 +182,7 @@ class TestPriceImportStorageResilience:
         GeminiScript(fake_gemini_response(extraction([item('Shirt', '15')]))).install(monkeypatch)
         with override_settings(**AI_SETTINGS), failing_storage():
             resp = _client(owner).post(
-                reverse(self.URL), {'source_image': upload()}, format='multipart'
+                reverse(self.URL), {'source_image': upload(), 'third_party_processing_consent': 'true'}, format='multipart'
             )
         assert resp.status_code == status.HTTP_201_CREATED, resp.data
         job = PriceListImportJob.objects.get()

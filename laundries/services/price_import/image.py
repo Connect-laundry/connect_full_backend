@@ -20,7 +20,7 @@ import re
 import unicodedata
 import uuid
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.conf import settings
 from PIL import Image, ImageFile, ImageOps
@@ -52,6 +52,7 @@ class PreparedImage:
     source_format: str
     storage_name: str
     original_filename: str
+    pages: list['PreparedImage'] = field(default_factory=list)
 
 
 def sniff_format(head: bytes) -> str | None:

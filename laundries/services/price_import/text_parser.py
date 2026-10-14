@@ -97,6 +97,23 @@ def parse_text(raw_text: str) -> PriceListExtraction:
             headers = None
             continue
 
+        # Flat intervals are not per-kg prices. Parse their boundaries before
+        # the generic amount splitter can mistake a weight for a price.
+        interval = re.fullmatch(
+            r'\s*(?:over\s+)?(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*kg\s*[:=\-–—]?\s*(?:(?:GHS|GHC|GH[₵¢]|₵)\s*)?(\d+(?:\.\d{1,2})?)\s*',
+            line, flags=re.IGNORECASE,
+        )
+        if interval:
+            lo, hi, price = interval.groups()
+            items.append(ServiceCandidate(
+                raw_name=f'{lo}-{hi} kg', normalized_name=f'{category or "Laundry"} {lo}-{hi} kg',
+                category=category, pricing_method='WEIGHT_TIER', price=price,
+                weight_min=lo, weight_max=hi, service_type=_service_type(category),
+                source_text=line.strip()[:300], confidence=PARSER_CONFIDENCE,
+                warnings=['PARSED_FROM_OCR_TEXT', 'WEIGHT_BOUNDARIES_REVIEW_REQUIRED'],
+            ))
+            continue
+
         cells = _split_cells(line)
         name_cells = [c for c in cells if not _is_amount_cell(c)]
         price_cells = [c for c in cells if _is_amount_cell(c)]
@@ -202,7 +219,15 @@ def _row_items(name, price_cells, use_headers, category, line, *, per_kg_line) -
         elif len(price_cells) > 1:
             row_warnings.append('AMBIGUOUS_PAIRING')
         per_kg = mentions_per_kg(cell) or (per_kg_line and len(price_cells) == 1)
-        if per_kg:
+        details = {}
+        if re.search(r'\bbasket\b', name, re.IGNORECASE) and not per_kg:
+            method, price, price_per_kg = 'PER_BASKET', amount_text, None
+            details = {'basket_name': name, 'basket_capacity': None}
+            row_warnings.append('BASKET_CAPACITY_REQUIRED')
+        elif re.search(r'\b(package|bundle)\b|\b\d+\s+\w+\s+for\b', name, re.IGNORECASE) and not per_kg:
+            method, price, price_per_kg = 'FIXED_PACKAGE', amount_text, None
+            details = {'inclusions': [name]}
+        elif per_kg:
             method, price, price_per_kg = 'PER_KG', None, amount_text
         elif len(price_cells) == 1 or use_headers:
             method, price, price_per_kg = 'PER_ITEM', amount_text, None
@@ -220,5 +245,22 @@ def _row_items(name, price_cells, use_headers, category, line, *, per_kg_line) -
             source_text=line.strip()[:300],
             confidence=PARSER_CONFIDENCE,
             warnings=row_warnings,
+            service_type=_service_type(variant or category),
+            **details,
         ))
     return items
+
+
+def _service_type(heading):
+    heading = re.sub(r'\s+', ' ', (heading or '').lower()).replace('&', 'and')
+    if 'dry clean' in heading:
+        return 'DRY_CLEAN'
+    if 'wash' in heading and 'iron' in heading:
+        return 'WASH_AND_IRON'
+    if 'wash' in heading and 'fold' in heading:
+        return 'WASH_AND_FOLD'
+    if 'iron' in heading:
+        return 'IRON_ONLY'
+    if 'wash' in heading and 'only' in heading:
+        return 'WASH_ONLY'
+    return None

@@ -14,7 +14,12 @@ from rest_framework import status
 
 from laundries.models.laundry import OwnerAuditLog
 from laundries.models.price_import import PriceListDraftItem, PriceListImportJob
-from laundries.models.pricing import LaundryPricingItem, LaundryWeightPricing, PricingCatalogVersion
+from laundries.models.pricing import (
+    BasketDefinition,
+    LaundryPricingItem,
+    LaundryWeightPricing,
+    PricingCatalogVersion,
+)
 from laundries.services.price_import import circuit
 
 from .price_import_helpers import (
@@ -56,7 +61,7 @@ def _good_extraction():
 
 
 def _post(client, **kw):
-    return client.post(reverse(LIST_URL), {'source_image': upload(**kw)}, format='multipart')
+    return client.post(reverse(LIST_URL), {'source_image': upload(**kw), 'third_party_processing_consent': 'true'}, format='multipart')
 
 
 def _ready_job(monkeypatch, user=None, ext=None, seed=0):
@@ -73,6 +78,13 @@ def _ready_job(monkeypatch, user=None, ext=None, seed=0):
 @pytest.mark.django_db
 @pytest.mark.usefixtures('ai_settings')
 class TestAccess:
+    def test_upload_requires_explicit_third_party_processing_permission(self, monkeypatch):
+        user = owner()
+        GeminiScript(fake_gemini_response(_good_extraction())).install(monkeypatch)
+        response = client_for(user).post(reverse(LIST_URL), {'source_image': upload()}, format='multipart')
+        assert response.status_code == 400 and response.data['code'] == 'CONSENT_REQUIRED'
+        assert PriceListImportJob.objects.count() == 0
+
     def test_unauthenticated_denied(self, api_client):
         assert api_client.post(reverse(LIST_URL), {}, format='multipart').status_code == 401
 
@@ -125,7 +137,7 @@ class TestAccess:
         user = owner()
         laundry_for(user)
         GeminiScript(fake_gemini_response(_good_extraction())).install(monkeypatch)
-        resp = client_for(user).post(reverse(LIST_URL) + '?async=1', {'source_image': upload()}, format='multipart')
+        resp = client_for(user).post(reverse(LIST_URL) + '?async=1', {'source_image': upload(), 'third_party_processing_consent': 'true'}, format='multipart')
         assert resp.status_code == 202
         polled = client_for(user).get(reverse(DETAIL_URL, kwargs={'pk': resp.data['id']}))
         assert polled.data['status'] == 'READY' and len(polled.data['draft_items']) == 3
@@ -515,9 +527,9 @@ class TestLimits:
         c = client_for(user)
         from django.core.files.uploadedfile import SimpleUploadedFile
         evil = SimpleUploadedFile('menu.jpg', b'MZ' + b'\x00' * 300, content_type='image/jpeg')
-        resp = c.post(reverse(LIST_URL), {'source_image': evil}, format='multipart')
+        resp = c.post(reverse(LIST_URL), {'source_image': evil, 'third_party_processing_consent': 'true'}, format='multipart')
         assert resp.status_code == 415 and resp.data['code'] == 'UNSUPPORTED_FILE'
-        resp = c.post(reverse(LIST_URL), {}, format='multipart')
+        resp = c.post(reverse(LIST_URL), {'third_party_processing_consent': 'true'}, format='multipart')
         assert resp.status_code == 400 and resp.data['code'] == 'NO_FILE'
         assert PriceListImportJob.objects.count() == 0
 
@@ -551,6 +563,44 @@ class TestConfirm:
         assert job.confirm_result['edits']['added'] == 1 and job.confirm_result['edits']['ignored'] == 1
         assert OwnerAuditLog.objects.filter(action='PRICE_LIST_AI_IMPORT').count() == 1
         assert PricingCatalogVersion.objects.filter(laundry=laundry).count() == 1
+
+    @override_settings(UNIFIED_PRICING_ENABLED=True)
+    def test_confirm_publishes_extracted_basket_definition_atomically(self, monkeypatch):
+        user, laundry, job = _ready_job(
+            monkeypatch,
+            ext=extraction([
+                item(
+                    'Laundry basket wash',
+                    '75',
+                    method='PER_BASKET',
+                    basket_name='Standard basket',
+                    basket_capacity='Up to one household laundry basket',
+                    inclusions=['Everyday clothing'],
+                    restrictions=['No blankets'],
+                ),
+            ]),
+        )
+        draft = job.draft_items.get()
+        response = client_for(user).post(
+            _confirm_url(job.id),
+            {'items': [{
+                'draft_id': str(draft.id),
+                'action': 'CREATE',
+                'pricing_method': 'PER_BASKET',
+                'item_name': 'Laundry basket wash',
+                'unit_price': '75.00',
+            }]},
+            format='json',
+        )
+
+        assert response.status_code == 200, response.data
+        basket = BasketDefinition.objects.get(laundry=laundry, name='Standard basket')
+        assert basket.capacity_description == 'Up to one household laundry basket'
+        assert basket.inclusions == ['Everyday clothing']
+        assert basket.exclusions == ['No blankets']
+        offering = LaundryPricingItem.objects.get(laundry=laundry)
+        assert offering.pricing_basis == 'PER_BASKET'
+        assert offering.basket_id == basket.id
 
     def test_repeat_confirm_is_idempotent(self, monkeypatch):
         user, laundry, job = _ready_job(monkeypatch)
