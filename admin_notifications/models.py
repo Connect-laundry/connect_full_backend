@@ -57,6 +57,13 @@ class AdminNotificationDelivery(models.Model):
         WHATSAPP = 'WHATSAPP', 'WhatsApp'
         TELEGRAM = 'TELEGRAM', 'Telegram'
 
+    class Audience(models.TextChoices):
+        # SIMAME operations staff (env-configured recipients).
+        ADMIN = 'ADMIN', 'Operations'
+        # The owner of the laundry fulfilling the order, at the verified
+        # number in MerchantNotificationSettings. Never anyone else.
+        MERCHANT = 'MERCHANT', 'Laundry owner'
+
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         SENDING = 'SENDING', 'Sending'
@@ -72,6 +79,9 @@ class AdminNotificationDelivery(models.Model):
         UNKNOWN = 'UNKNOWN', 'Unknown (possible duplicate risk)'
         FAILED = 'FAILED', 'Failed (needs config/provider fix)'
         DEAD = 'DEAD', 'Dead (retries exhausted or expired)'
+        # Never sent on purpose: the laundry has no verified SMS number, turned
+        # alerts off, or is outside the rollout. The reason is in last_error_*.
+        BLOCKED = 'BLOCKED', 'Blocked (not sent by policy)'
 
     ACTIVE_STATUSES = (Status.PENDING, Status.SENDING, Status.RETRY)
     ACCEPTED_STATUSES = (Status.SUBMITTED, Status.SENT, Status.DELIVERED)
@@ -80,10 +90,21 @@ class AdminNotificationDelivery(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(AdminNotificationEvent, on_delete=models.CASCADE, related_name='deliveries')
     channel = models.CharField(max_length=16, choices=Channel.choices)
+    audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.ADMIN, db_index=True)
+    # MERCHANT deliveries only: the laundry whose owner this goes to. Lets an
+    # owner list their own alerts without reading any other laundry's rows.
+    laundry = models.ForeignKey(
+        'laundries.Laundry', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sms_notification_deliveries',
+    )
+    # Which message template rendered this delivery ('' = the admin default).
+    template = models.CharField(max_length=40, blank=True, default='')
     # SMS/WhatsApp: normalized 233XXXXXXXXX. Telegram: numeric chat id.
-    recipient = models.CharField(max_length=20)
+    # Empty for a BLOCKED merchant delivery that had no verified number.
+    recipient = models.CharField(max_length=20, blank=True)
     provider = models.CharField(max_length=32)
-    # "<event uuid>:<channel>:<recipient>"
+    # "<event uuid>:<channel>:<recipient>" (admin) or
+    # "<event uuid>:MERCHANT:<laundry uuid>" (one owner alert per event).
     dedup_key = models.CharField(max_length=255, unique=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
 
@@ -110,10 +131,15 @@ class AdminNotificationDelivery(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['status', 'next_attempt_at'])]
+        indexes = [
+            models.Index(fields=['status', 'next_attempt_at']),
+            models.Index(fields=['laundry', '-created_at'], name='admin_notif_laundry_recent'),
+        ]
         constraints = [
+            # An ops number that is also an owner's number gets both messages:
+            # they are different alerts, so audience is part of the key.
             models.UniqueConstraint(
-                fields=['event', 'channel', 'recipient'], name='uniq_admin_notif_delivery_recipient',
+                fields=['event', 'channel', 'recipient', 'audience'], name='uniq_admin_notif_delivery_recipient',
             ),
         ]
         verbose_name = 'Admin notification delivery'
@@ -151,3 +177,69 @@ class AdminNotificationProviderMessage(models.Model):
                 fields=['provider', 'provider_message_id'], name='uniq_admin_notif_provider_msg',
             ),
         ]
+
+
+class MerchantNotificationSettings(models.Model):
+    """Where a laundry's booking SMS alerts go, and whether that number is proven.
+
+    One row per laundry. ``phone`` is only ever sent customer booking details
+    once ``phone_verified_at`` is set, by a one-time code sent to that exact
+    number, or by adopting the owner's sign-in phone that Clerk has already
+    verified. Changing the number clears the verification.
+    """
+    class VerificationMethod(models.TextChoices):
+        OTP = 'OTP', 'One-time code'
+        ACCOUNT = 'ACCOUNT', 'Verified sign-in phone'
+
+    laundry = models.OneToOneField(
+        'laundries.Laundry', on_delete=models.CASCADE, related_name='sms_notification_settings',
+    )
+    sms_enabled = models.BooleanField(default=True)
+    # Normalized 233XXXXXXXXX, or '' when none has been set.
+    phone = models.CharField(max_length=20, blank=True, default='')
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_method = models.CharField(max_length=10, choices=VerificationMethod.choices, blank=True, default='')
+
+    # Pending one-time code for ``pending_phone``. Only a salted hash is kept.
+    pending_phone = models.CharField(max_length=20, blank=True, default='')
+    otp_hash = models.CharField(max_length=128, blank=True, default='')
+    otp_expires_at = models.DateTimeField(null=True, blank=True)
+    otp_attempts = models.PositiveSmallIntegerField(default=0)
+
+    updated_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Laundry SMS alert settings'
+        verbose_name_plural = 'Laundry SMS alert settings'
+
+    @property
+    def is_verified(self) -> bool:
+        return bool(self.phone and self.phone_verified_at)
+
+    def __str__(self):
+        from .phone import mask_recipient
+        state = 'verified' if self.is_verified else 'unverified'
+        return f'{self.laundry_id} {mask_recipient(self.phone) if self.phone else "no phone"} ({state})'
+
+
+class MerchantSmsSendLog(models.Model):
+    """Owner-initiated sends (verification codes, test messages).
+
+    Counted per laundry to rate-limit them in the database, which every web
+    process shares; production has no shared cache. Holds no number or text.
+    """
+    class Kind(models.TextChoices):
+        OTP = 'OTP', 'Verification code'
+        TEST = 'TEST', 'Test message'
+
+    laundry = models.ForeignKey('laundries.Laundry', on_delete=models.CASCADE, related_name='+')
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    accepted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['laundry', 'kind', 'created_at'], name='merchant_sms_log_window')]

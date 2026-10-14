@@ -19,6 +19,7 @@ DEAD = 'admin_notification.dead'
 UNKNOWN = 'admin_notification.unknown'
 UNDELIVERED = 'admin_notification.undelivered'
 EMIT_ERROR = 'admin_notification.emit_error'
+BLOCKED = 'admin_notification.blocked'
 
 
 def record(name: str, *, level=logging.INFO, channel='', provider='', event_type='', error_class='',

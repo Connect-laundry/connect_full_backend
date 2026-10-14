@@ -635,3 +635,143 @@ def render_telegram_parts(p) -> list[str]:
     boundaries only, just when an order exceeds one Telegram message."""
     order_no = (p.get('order') or {}).get('order_no', '')
     return split_sms(full_text(p), order_no, TELEGRAM_MAX_CHARS, prefix=conf_prefix(p))
+
+
+# --- Laundry-owner SMS ------------------------------------------------------------
+#
+# One short GSM-7 message per event. The SMS identifies the booking and what
+# to do; everything else stays behind the Seller Center login. "compact"
+# (default) masks the customer's number and shortens addresses; "full" gives
+# the whole number, which the owner may need to call before pickup.
+
+MERCHANT_ADDRESS_CHARS = {'compact': 60, 'full': 120}
+
+
+def _short(text: str, limit: int) -> str:
+    text = ' '.join(str(text or '').split())
+    return text if len(text) <= limit else text[: limit - 3].rstrip(' ,') + '...'
+
+
+def _initial_name(name: str) -> str:
+    """'Ama Kusi Mensah' -> 'Ama M.'; one word stays as is."""
+    words = str(name or '').split()
+    if not words:
+        return 'Customer'
+    return words[0] if len(words) == 1 else f'{words[0]} {words[-1][0]}.'
+
+
+def _mask_display_phone(display: str) -> str:
+    """'024 573 8120' -> '024 XXX 8120'. Anything else keeps only its last 4."""
+    digits = re.sub(r'\D', '', display or '')
+    if len(digits) == 10 and digits.startswith('0'):
+        return f'{digits[:3]} XXX {digits[-4:]}'
+    return f'XXX {digits[-4:]}' if len(digits) >= 4 else ''
+
+
+def short_window(start_iso, end_iso) -> str:
+    """'Wed 15 Oct 9:00-10:00 AM' in Africa/Accra."""
+    start = _parse(start_iso)
+    if start is None:
+        return 'time not set'
+    day = f"{start.strftime('%a')} {start.day} {start.strftime('%b')}"
+    end = _parse(end_iso)
+    if end and end > start and end.date() == start.date():
+        same_half = (start.hour < 12) == (end.hour < 12)
+        first = fmt_time(start).rsplit(' ', 1)[0] if same_half else fmt_time(start)
+        return f'{day} {first}-{fmt_time(end)}'
+    return f'{day} {fmt_time(start)}'
+
+
+def merchant_order_url(p) -> str:
+    base = conf.seller_center_base_url()
+    order_id = (p.get('order') or {}).get('id', '')
+    return f'{base}/orders?order={order_id}' if base and order_id else ''
+
+
+def _merchant_footer(p) -> str:
+    url = merchant_order_url(p)
+    return f'Details: {url}' if url else 'Open Seller Center for details.'
+
+
+def _merchant_order_line(p) -> str:
+    mode = (p.get('order') or {}).get('pricing_mode', '')
+    cur = _cur(p)
+    m = _money(p)
+    if mode == 'CUSTOM_QUOTE':
+        return 'Order: quote request - you set the price'
+    if mode == 'BY_WEIGHT':
+        kg = (p.get('weight') or {}).get('estimated_kg')
+        about = f'about {kg} kg, ' if kg else ''
+        return f"Order: by weight, {about}est. {ghs(m.get('items_total'), cur)}"
+    count = sum(int(i.get('quantity') or 0) for i in p.get('items') or [])
+    return f"Order: {count} item{'s' if count != 1 else ''}, {ghs(m.get('items_total'), cur)}"
+
+
+def _merchant_payment_line(p) -> str:
+    pay = p.get('payment') or {}
+    if pay.get('status') == 'PAID':
+        return 'Payment: paid online'
+    if pay.get('is_cod'):
+        return 'Payment: cash on delivery'
+    if pay.get('status') == 'AWAITING_QUOTE':
+        return 'Payment: after your quote'
+    return 'Payment: not yet confirmed'
+
+
+def merchant_booking_text(p, mode: str) -> str:
+    c = p.get('customer') or {}
+    pk = p.get('pickup') or {}
+    d = p.get('delivery') or {}
+    limit = MERCHANT_ADDRESS_CHARS[mode]
+    phone = c.get('phone') if mode == 'full' else _mask_display_phone(c.get('phone') or '')
+    who = _initial_name(c.get('name'))
+    lines = [
+        f"{conf_prefix(p)}SIMAME NEW BOOKING {(p.get('order') or {}).get('order_no', '')}",
+        f'Customer: {who}' + (f' ({phone})' if phone else ''),
+        f"Pickup: {short_window(pk.get('scheduled_at'), pk.get('window_end'))}",
+        f"At: {_short(pk.get('address') or 'address in Seller Center', limit)}",
+    ]
+    if d.get('same_as_pickup'):
+        lines.append('Delivery: same address')
+    elif d.get('address'):
+        lines.append(f"Delivery: {_short(d['address'], limit)}")
+    lines += [_merchant_order_line(p), _merchant_payment_line(p), _merchant_footer(p)]
+    return '\n'.join(lines)
+
+
+def merchant_cancelled_text(p) -> str:
+    pk = p.get('pickup') or {}
+    return '\n'.join([
+        f"{conf_prefix(p)}SIMAME BOOKING CANCELLED {(p.get('order') or {}).get('order_no', '')}",
+        f"Do not collect. Pickup was {short_window(pk.get('scheduled_at'), pk.get('window_end'))}.",
+        _merchant_footer(p),
+    ])
+
+
+def merchant_changed_text(p, mode: str) -> str:
+    limit = MERCHANT_ADDRESS_CHARS[mode]
+    lines = [f"{conf_prefix(p)}SIMAME BOOKING UPDATED {(p.get('order') or {}).get('order_no', '')}"]
+    for change in (p.get('event') or {}).get('changes') or []:
+        field = change.get('field', '')
+        if field.endswith('_pin'):
+            lines.append(f"{change.get('label', 'Map pin')} moved")
+        elif field.endswith('_date'):
+            lines.append(f"{change.get('label', 'Time')}: {change.get('new') or 'cleared'}")
+        else:
+            lines.append(f"{change.get('label', 'Address')}: {_short(change.get('new') or 'cleared', limit)}")
+    lines.append(_merchant_footer(p))
+    return '\n'.join(lines)
+
+
+def render_merchant_sms(p, template: str) -> list[str]:
+    from .services.merchant import BOOKING, CANCELLED, CHANGED
+    mode = conf.merchant_sms_detail_mode()
+    if template == BOOKING:
+        text = merchant_booking_text(p, mode)
+    elif template == CANCELLED:
+        text = merchant_cancelled_text(p)
+    elif template == CHANGED:
+        text = merchant_changed_text(p, mode)
+    else:
+        raise ValueError(f'Unknown merchant template {template!r}')
+    return [to_sms_text(text)]

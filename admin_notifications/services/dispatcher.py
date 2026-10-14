@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Exists, F, OuterRef
+from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 
 from .. import conf
@@ -42,8 +42,9 @@ from ..models import AdminNotificationDelivery as Delivery
 from ..models import AdminNotificationEvent as Event
 from ..models import AdminNotificationProviderMessage as ProviderMessage
 from ..providers import base, get_sms_provider, get_telegram_provider, get_whatsapp_provider
-from ..rendering import render_sms_parts, render_telegram_parts, render_whatsapp_parts, sms_segments
-from . import metrics
+from ..rendering import (render_merchant_sms, render_sms_parts, render_telegram_parts, render_whatsapp_parts,
+                         sms_segments)
+from . import merchant, metrics
 
 logger = logging.getLogger('admin_notifications')
 
@@ -60,7 +61,25 @@ class DispatchResult:
     dead: int = 0
     expired: int = 0
     recovered: int = 0
+    blocked: int = 0
     dry_run: list = field(default_factory=list)
+
+
+def _sendable(channel: str | None) -> Q | None:
+    """Rows this pass may claim: admin rows on enabled admin channels, owner
+    SMS rows while the merchant switch is on. None when nothing is sendable."""
+    clauses = []
+    admin_channels = _channels(channel)
+    if admin_channels:
+        clauses.append(Q(audience=Delivery.Audience.ADMIN, channel__in=admin_channels))
+    if conf.merchant_sms_enabled() and (not channel or channel.upper() == Delivery.Channel.SMS):
+        clauses.append(Q(audience=Delivery.Audience.MERCHANT, channel=Delivery.Channel.SMS))
+    if not clauses:
+        return None
+    combined = clauses[0]
+    for clause in clauses[1:]:
+        combined |= clause
+    return combined
 
 
 def _channels(channel: str | None) -> list[str]:
@@ -103,7 +122,7 @@ def expire_and_recover(now=None) -> tuple[int, int]:
     return expired, recovered
 
 
-def _claim(limit: int, channels: list[str], event_id=None, now=None) -> tuple[list, uuid.UUID]:
+def _claim(limit: int, sendable: Q, event_id=None, now=None) -> tuple[list, uuid.UUID]:
     now = now or timezone.now()
     token = uuid.uuid4()
     earlier_in_flight = Delivery.objects.filter(
@@ -115,8 +134,8 @@ def _claim(limit: int, channels: list[str], event_id=None, now=None) -> tuple[li
     )
     with transaction.atomic():
         qs = Delivery.objects.filter(
-            status__in=[S.PENDING, S.RETRY], next_attempt_at__lte=now, channel__in=channels,
-        ).filter(~Exists(earlier_in_flight))
+            status__in=[S.PENDING, S.RETRY], next_attempt_at__lte=now,
+        ).filter(sendable).filter(~Exists(earlier_in_flight))
         if event_id:
             qs = qs.filter(event_id=event_id)
         if connection.features.has_select_for_update_skip_locked:
@@ -141,6 +160,8 @@ def _finish_event(event_id):
 
 def _render(delivery):
     payload = delivery.event.payload
+    if delivery.audience == Delivery.Audience.MERCHANT:
+        return render_merchant_sms(payload, delivery.template)
     if delivery.channel == Delivery.Channel.SMS:
         return render_sms_parts(payload)
     if delivery.channel == Delivery.Channel.TELEGRAM:
@@ -158,7 +179,7 @@ def _send_part(delivery, part):
 
 def _apply_failure(delivery, token, result: base.SendResult, now):
     tags = dict(channel=delivery.channel, provider=delivery.provider, event_type=delivery.event.event_type,
-                error_class=result.error_class, order_no=delivery.event.payload.get('order', {}).get('order_no', ''))
+                error_class=result.error_class, audience=delivery.audience, order_no=delivery.event.payload.get('order', {}).get('order_no', ''))
     common = dict(claim_token=None, last_error_class=result.error_class,
                   last_error_safe_message=result.safe_message[:300])
     if result.outcome == base.RETRYABLE:
@@ -211,6 +232,16 @@ def _record_provider_message(delivery, index, part, message_id):
 def _process(delivery_id, token) -> str:
     delivery = Delivery.objects.select_related('event').get(pk=delivery_id)
     now = timezone.now()
+    if delivery.audience == Delivery.Audience.MERCHANT and delivery.parts_sent == 0:
+        reason = merchant.dispatch_block_reason(delivery)
+        if reason:
+            _mine(delivery.id, token).update(
+                status=S.BLOCKED, failed_at=now, claim_token=None, last_error_class=reason,
+                last_error_safe_message=merchant.BLOCK_MESSAGES[reason],
+            )
+            metrics.record(metrics.BLOCKED, audience=delivery.audience, event_type=delivery.event.event_type,
+                           error_class=reason, order_no=delivery.event.payload.get('order', {}).get('order_no', ''))
+            return 'blocked'
     try:
         parts = _render(delivery)
     except Exception as exc:
@@ -265,12 +296,12 @@ def dispatch_due(*, limit=None, event_id=None, channel=None, dry_run=False) -> D
         return result
 
     result.expired, result.recovered = expire_and_recover()
-    if not conf.notifications_enabled():
+    if not conf.any_enabled():
         return result
-    channels = _channels(channel)
-    if not channels:
+    sendable = _sendable(channel)
+    if sendable is None:
         return result
-    ids, token = _claim(limit or conf.batch_size(), channels, event_id=event_id)
+    ids, token = _claim(limit or conf.batch_size(), sendable, event_id=event_id)
     result.claimed = len(ids)
     for delivery_id in ids:
         try:
@@ -284,7 +315,7 @@ def dispatch_due(*, limit=None, event_id=None, channel=None, dry_run=False) -> D
                 safe_message='Unexpected dispatcher error; check logs.'), timezone.now())
         if outcome == 'accepted':
             result.accepted += 1
-        elif outcome in ('retry', 'dead', 'failed', 'unknown'):
+        elif outcome in ('retry', 'dead', 'failed', 'unknown', 'blocked'):
             setattr(result, outcome, getattr(result, outcome) + 1)
         event_id_of = Delivery.objects.filter(pk=delivery_id).values_list('event_id', flat=True).first()
         if event_id_of:

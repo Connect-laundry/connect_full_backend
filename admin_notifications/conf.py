@@ -37,6 +37,61 @@ def sms_enabled() -> bool:
     return notifications_enabled() and _flag('ADMIN_SMS_NOTIFICATIONS_ENABLED')
 
 
+# --- Laundry-owner (merchant) SMS -----------------------------------------------
+
+def merchant_sms_enabled() -> bool:
+    """Server-side master switch for owner booking SMS. Off when unset.
+
+    Independent of the admin switches: ops alerts and owner alerts can each be
+    turned off without touching the other.
+    """
+    return _flag('MERCHANT_SMS_NOTIFICATIONS_ENABLED')
+
+
+def merchant_pilot_laundry_ids() -> frozenset[str]:
+    """Staged rollout: when non-empty, only these laundries get owner SMS."""
+    raw = _get('MERCHANT_SMS_PILOT_LAUNDRY_IDS', '')
+    items = raw if isinstance(raw, (list, tuple)) else str(raw or '').split(',')
+    return frozenset(str(i).strip().lower() for i in items if str(i).strip())
+
+
+def merchant_sms_allowed_for(laundry_id) -> bool:
+    pilot = merchant_pilot_laundry_ids()
+    return not pilot or str(laundry_id).lower() in pilot
+
+
+def merchant_sms_detail_mode() -> str:
+    """'compact' (default) masks the customer phone and shortens addresses;
+    'full' gives the owner the full phone number and longer addresses."""
+    mode = str(_get('MERCHANT_SMS_DETAIL_MODE', 'compact') or 'compact').strip().lower()
+    return mode if mode in ('full', 'compact') else 'compact'
+
+
+def seller_center_base_url() -> str:
+    """Origin of the owner web portal used in SMS links (no session in the link)."""
+    explicit = str(_get('SELLER_CENTER_BASE_URL', '') or '').strip().rstrip('/')
+    if is_production():
+        return '' if url_problem(explicit) else explicit
+    return explicit
+
+
+def merchant_otp_ttl_minutes() -> int:
+    return max(2, int(_get('MERCHANT_SMS_OTP_TTL_MINUTES', 10) or 10))
+
+
+def merchant_otp_hourly_limit() -> int:
+    return max(1, int(_get('MERCHANT_SMS_OTP_HOURLY_LIMIT', 3) or 3))
+
+
+def merchant_test_daily_limit() -> int:
+    return max(1, int(_get('MERCHANT_SMS_TEST_DAILY_LIMIT', 3) or 3))
+
+
+def any_enabled() -> bool:
+    """True when any audience may record or send. Gates emits and dispatch."""
+    return notifications_enabled() or merchant_sms_enabled()
+
+
 def whatsapp_enabled() -> bool:
     return notifications_enabled() and _flag('ADMIN_WHATSAPP_NOTIFICATIONS_ENABLED')
 

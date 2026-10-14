@@ -46,6 +46,7 @@ def _run_pass():
     try:
         from .dispatcher import dispatch_due
         dispatch_due()
+        _run_maintenance_if_due()
     except Exception as exc:
         logger.warning('Admin notification background dispatch failed', exc_info=True,
                        extra={'event': 'admin_notification.dispatch_error'})
@@ -56,10 +57,45 @@ def _run_pass():
         connection.close()
 
 
+RECONCILE_EVERY_SECONDS = 600
+PURGE_EVERY_SECONDS = 24 * 3600
+_next_reconcile_at = 0.0
+_next_purge_at = 0.0
+
+
+def _run_maintenance_if_due():
+    """Report reconciliation and payload purge, each on its own timer.
+
+    Per process; several processes doing it is harmless (both jobs are
+    idempotent and bounded)."""
+    global _next_reconcile_at, _next_purge_at
+    now = time.monotonic()
+    from . import maintenance
+    if now >= _next_reconcile_at:
+        _next_reconcile_at = now + RECONCILE_EVERY_SECONDS
+        maintenance.reconcile_sms_reports()
+    if now >= _next_purge_at:
+        _next_purge_at = now + PURGE_EVERY_SECONDS
+        maintenance.purge_old_payloads()
+
+
 def kick_dispatch():
     """Schedule one dispatch pass in the background (post-commit hook)."""
     global _pass_queued
-    if not conf.dispatch_in_thread() or not conf.notifications_enabled():
+    if not conf.any_enabled():
+        return
+    # Optional Celery dispatch when configured
+    from django.conf import settings
+    if getattr(settings, 'ADMIN_NOTIFICATIONS_USE_CELERY', False):
+        try:
+            from ..tasks import dispatch_notifications_task
+            from utils.tasks import safe_task_delay
+            if safe_task_delay(dispatch_notifications_task):
+                return
+        except Exception:
+            logger.warning('Failed to dispatch notifications via Celery; falling back to threadpool', exc_info=True)
+
+    if not conf.dispatch_in_thread():
         return
     with _lock:
         if _pass_queued:
@@ -73,6 +109,7 @@ def kick_dispatch():
             _pass_queued = False
 
 
+
 def _sweep_due() -> bool:
     global _next_sweep_at
     with _lock:
@@ -84,7 +121,7 @@ def _sweep_due() -> bool:
 
 
 def maybe_sweep_after_request(sender=None, **kwargs):
-    if not conf.sweep_enabled() or not conf.notifications_enabled():
+    if not conf.sweep_enabled() or not conf.any_enabled():
         return
     if _sweep_due():
         kick_dispatch()

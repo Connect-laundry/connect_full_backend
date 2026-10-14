@@ -33,6 +33,10 @@ from .views.location import GeocodeView, HoursTemplateView
 from .views.admin_views import AdminLaundryViewSet, AdminServiceViewSet
 
 from .views.pricing import BasketDefinitionViewSet
+from admin_notifications.merchant_views import (
+    MerchantSmsSettingsView, MerchantSmsTestView, MerchantSmsUseAccountPhoneView,
+    MerchantSmsVerifyConfirmView, MerchantSmsVerifyStartView,
+)
 
 router = DefaultRouter()
 router.register(r'dashboard/orders', DashboardOrderViewSet, basename='dashboard-orders')
@@ -54,6 +58,14 @@ urlpatterns = [
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/earnings/', DashboardEarningsView.as_view(), name='dashboard-earnings'),
     path('dashboard/payouts/', DashboardPayoutsView.as_view(), name='dashboard-payouts'),
+    path('dashboard/sms-alerts/', MerchantSmsSettingsView.as_view(), name='dashboard-sms-alerts'),
+    path('dashboard/sms-alerts/verify/start/', MerchantSmsVerifyStartView.as_view(),
+         name='dashboard-sms-alerts-verify-start'),
+    path('dashboard/sms-alerts/verify/confirm/', MerchantSmsVerifyConfirmView.as_view(),
+         name='dashboard-sms-alerts-verify-confirm'),
+    path('dashboard/sms-alerts/use-account-phone/', MerchantSmsUseAccountPhoneView.as_view(),
+         name='dashboard-sms-alerts-use-account-phone'),
+    path('dashboard/sms-alerts/test/', MerchantSmsTestView.as_view(), name='dashboard-sms-alerts-test'),
     path('dashboard/my-laundry/', MyLaundryView.as_view(), name='dashboard-my-laundry'),
     path('dashboard/my-laundry/payout-account/', OwnerPayoutAccountView.as_view(), name='dashboard-my-laundry-payout-account'),
     path('dashboard/my-laundry/<uuid:id>/', MyLaundryDetailView.as_view(), name='dashboard-my-laundry-detail'),

@@ -712,6 +712,19 @@ ARKESEL_WHATSAPP_INBOX_ID = os.getenv('ARKESEL_WHATSAPP_INBOX_ID', '')
 ARKESEL_WHATSAPP_NEW_ORDER_TEMPLATE_ID = os.getenv('ARKESEL_WHATSAPP_NEW_ORDER_TEMPLATE_ID', '')
 ARKESEL_WHATSAPP_ORDER_UPDATE_TEMPLATE_ID = os.getenv('ARKESEL_WHATSAPP_ORDER_UPDATE_TEMPLATE_ID', '')
 # Telegram (official Bot API): free ops channel, e.g. a "Simame Ops" group.
+# Laundry-owner booking SMS (same outbox and Arkesel account as the admin
+# alerts). Off unless explicitly enabled; see docs/merchant-sms-notifications.
+MERCHANT_SMS_NOTIFICATIONS_ENABLED = _env_flag('MERCHANT_SMS_NOTIFICATIONS_ENABLED')
+# Comma-separated laundry UUIDs for a staged rollout; empty means every laundry.
+MERCHANT_SMS_PILOT_LAUNDRY_IDS = os.getenv('MERCHANT_SMS_PILOT_LAUNDRY_IDS', '')
+MERCHANT_SMS_DETAIL_MODE = os.getenv('MERCHANT_SMS_DETAIL_MODE', 'compact')
+# Owner portal origin for SMS links, e.g. https://simame.tech (no path).
+SELLER_CENTER_BASE_URL = os.getenv('SELLER_CENTER_BASE_URL', '').rstrip('/')
+MERCHANT_SMS_OTP_TTL_MINUTES = int(os.getenv('MERCHANT_SMS_OTP_TTL_MINUTES', '10'))
+MERCHANT_SMS_OTP_HOURLY_LIMIT = int(os.getenv('MERCHANT_SMS_OTP_HOURLY_LIMIT', '3'))
+MERCHANT_SMS_TEST_DAILY_LIMIT = int(os.getenv('MERCHANT_SMS_TEST_DAILY_LIMIT', '3'))
+# Customer details are scrubbed from settled alert payloads after this many days.
+ADMIN_NOTIFICATION_PAYLOAD_RETENTION_DAYS = int(os.getenv('ADMIN_NOTIFICATION_PAYLOAD_RETENTION_DAYS', '30'))
 ADMIN_TELEGRAM_NOTIFICATIONS_ENABLED = _env_flag('ADMIN_TELEGRAM_NOTIFICATIONS_ENABLED')
 ADMIN_TELEGRAM_CHAT_IDS = os.getenv('ADMIN_TELEGRAM_CHAT_IDS', '')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')

@@ -20,6 +20,7 @@ from .http import CONNECT_FAILED, post_json
 
 PROVIDER = 'arkesel_sms'
 SEND_PATH = '/api/v2/sms/send'
+REPORTS_PATH = '/api/v2/sms/message-reports'
 
 
 def transport_result(outcome) -> base.SendResult | None:
@@ -80,6 +81,34 @@ class ArkeselSmsProvider:
         url, headers, payload = self.build_request(recipient, message)
         outcome = post_json(url, headers=headers, payload=payload, timeout=conf.http_timeouts())
         return self.interpret(outcome, recipient)
+
+    def fetch_reports(self, message_ids: list[str]) -> dict[str, str]:
+        """Delivery status per message id, from the batch report endpoint.
+
+        ``POST /api/v2/sms/message-reports`` with ``{"msg_ids": [...]}``
+        answers ``{"status": "success", "data": {"<id>": {"status": ...}}}``.
+        Ids Arkesel does not know come back as ``{"status": "error"}`` and are
+        left out. Any transport or HTTP problem returns {} (try again later).
+        """
+        if not message_ids or self.missing_config():
+            return {}
+        outcome = post_json(
+            conf.arkesel_sms_base_url() + REPORTS_PATH,
+            headers={'api-key': conf.arkesel_api_key()},
+            payload={'msg_ids': list(message_ids)},
+            timeout=conf.http_timeouts(),
+        )
+        body = outcome.body if isinstance(outcome.body, dict) else {}
+        if outcome.transport_error or not (200 <= (outcome.status_code or 0) < 300):
+            return {}
+        if str(body.get('status', '')).lower() != 'success' or not isinstance(body.get('data'), dict):
+            return {}
+        wanted = set(message_ids)
+        statuses = {}
+        for message_id, report in body['data'].items():
+            if message_id in wanted and isinstance(report, dict) and isinstance(report.get('status'), str):
+                statuses[message_id] = report['status'].strip().upper()
+        return statuses
 
     @staticmethod
     def interpret(outcome, recipient: str) -> base.SendResult:

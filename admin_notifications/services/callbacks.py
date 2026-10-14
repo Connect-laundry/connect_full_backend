@@ -67,8 +67,9 @@ def apply_sms_status(sms_id, status) -> str:
                 status=Delivery.Status.UNDELIVERED, failed_at=now, last_error_class=f'SMS_{status}',
                 last_error_safe_message=f'Arkesel delivery report: {status}.',
             )
-            metrics.alert(metrics.UNDELIVERED, f'Admin SMS not delivered ({status})', level='warning',
-                          error_class=f'SMS_{status}', **tags)
+            who = 'Laundry-owner' if delivery.audience == Delivery.Audience.MERCHANT else 'Admin'
+            metrics.alert(metrics.UNDELIVERED, f'{who} SMS not delivered ({status})', level='warning',
+                          error_class=f'SMS_{status}', audience=delivery.audience, **tags)
         elif len(parts) >= delivery.parts_total and all(s == 'DELIVERED' for s in parts):
             Delivery.objects.filter(pk=delivery.pk).update(status=Delivery.Status.DELIVERED, delivered_at=now)
             metrics.record(metrics.DELIVERED, **tags)

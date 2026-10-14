@@ -61,7 +61,7 @@ def notify_admins_of_order_changes(sender, instance, created, raw=False, update_
     before = instance.__dict__.get(_ATTR)
     after = _loaded_values(instance)
     instance.__dict__[_ATTR] = after
-    if created or raw or before is None or not conf.notifications_enabled():
+    if created or raw or before is None or not conf.any_enabled():
         return
     if update_fields is not None and not set(update_fields) & set(TRACKED_FIELDS):
         return

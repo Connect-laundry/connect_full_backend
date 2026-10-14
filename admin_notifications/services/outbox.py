@@ -41,7 +41,7 @@ def _never_raises(event_type):
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(order, *args, **kwargs):
-            if not conf.notifications_enabled():
+            if not conf.any_enabled():
                 return None
             try:
                 with transaction.atomic():
@@ -102,13 +102,20 @@ def _record(order, event_type: str, key: str, *, extra=None, booking_payload=Non
     if not created:
         return None
     rows = _deliveries_for(event)
+    # The laundry owner's alert, if this event is one they are told about.
+    # Created here, in the booking/payment transaction, so it exists exactly
+    # when the change committed.
+    from .merchant import merchant_delivery_for
+    owner_row = merchant_delivery_for(event, order)
+    if owner_row is not None:
+        rows.append(owner_row)
     if rows:
         Delivery.objects.bulk_create(rows, ignore_conflicts=True)
-    else:
+    if not any(r.status in Delivery.ACTIVE_STATUSES for r in rows):
         from django.utils import timezone
         Event.objects.filter(pk=event.pk).update(processed_at=timezone.now())
     metrics.record(metrics.CREATED, event_type=event_type, order_no=payload['order']['order_no'],
-                   deliveries=len(rows))
+                   deliveries=len(rows), merchant=owner_row is not None)
     from .kick import kick_dispatch
     transaction.on_commit(kick_dispatch)
     return event

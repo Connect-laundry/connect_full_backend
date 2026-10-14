@@ -126,6 +126,12 @@ class FakeSms:
             base.ACCEPTED, provider_message_id=f'sms-{uuid.uuid4().hex[:12]}'))
         self.delay = delay
 
+    def missing_config(self):
+        return False
+
+    def fetch_reports(self, sms_ids):
+        return {}
+
     def send(self, recipient, message):
         import time
         with self.lock:
@@ -143,6 +149,9 @@ class FakeWhatsApp:
         self.script = script or (lambda recipient, key, params, n: base.SendResult(
             base.ACCEPTED, provider_message_id=f'wa-{uuid.uuid4().hex[:12]}'))
         self.delay = delay
+
+    def missing_config(self):
+        return False
 
     def send(self, recipient, template_key, params):
         import time
@@ -164,4 +173,7 @@ def patch_providers(monkeypatch, sms=None, whatsapp=None) -> Providers:
     providers = Providers(sms or FakeSms(), whatsapp or FakeWhatsApp())
     monkeypatch.setattr('admin_notifications.services.dispatcher.get_sms_provider', lambda: providers.sms)
     monkeypatch.setattr('admin_notifications.services.dispatcher.get_whatsapp_provider', lambda: providers.whatsapp)
+    monkeypatch.setattr('admin_notifications.providers.get_sms_provider', lambda: providers.sms)
+    monkeypatch.setattr('admin_notifications.providers.get_whatsapp_provider', lambda: providers.whatsapp)
     return providers
+
