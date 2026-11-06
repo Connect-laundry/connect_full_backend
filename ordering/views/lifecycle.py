@@ -19,6 +19,15 @@ from config.throttling import HANDOVER_CODE_THROTTLES
 import logging
 from decimal import Decimal
 
+# A quote prices clothes the laundry still holds; once the order has ended
+# (rejected/cancelled) or been handed back (delivered/completed) it is final.
+QUOTE_CLOSED_STATUSES = frozenset({
+    Order.Status.REJECTED,
+    Order.Status.CANCELLED,
+    Order.Status.DELIVERED,
+    Order.Status.COMPLETED,
+})
+
 logger = logging.getLogger(__name__)
 
 
@@ -369,6 +378,11 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
                 {"status": "error", "message": "This order has already been quoted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if order.status in QUOTE_CLOSED_STATUSES:
+            return Response(
+                {"status": "error", "message": "This order can no longer be quoted."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         raw_items = request.data.get('items')
         if not isinstance(raw_items, list) or not raw_items:
@@ -401,6 +415,19 @@ class OrderLifecycleViewSet(viewsets.GenericViewSet):
             parsed.append((name, quantity, price))
 
         with transaction.atomic():
+            # Re-check under a row lock so two concurrent submissions cannot
+            # both add invoice lines to the same order.
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.items.exists() or order.payment_status == Order.PaymentStatus.PAID:
+                return Response(
+                    {"status": "error", "message": "This order has already been quoted."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if order.status in QUOTE_CLOSED_STATUSES:
+                return Response(
+                    {"status": "error", "message": "This order can no longer be quoted."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             for name, quantity, price in parsed:
                 OrderItem.objects.create(
                     order=order, item=None, service_type=None,
