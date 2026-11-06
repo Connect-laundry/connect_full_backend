@@ -166,7 +166,7 @@ class TestClerkSocialAuth:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'expired' in str(response.data).lower()
 
-    def test_existing_user_is_updated_without_duplicate(self):
+    def test_email_collision_requires_existing_account_verification(self):
         user = User.objects.create_user(
             email='social@example.com',
             phone='233555000099',
@@ -176,19 +176,24 @@ class TestClerkSocialAuth:
             role=User.Role.OWNER,
         )
 
-        synced, created = sync_user_from_clerk(
-            profile=_profile(first_name='New', last_name='Name', provider='oauth_facebook'),
-            requested_role=User.Role.CUSTOMER,
-        )
-
-        assert created is False
-        assert synced.id == user.id
+        with pytest.raises(ValidationError, match='verify ownership'):
+            sync_user_from_clerk(
+                profile=_profile(first_name='New', last_name='Name', provider='oauth_facebook'),
+                requested_role=User.Role.CUSTOMER,
+            )
         assert User.objects.count() == 1
-        synced.refresh_from_db()
-        assert synced.first_name == 'New'
-        assert synced.role == User.Role.OWNER
-        assert synced.clerk_user_id == 'user_google_123'
-        assert synced.social_provider == 'oauth_facebook'
+        user.refresh_from_db()
+        assert user.first_name == 'Old'
+        assert user.role == User.Role.OWNER
+        assert not user.clerk_user_id
+
+    def test_already_linked_user_can_return_without_duplicate(self):
+        first, created = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
+        second, created_again = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
+        assert created is True
+        assert created_again is False
+        assert second.pk == first.pk
+        assert User.objects.count() == 1
 
     def test_inactive_user_cannot_authenticate_with_valid_clerk_token(self, monkeypatch):
         user, _ = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
@@ -595,6 +600,37 @@ class TestClerkSocialAuth:
         assert user.clerk_status == 'active'
         assert user.clerk_metadata['public_metadata'] == {'tier': 'standard'}
         assert ClerkWebhookEvent.objects.filter(svix_id='msg_123', status=ClerkWebhookEvent.Status.PROCESSED).exists()
+
+    def test_webhook_email_collision_is_acknowledged_without_linking(self, settings):
+        existing = User.objects.create_user(
+            email='social@example.com',
+            phone='233555000098',
+            password='StrongPass123!',
+            first_name='Existing',
+            last_name='Owner',
+            role=User.Role.OWNER,
+        )
+        body = json.dumps(_clerk_user_payload(), separators=(',', ':')).encode('utf-8')
+        secret, headers = _signed_webhook_headers(body, svix_id='msg_collision')
+        settings.CLERK_WEBHOOK_SECRET = secret
+
+        responses = [
+            APIClient().generic('POST', reverse('auth_clerk_webhook'), data=body, content_type='application/json', **headers)
+            for _ in range(2)
+        ]
+
+        # Acknowledged (no Svix retry storm), recorded, and never merged.
+        assert responses[0].status_code == status.HTTP_200_OK
+        assert responses[0].data['status'] == 'conflict'
+        assert responses[1].status_code == status.HTTP_200_OK
+        assert responses[1].data['status'] == 'duplicate'
+        event = ClerkWebhookEvent.objects.get(svix_id='msg_collision')
+        assert event.status == ClerkWebhookEvent.Status.PROCESSED
+        assert event.error == 'email_ownership_conflict'
+        existing.refresh_from_db()
+        assert existing.clerk_user_id in (None, '')
+        assert existing.role == User.Role.OWNER
+        assert User.objects.count() == 1
 
     def test_clerk_webhook_rejects_invalid_signature(self, settings):
         settings.CLERK_WEBHOOK_SECRET = 'whsec_' + base64.b64encode(b'test-secret').decode('utf-8')

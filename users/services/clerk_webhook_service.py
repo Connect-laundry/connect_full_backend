@@ -17,6 +17,7 @@ from marketplace.models import AuditLog
 from marketplace.services.audit import record_audit
 from users.models import ClerkWebhookEvent, User
 from users.services.clerk_service import (
+    ClerkEmailOwnershipConflict,
     deactivate_user_from_clerk,
     profile_from_clerk_user_data,
     sync_user_from_clerk,
@@ -167,7 +168,21 @@ def process_clerk_webhook(*, body: bytes, headers: dict[str, str]) -> dict[str, 
         created_user: bool | None = None
         try:
             if event_type in USER_EVENTS:
-                _, created_user = _handle_user_event(payload, source=f'webhook:{event_type}')
+                try:
+                    _, created_user = _handle_user_event(payload, source=f'webhook:{event_type}')
+                except ClerkEmailOwnershipConflict:
+                    # Retrying can never succeed; record it for manual review
+                    # and acknowledge so Svix stops redelivering.
+                    logger.warning(
+                        'Clerk webhook skipped: email belongs to an existing unlinked account',
+                        extra={'event_type': event_type, 'svix_id': svix_id},
+                    )
+                    event.status = ClerkWebhookEvent.Status.PROCESSED
+                    event.error = 'email_ownership_conflict'
+                    event.processed_at = timezone.now()
+                    event.save(update_fields=['status', 'error', 'processed_at'])
+                    _record_webhook_audit(event, created_user=False)
+                    return {'status': 'conflict', 'event_type': event_type}
             elif event_type == 'user.deleted':
                 deactivate_user_from_clerk(clerk_user_id, reason='clerk_user_deleted')
             elif event_type == 'session.created':
