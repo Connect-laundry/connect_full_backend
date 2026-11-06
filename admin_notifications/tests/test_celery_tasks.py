@@ -52,7 +52,11 @@ def test_kick_dispatch_uses_celery_when_enabled(settings):
         assert task_arg == dispatch_notifications_task
 
 
-def test_kick_dispatch_falls_back_when_celery_delay_returns_false(settings):
+def test_kick_dispatch_falls_back_when_celery_delay_returns_false(settings, monkeypatch):
+    # The mocked executor never runs the pass that would clear the module's
+    # coalescing flag; restore it so later tests' real kicks are not dropped.
+    from admin_notifications.services import kick
+    monkeypatch.setattr(kick, '_pass_queued', False)
     configure(settings)
     settings.ADMIN_NOTIFICATIONS_USE_CELERY = True
     settings.ADMIN_NOTIFICATION_DISPATCH_IN_THREAD = True
