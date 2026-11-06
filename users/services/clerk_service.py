@@ -558,7 +558,11 @@ def sync_user_from_clerk(
             if not profile.email_verified:
                 raise ValidationError({'email': ['Clerk did not provide a verified email address.']})
             user = User.objects.select_for_update().filter(email__iexact=email).first()
-            if user:
+            if user and user.clerk_user_id == profile.clerk_user_id:
+                # The user.created webhook committed between the two lookups
+                # (READ COMMITTED). Same Clerk subject: a returning user.
+                pass
+            elif user:
                 # Email equality is not proof of ownership of the existing
                 # SIMAME account. Only an already-linked Clerk subject may
                 # authenticate it through this endpoint.

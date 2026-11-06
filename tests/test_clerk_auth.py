@@ -187,6 +187,31 @@ class TestClerkSocialAuth:
         assert user.role == User.Role.OWNER
         assert not user.clerk_user_id
 
+    def test_webhook_commit_between_lookups_is_a_returning_user_not_a_conflict(self, monkeypatch):
+        # The user.created webhook can commit after social login's lookup by
+        # Clerk id and before its lookup by email (READ COMMITTED).
+        from django.db.models.query import QuerySet
+        linked = User.objects.create_user(
+            email='social@example.com', phone='233555000096', password='StrongPass123!',
+        )
+        User.objects.filter(pk=linked.pk).update(clerk_user_id='user_google_123')
+        real_filter = QuerySet.filter
+        missed = {'done': False}
+
+        def filter_missing_first_clerk_lookup(qs, *args, **kwargs):
+            if not missed['done'] and kwargs.get('clerk_user_id') == 'user_google_123':
+                missed['done'] = True
+                return real_filter(qs, pk__in=[])
+            return real_filter(qs, *args, **kwargs)
+
+        monkeypatch.setattr(QuerySet, 'filter', filter_missing_first_clerk_lookup)
+        user, created = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
+
+        assert missed['done'] is True
+        assert created is False
+        assert user.pk == linked.pk
+        assert User.objects.count() == 1
+
     def test_already_linked_user_can_return_without_duplicate(self):
         first, created = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
         second, created_again = sync_user_from_clerk(profile=_profile(), requested_role=User.Role.CUSTOMER)
@@ -627,6 +652,8 @@ class TestClerkSocialAuth:
         event = ClerkWebhookEvent.objects.get(svix_id='msg_collision')
         assert event.status == ClerkWebhookEvent.Status.PROCESSED
         assert event.error == 'email_ownership_conflict'
+        from marketplace.models import AuditLog
+        assert AuditLog.objects.filter(target_id=str(event.id), metadata__outcome='email_ownership_conflict').exists()
         existing.refresh_from_db()
         assert existing.clerk_user_id in (None, '')
         assert existing.role == User.Role.OWNER
