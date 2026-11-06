@@ -93,6 +93,22 @@ class TestOwnerQuote:
         # Second attempt must not double-invoice.
         assert owner_client.post(url, items, format='json').status_code == status.HTTP_400_BAD_REQUEST
 
+    @pytest.mark.parametrize('closed_status', ['CANCELLED', 'REJECTED', 'DELIVERED', 'COMPLETED'])
+    def test_a_closed_order_cannot_be_quoted(self, closed_status):
+        _, laundry, order = _quote_order(f'QiC{closed_status[:3]}')
+        Order.objects.filter(pk=order.pk).update(status=closed_status)
+
+        resp = _auth_client(laundry.owner).post(
+            reverse('order-lifecycle-quote', args=[str(order.id)]),
+            {'items': [{'name': 'Wash', 'quantity': 1, 'price': '20.00'}]},
+            format='json',
+        )
+
+        assert resp.status_code == status.HTTP_409_CONFLICT
+        order.refresh_from_db()
+        assert order.items.count() == 0
+        assert order.priced_at is None
+
     def test_an_itemised_order_cannot_be_quoted(self):
         # Only quote requests take this path; a normal order is already priced.
         from test_booking_create import _booking_payload

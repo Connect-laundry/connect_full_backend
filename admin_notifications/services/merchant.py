@@ -114,7 +114,13 @@ def resolve_recipient(laundry) -> tuple[str, str]:
         return '', NO_VERIFIED_PHONE
     if not row.sms_enabled:
         return '', ALERTS_OFF
-    return row.phone, ''
+    # Honour the contract above even for rows edited outside the verification
+    # flow (e.g. '+233...' entered in the admin): the SMS provider expects the
+    # normalized form.
+    try:
+        return normalize_admin_recipient(row.phone), ''
+    except AdminRecipientError:
+        return '', NO_VERIFIED_PHONE
 
 
 def merchant_delivery_for(event, order) -> Delivery | None:
@@ -221,13 +227,21 @@ def start_verification(laundry, user, raw_phone) -> MerchantNotificationSettings
     """Text a 6-digit code to ``raw_phone``. The current verified number keeps
     receiving alerts until the new one is confirmed."""
     number = normalize_owner_number(raw_phone)
-    if _recent_sends(laundry, MerchantSmsSendLog.Kind.OTP, timedelta(hours=1)) >= conf.merchant_otp_hourly_limit():
-        raise VerificationError('Too many codes requested. Try again in an hour.', code='throttled', status=429)
+    # Check and reserve under a per-laundry row lock: concurrent requests used
+    # to all pass the count and each send a paid SMS. The reserved log row
+    # counts toward the limit even if the send then fails, as before.
+    from laundries.models import Laundry
+    with transaction.atomic():
+        Laundry.objects.select_for_update().filter(pk=laundry.pk).first()
+        if _recent_sends(laundry, MerchantSmsSendLog.Kind.OTP, timedelta(hours=1)) >= conf.merchant_otp_hourly_limit():
+            raise VerificationError('Too many codes requested. Try again in an hour.', code='throttled', status=429)
+        send_log = MerchantSmsSendLog.objects.create(laundry=laundry, kind=MerchantSmsSendLog.Kind.OTP, accepted=False)
     code = f'{secrets.randbelow(10 ** 6):06d}'
     text = (f'{conf.message_prefix()}Your SIMAME code is {code}. It confirms this number for booking alerts '
             f'for your laundry. It expires in {conf.merchant_otp_ttl_minutes()} minutes. Do not share it.')
     result = _send_now(number, text)
-    MerchantSmsSendLog.objects.create(laundry=laundry, kind=MerchantSmsSendLog.Kind.OTP, accepted=result.accepted)
+    if result.accepted:
+        MerchantSmsSendLog.objects.filter(pk=send_log.pk).update(accepted=True)
     if not result.accepted:
         raise VerificationError('We could not send a code to that number. Check it and try again.',
                                 code='send_failed', status=502)

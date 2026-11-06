@@ -49,39 +49,155 @@ class TestAuthSessions:
         assert session.current_refresh_jti
         assert SessionRefreshToken.objects.filter(session=session, jti=session.current_refresh_jti).exists()
 
+    def _refresh(self, client, token, device_id='device-1'):
+        return client.post(
+            reverse('token_refresh'),
+            {'refresh': token},
+            format='json',
+            **_device_headers(device_id),
+        )
+
     def test_refresh_rotates_token_and_reuse_revokes_family(self, client):
         _create_user()
         login_payload = _login(client)
 
-        refresh_response = client.post(
-            reverse('token_refresh'),
-            {'refresh': login_payload['refreshToken']},
-            format='json',
-            **_device_headers(),
-        )
+        refresh_response = self._refresh(client, login_payload['refreshToken'])
         assert refresh_response.status_code == status.HTTP_200_OK
         rotated = refresh_response.data.get('data', refresh_response.data)
         assert rotated['refreshToken'] != login_payload['refreshToken']
 
-        reuse_response = client.post(
-            reverse('token_refresh'),
-            {'refresh': login_payload['refreshToken']},
-            format='json',
-            **_device_headers(),
-        )
+        # The legitimate client continues the chain with its new token...
+        continued = self._refresh(client, rotated['refreshToken'])
+        assert continued.status_code == status.HTTP_200_OK
+        latest = continued.data.get('data', continued.data)
+
+        # ...so a replay of the old token is theft, even from the same device.
+        reuse_response = self._refresh(client, login_payload['refreshToken'])
         assert reuse_response.status_code == status.HTTP_401_UNAUTHORIZED
 
         session = DeviceSession.objects.get(device_id='device-1')
         session.refresh_from_db()
         assert session.revoked_at is not None
+        assert session.revoked_reason == 'refresh_token_reuse'
 
-        chained_refresh = client.post(
+        chained_refresh = self._refresh(client, latest['refreshToken'])
+        assert chained_refresh.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_lost_refresh_response_retry_within_grace_keeps_session(self, client):
+        _create_user()
+        login_payload = _login(client)
+
+        first = self._refresh(client, login_payload['refreshToken'])
+        assert first.status_code == status.HTTP_200_OK
+        lost_successor = first.data.get('data', first.data)['refreshToken']
+
+        # The client never received `first` and retries with what it holds.
+        retry = self._refresh(client, login_payload['refreshToken'])
+        assert retry.status_code == status.HTTP_200_OK
+        recovered = retry.data.get('data', retry.data)
+        assert recovered['refreshToken'] not in (lost_successor, login_payload['refreshToken'])
+
+        session = DeviceSession.objects.get(device_id='device-1')
+        assert session.revoked_at is None
+        assert session.current_refresh_jti == SessionRefreshToken.objects.filter(
+            session=session, revoked_at__isnull=True
+        ).get().jti
+
+        # The recovered token works; only one token in the chain is live.
+        onward = self._refresh(client, recovered['refreshToken'])
+        assert onward.status_code == status.HTTP_200_OK
+        assert SessionRefreshToken.objects.filter(session=session, revoked_at__isnull=True).count() == 1
+
+    def test_superseded_successor_presented_later_is_treated_as_reuse(self, client):
+        _create_user()
+        login_payload = _login(client)
+        lost = self._refresh(client, login_payload['refreshToken']).data
+        lost_successor = lost.get('data', lost)['refreshToken']
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        assert self._refresh(client, lost_successor).status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
+
+    def test_retry_from_another_device_revokes_session(self, client):
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        stolen = self._refresh(client, login_payload['refreshToken'], device_id='attacker-device')
+        assert stolen.status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
+
+    def test_retry_from_another_network_address_revokes_session(self, client):
+        # The device id is readable inside the refresh token, so the grace
+        # path also requires the address that received the lost response.
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        replay = client.post(
             reverse('token_refresh'),
-            {'refresh': rotated['refreshToken']},
+            {'refresh': login_payload['refreshToken']},
             format='json',
+            REMOTE_ADDR='203.0.113.77',
             **_device_headers(),
         )
-        assert chained_refresh.status_code == status.HTTP_401_UNAUTHORIZED
+        assert replay.status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
+
+    def test_grace_retry_is_audited(self, client):
+        from marketplace.models import AuditLog
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        session = DeviceSession.objects.get(device_id='device-1')
+        entry = AuditLog.objects.get(target_id=str(session.id), target_repr='refresh_retry_within_grace')
+        assert entry.metadata['seconds_since_rotation'] >= 0
+
+    def test_retry_for_deactivated_user_is_revoked_as_inactive(self, client):
+        user = _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'user_inactive'
+
+    def test_retry_after_grace_window_revokes_session(self, client, settings):
+        settings.REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        from datetime import timedelta
+        from django.utils import timezone
+        SessionRefreshToken.objects.filter(revoked_reason='rotated').update(
+            rotated_at=timezone.now() - timedelta(seconds=61)
+        )
+        late = self._refresh(client, login_payload['refreshToken'])
+        assert late.status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
+
+    def test_grace_window_can_be_disabled(self, client, settings):
+        settings.REFRESH_TOKEN_REUSE_GRACE_SECONDS = 0
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_at is not None
+
+    def test_refresh_for_inactive_user_revokes_session_durably(self, client):
+        user = _create_user()
+        login_payload = _login(client)
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+
+        response = self._refresh(client, login_payload['refreshToken'])
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        session = DeviceSession.objects.get(device_id='device-1')
+        assert session.revoked_reason == 'user_inactive'
 
     def test_logout_revokes_current_session_chain(self, client):
         _create_user()
