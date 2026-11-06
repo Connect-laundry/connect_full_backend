@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any
 import uuid
 
 import jwt # type: ignore
+from django.conf import settings # type: ignore
 from django.db import transaction # type: ignore
 from django.utils import timezone # type: ignore
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied # type: ignore
@@ -213,6 +214,91 @@ def _resolve_session_for_payload(payload, request):
     return _create_migrated_session(user, request)
 
 
+REFRESH_REUSE_GRACE_SECONDS_DEFAULT = 60
+RETRY_SUPERSEDED_REASON = 'superseded_by_retry'
+
+
+def _refresh_reuse_grace() -> timedelta:
+    seconds = getattr(settings, 'REFRESH_TOKEN_REUSE_GRACE_SECONDS', REFRESH_REUSE_GRACE_SECONDS_DEFAULT)
+    return timedelta(seconds=max(0, int(seconds)))
+
+
+def _mark_reuse_and_revoke(token_record: SessionRefreshToken):
+    token_record.reuse_detected_at = timezone.now()
+    token_record.save(update_fields=['reuse_detected_at'])
+    revoke_session(token_record.session, reason='refresh_token_reuse')
+
+
+def _rotate_benign_retry(token_record: SessionRefreshToken, payload: dict, request):
+    """Re-issue tokens when a just-rotated refresh token is presented again.
+
+    A client whose refresh response was lost (timeout, app suspended, dropped
+    connection) or that raced two refreshes still holds the previous token.
+    That is only treated as a retry, not theft, when all of these hold:
+    the token was rotated normally within the grace window, its successor has
+    never been used, the session is live, the token itself is unexpired and
+    it comes from the session's own device id. The unused successor is then
+    invalidated, so at most one token in the chain is ever usable. Anything
+    else returns None and the caller revokes the session as before.
+
+    Must be called inside a transaction holding a row lock on token_record.
+    """
+    grace = _refresh_reuse_grace()
+    now = timezone.now()
+    if not grace or token_record.revoked_reason != 'rotated' or token_record.rotated_at is None:
+        return None
+    if now - token_record.rotated_at > grace or token_record.reuse_detected_at is not None:
+        return None
+    if payload.get(api_settings.TOKEN_TYPE_CLAIM) != 'refresh':
+        return None
+    exp = _exp_to_datetime(payload.get('exp'))
+    if exp is None or exp <= now:
+        return None
+
+    session = DeviceSession.objects.select_for_update().select_related('user').get(pk=token_record.session_id)
+    if session.revoked_at is not None:
+        return None
+    device_id = (request.META.get('HTTP_X_DEVICE_ID', '') or '').strip()
+    if not device_id or device_id != session.device_id:
+        return None
+
+    successor = (
+        SessionRefreshToken.objects.select_for_update()
+        .filter(session=session, jti=token_record.replaced_by_jti)
+        .first()
+    )
+    if successor is None or not successor.is_active:
+        return None
+
+    user = session.user
+    if not user.is_active:
+        return None
+
+    refresh = RefreshToken.for_user(user)
+    _attach_session_claims(refresh, session=session, user=user)
+    new_jti = str(refresh[api_settings.JTI_CLAIM])
+    new_exp = _exp_to_datetime(refresh.get('exp'))
+
+    successor.replaced_by_jti = new_jti
+    successor.revoked_at = now
+    successor.revoked_reason = RETRY_SUPERSEDED_REASON
+    successor.save(update_fields=['replaced_by_jti', 'revoked_at', 'revoked_reason'])
+    _blacklist_jti(successor.jti)
+
+    # Keep the chain pointing at the live token so a further duplicate of the
+    # same request inside the window is handled identically.
+    token_record.replaced_by_jti = new_jti
+    token_record.save(update_fields=['replaced_by_jti'])
+
+    _create_refresh_record(session, jti=new_jti, exp=new_exp)
+    _touch_session(session, jti=new_jti, exp=new_exp, request=request)
+    return {
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'session': session,
+    }
+
+
 def rotate_refresh_token(submitted_refresh: str, request):
     try:
         payload = _decode_refresh_token(submitted_refresh, verify_exp=False)
@@ -223,69 +309,81 @@ def rotate_refresh_token(submitted_refresh: str, request):
     if not old_jti:
         raise AuthenticationFailed('Invalid refresh token.')
 
-    token_record = (
-        SessionRefreshToken.objects.select_related('session', 'session__user')
-        .filter(jti=old_jti)
-        .first()
-    )
-    if token_record and not token_record.is_active:
-        token_record.reuse_detected_at = timezone.now()
-        token_record.save(update_fields=['reuse_detected_at'])
-        revoke_session(token_record.session, reason='refresh_token_reuse')
-        raise AuthenticationFailed('Session security event detected. Please sign in again.')
-
-    try:
-        refresh = RefreshToken(submitted_refresh)
-    except TokenError as exc:
-        if token_record:
-            token_record.reuse_detected_at = timezone.now()
-            token_record.save(update_fields=['reuse_detected_at'])
-            revoke_session(token_record.session, reason='refresh_token_reuse')
-        raise AuthenticationFailed('Refresh token is invalid or expired.') from exc
+    # Revocations must commit before the error is raised, so failures are
+    # recorded here and acted on after the locked transaction ends.
+    failure: tuple[str, SessionRefreshToken | None, Exception | None] | None = None
 
     with transaction.atomic():
-        session = token_record.session if token_record else _resolve_session_for_payload(payload, request)
-        if session.revoked_at is not None:
-            raise AuthenticationFailed('Session has been revoked. Please sign in again.')
+        # The row lock serializes concurrent refreshes of the same token: the
+        # second waits, then sees it rotated and takes the retry path instead
+        # of minting a parallel, untracked successor.
+        token_record = SessionRefreshToken.objects.select_for_update().filter(jti=old_jti).first()
 
-        user = session.user
-        if not user.is_active:
-            revoke_session(session, reason='user_inactive')
-            raise AuthenticationFailed('User account is disabled.')
-
-        if api_settings.BLACKLIST_AFTER_ROTATION:
+        if token_record and not token_record.is_active:
+            retried = _rotate_benign_retry(token_record, payload, request)
+            if retried is not None:
+                return retried
+            failure = ('reuse', token_record, None)
+        else:
             try:
-                refresh.blacklist()
-            except AttributeError:
-                # Blacklist support is optional (e.g., blacklist app not installed); continue rotation.
-                pass
+                refresh = RefreshToken(submitted_refresh)
+            except TokenError as exc:
+                failure = ('invalid', token_record, exc)
 
-        refresh.set_jti()
-        refresh.set_exp()
-        refresh.set_iat()
-        _attach_session_claims(refresh, session=session, user=user)
+        if failure is None:
+            session = token_record.session if token_record else _resolve_session_for_payload(payload, request)
+            if session.revoked_at is not None:
+                raise AuthenticationFailed('Session has been revoked. Please sign in again.')
 
-        new_jti = str(refresh[api_settings.JTI_CLAIM])
-        new_exp = _exp_to_datetime(refresh.get('exp'))
-        now = timezone.now()
+            user = session.user
+            if not user.is_active:
+                failure = ('inactive', None, None)
+                inactive_session = session
+            else:
+                if api_settings.BLACKLIST_AFTER_ROTATION:
+                    try:
+                        refresh.blacklist()
+                    except AttributeError:
+                        # Blacklist support is optional (e.g., blacklist app not installed); continue rotation.
+                        pass
 
-        if token_record:
-            token_record.rotated_at = now
-            token_record.replaced_by_jti = new_jti
-            token_record.revoked_at = now
-            token_record.revoked_reason = 'rotated'
-            token_record.save(
-                update_fields=['rotated_at', 'replaced_by_jti', 'revoked_at', 'revoked_reason']
-            )
+                refresh.set_jti()
+                refresh.set_exp()
+                refresh.set_iat()
+                _attach_session_claims(refresh, session=session, user=user)
 
-        _create_refresh_record(session, jti=new_jti, exp=new_exp)
-        _touch_session(session, jti=new_jti, exp=new_exp, request=request)
+                new_jti = str(refresh[api_settings.JTI_CLAIM])
+                new_exp = _exp_to_datetime(refresh.get('exp'))
+                now = timezone.now()
 
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'session': session,
-        }
+                if token_record:
+                    token_record.rotated_at = now
+                    token_record.replaced_by_jti = new_jti
+                    token_record.revoked_at = now
+                    token_record.revoked_reason = 'rotated'
+                    token_record.save(
+                        update_fields=['rotated_at', 'replaced_by_jti', 'revoked_at', 'revoked_reason']
+                    )
+
+                _create_refresh_record(session, jti=new_jti, exp=new_exp)
+                _touch_session(session, jti=new_jti, exp=new_exp, request=request)
+
+                return {
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                    'session': session,
+                }
+
+    kind, record, exc = failure
+    if kind == 'reuse':
+        _mark_reuse_and_revoke(record)
+        raise AuthenticationFailed('Session security event detected. Please sign in again.')
+    if kind == 'invalid':
+        if record:
+            _mark_reuse_and_revoke(record)
+        raise AuthenticationFailed('Refresh token is invalid or expired.') from exc
+    revoke_session(inactive_session, reason='user_inactive')
+    raise AuthenticationFailed('User account is disabled.')
 
 
 def revoke_current_session(user: User, *, submitted_refresh: str | None, request, reason: str):
