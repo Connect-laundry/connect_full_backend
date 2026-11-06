@@ -127,6 +127,44 @@ class TestAuthSessions:
         assert stolen.status_code == status.HTTP_401_UNAUTHORIZED
         assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
 
+    def test_retry_from_another_network_address_revokes_session(self, client):
+        # The device id is readable inside the refresh token, so the grace
+        # path also requires the address that received the lost response.
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        replay = client.post(
+            reverse('token_refresh'),
+            {'refresh': login_payload['refreshToken']},
+            format='json',
+            REMOTE_ADDR='203.0.113.77',
+            **_device_headers(),
+        )
+        assert replay.status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'refresh_token_reuse'
+
+    def test_grace_retry_is_audited(self, client):
+        from marketplace.models import AuditLog
+        _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+
+        session = DeviceSession.objects.get(device_id='device-1')
+        entry = AuditLog.objects.get(target_id=str(session.id), target_repr='refresh_retry_within_grace')
+        assert entry.metadata['seconds_since_rotation'] >= 0
+
+    def test_retry_for_deactivated_user_is_revoked_as_inactive(self, client):
+        user = _create_user()
+        login_payload = _login(client)
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_200_OK
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+
+        assert self._refresh(client, login_payload['refreshToken']).status_code == status.HTTP_401_UNAUTHORIZED
+        assert DeviceSession.objects.get(device_id='device-1').revoked_reason == 'user_inactive'
+
     def test_retry_after_grace_window_revokes_session(self, client, settings):
         settings.REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60
         _create_user()

@@ -229,6 +229,28 @@ def _mark_reuse_and_revoke(token_record: SessionRefreshToken):
     revoke_session(token_record.session, reason='refresh_token_reuse')
 
 
+def _audit_benign_retry(session: DeviceSession, token_record: SessionRefreshToken, request, now):
+    """Every grace-window re-rotation is recorded for security review."""
+    try:
+        from marketplace.models import AuditLog
+        from marketplace.services.audit import record_audit
+        record_audit(
+            action=AuditLog.Action.SECURITY_EVENT,
+            actor=session.user,
+            target_type='DeviceSession',
+            target_id=str(session.id),
+            target_repr='refresh_retry_within_grace',
+            metadata={
+                'event': 'refresh_retry_within_grace',
+                'seconds_since_rotation': round((now - token_record.rotated_at).total_seconds(), 3),
+                'ip': mask_ip_address(get_client_ip(request)),
+                'platform': (request.META.get('HTTP_X_CLIENT_PLATFORM', '') or '')[:32],
+            },
+        )
+    except Exception:  # auditing must never block authentication
+        pass
+
+
 def _rotate_benign_retry(token_record: SessionRefreshToken, payload: dict, request):
     """Re-issue tokens when a just-rotated refresh token is presented again.
 
@@ -255,11 +277,18 @@ def _rotate_benign_retry(token_record: SessionRefreshToken, payload: dict, reque
     if exp is None or exp <= now:
         return None
 
-    session = DeviceSession.objects.select_for_update().select_related('user').get(pk=token_record.session_id)
+    session = DeviceSession.objects.select_for_update(of=('self',)).select_related('user').get(pk=token_record.session_id)
     if session.revoked_at is not None:
         return None
+    # The device id is also a claim inside the refresh token, so it does not
+    # prove possession on its own. The client address recorded by the
+    # rotation that issued the unused successor is not in the token: a retry
+    # must come from that same address.
     device_id = (request.META.get('HTTP_X_DEVICE_ID', '') or '').strip()
     if not device_id or device_id != session.device_id:
+        return None
+    request_ip = get_client_ip(request)
+    if not request_ip or not session.ip_address or request_ip != session.ip_address:
         return None
 
     successor = (
@@ -274,6 +303,7 @@ def _rotate_benign_retry(token_record: SessionRefreshToken, payload: dict, reque
     if not user.is_active:
         return None
 
+    _audit_benign_retry(session, token_record, request, now)
     refresh = RefreshToken.for_user(user)
     _attach_session_claims(refresh, session=session, user=user)
     new_jti = str(refresh[api_settings.JTI_CLAIM])
@@ -312,6 +342,7 @@ def rotate_refresh_token(submitted_refresh: str, request):
     # Revocations must commit before the error is raised, so failures are
     # recorded here and acted on after the locked transaction ends.
     failure: tuple[str, SessionRefreshToken | None, Exception | None] | None = None
+    inactive_session: DeviceSession | None = None
 
     with transaction.atomic():
         # The row lock serializes concurrent refreshes of the same token: the
@@ -323,7 +354,11 @@ def rotate_refresh_token(submitted_refresh: str, request):
             retried = _rotate_benign_retry(token_record, payload, request)
             if retried is not None:
                 return retried
-            failure = ('reuse', token_record, None)
+            if not token_record.session.user.is_active:
+                failure = ('inactive', None, None)
+                inactive_session = token_record.session
+            else:
+                failure = ('reuse', token_record, None)
         else:
             try:
                 refresh = RefreshToken(submitted_refresh)
