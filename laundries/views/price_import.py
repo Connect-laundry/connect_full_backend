@@ -98,7 +98,9 @@ class PriceImportViewSet(viewsets.GenericViewSet):
         if len(payload.encode('utf-8')) > 200_000:
             return _error('DRAFT_TOO_LARGE', 'This draft is too large. Keep descriptions short.', 400)
         with transaction.atomic():
-            job = service.owner_jobs(request.user).select_for_update().filter(pk=pk).first()
+            # Lock only the job row: owner_jobs() outer-joins laundry, and PostgreSQL
+            # refuses FOR UPDATE on the nullable side of an outer join.
+            job = service.owner_jobs(request.user).select_for_update(of=('self',)).filter(pk=pk).first()
             if job is None:
                 return _error('NOT_FOUND', 'Import job not found.', 404)
             if job.status != PriceListImportJob.Status.READY:

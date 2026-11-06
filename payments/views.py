@@ -483,7 +483,20 @@ class PaymentVerifyView(APIView):
                         "data": {}
                     }, status=status.HTTP_404_NOT_FOUND)
 
-                if payment.status != Payment.Status.SUCCESS:
+                if payment.status not in {Payment.Status.PENDING, Payment.Status.SUCCESS}:
+                    # Refunding/refunded/failed/expired payments must never be
+                    # re-settled by a later verify call.
+                    return Response({
+                        "status": "error",
+                        "message": "This payment is no longer awaiting confirmation.",
+                        "data": {
+                            "payment_status": payment.status,
+                            "order_status": order.status,
+                            "order_payment_status": order.payment_status,
+                        }
+                    }, status=status.HTTP_409_CONFLICT)
+
+                if payment.status == Payment.Status.PENDING:
                     is_valid, validation_error = _validate_verified_payment(payment, verify_data.get('data', {}))
                     if not is_valid:
                         payment.transition_to(Payment.Status.FAILED, save=False)

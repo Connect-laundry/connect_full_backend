@@ -42,6 +42,15 @@ def _peek_unverified_payload(token: str) -> dict[str, Any]:
         return {}
 
 
+class ClerkEmailOwnershipConflict(ValidationError):
+    """A new Clerk identity's email matches an existing, unlinked SIMAME account.
+
+    Email equality does not prove ownership, so the identities are never merged
+    automatically. Social login reports this as HTTP 400; the Clerk webhook
+    acknowledges it so Svix does not retry an event that can never succeed.
+    """
+
+
 class ClerkDeletionUnavailable(APIException):
     status_code = 503
     default_detail = 'Account deletion is temporarily unavailable. Please try again.'
@@ -549,8 +558,15 @@ def sync_user_from_clerk(
             if not profile.email_verified:
                 raise ValidationError({'email': ['Clerk did not provide a verified email address.']})
             user = User.objects.select_for_update().filter(email__iexact=email).first()
-            if user and user.clerk_user_id and user.clerk_user_id != profile.clerk_user_id:
-                raise ValidationError({'email': ['This email is already linked to a different Clerk account.']})
+            if user and user.clerk_user_id == profile.clerk_user_id:
+                # The user.created webhook committed between the two lookups
+                # (READ COMMITTED). Same Clerk subject: a returning user.
+                pass
+            elif user:
+                # Email equality is not proof of ownership of the existing
+                # SIMAME account. Only an already-linked Clerk subject may
+                # authenticate it through this endpoint.
+                raise ClerkEmailOwnershipConflict({'email': ['An account with this email already exists. Sign in with your existing method to verify ownership.']})
         elif user.email.lower() != email.lower():
             # Heal corrupt legacy email in database (e.g. template syntax {{...}})
             if user.email and ('{{' in user.email or '@' not in user.email):

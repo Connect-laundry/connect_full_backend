@@ -263,6 +263,38 @@ class TestPaymentFlow:
         assert OrderSettlement.objects.filter(order=order).count() == 1
         assert order.payment_status == Order.PaymentStatus.PAID
 
+    @pytest.mark.parametrize('frozen_status', [
+        Payment.Status.REFUND_PENDING,
+        Payment.Status.REFUNDED,
+        Payment.Status.FAILED,
+        Payment.Status.EXPIRED,
+    ])
+    @patch('payments.services.paystack.PaystackService.verify_transaction')
+    def test_verify_never_resettles_a_non_pending_payment(self, mock_verify, frozen_status):
+        customer, order, payment = _build_pending_payment(f'ORD-VERIFY-FROZEN-{frozen_status}')
+        Payment.objects.filter(pk=payment.pk).update(status=frozen_status)
+        mock_verify.return_value = {
+            'status': True,
+            'data': {
+                'status': 'success',
+                'amount': 2500,
+                'currency': 'GHS',
+                'reference': payment.transaction_reference,
+                'metadata': {'order_id': str(order.id), 'user_id': str(customer.id)},
+            },
+        }
+
+        response = _auth_client(customer).get(
+            reverse('payment_verify', kwargs={'reference': payment.transaction_reference})
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == frozen_status
+        assert order.payment_status == Order.PaymentStatus.UNPAID
+        assert not OrderSettlement.objects.filter(order=order).exists()
+
     @patch('payments.services.paystack.PaystackService.verify_transaction')
     def test_payment_verification_rejects_missing_metadata(self, mock_verify):
         customer, order, payment = _build_pending_payment('ORD-VERIFY-NO-METADATA')
