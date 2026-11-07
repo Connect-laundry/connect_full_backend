@@ -130,6 +130,8 @@ def health_check(request):
     }
     if include_components:
         response_payload["components"] = components_status
+        # Render sets RENDER_GIT_COMMIT per deploy; token-gated, never public.
+        response_payload["commit"] = os.getenv('RENDER_GIT_COMMIT', '')[:12] or 'unknown'
 
     response = JsonResponse(response_payload, status=status_code)
     response["Cache-Control"] = "no-store"

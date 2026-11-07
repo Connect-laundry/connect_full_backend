@@ -47,6 +47,17 @@ class TestNetworkSecurity:
                 payload = response.json()
                 assert 'status' in payload
                 assert 'components' in payload
+                assert 'commit' in payload
+
+    def test_internal_health_reports_the_deployed_commit_only_with_the_token(self):
+        env = {'INTERNAL_HEALTH_TOKEN': 'health-secret', 'RENDER_GIT_COMMIT': 'abc123def4567890'}
+        with mock.patch.dict(os.environ, env, clear=False):
+            with override_settings(ROOT_URLCONF='config.urls'):
+                client = APIClient()
+                internal = client.get('/health/', HTTP_X_HEALTH_TOKEN='health-secret').json()
+                public = client.get('/health/').json()
+                assert internal['commit'] == 'abc123def456'
+                assert 'commit' not in public
 
     def test_health_uses_configured_celery_broker_from_settings(self):
         class DummyBrokerConnection:
