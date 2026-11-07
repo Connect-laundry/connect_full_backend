@@ -1,3 +1,4 @@
+import logging
 import uuid
 from rest_framework import generics, permissions, viewsets, status, serializers
 # pyre-ignore[missing-module]
@@ -11,7 +12,7 @@ from ..models import Address
 from ..serializers.profile import ProfileSerializer, AddressSerializer
 from users.serializers.session import RefreshTokenRequestSerializer
 from users.services.account_deletion import anonymize_local_account
-from users.services.apple_revocation import revoke_apple_sign_in
+from users.services.apple_revocation import revoke_apple_for_account_deletion
 from users.services.clerk_service import delete_clerk_user
 from users.services.session_service import revoke_current_session
 
@@ -21,6 +22,9 @@ def _request_event_suffix(request):
         or request.META.get('HTTP_X_REQUEST_ID')
         or str(uuid.uuid4())
     )
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -124,9 +128,16 @@ class DeleteAccountView(APIView):
     def delete(self, request):
         user = request.user
         reason = request.data.get('reason') or 'self_service_deletion'
+        apple_code = request.data.get('apple_authorization_code')
+        apple_code = apple_code if isinstance(apple_code, str) else None
         if user.clerk_user_id:
-            # Clerk holds the Apple tokens, so revoke before deleting the Clerk user.
-            revoke_apple_sign_in(user.clerk_user_id)
+            # Revoke before deleting the Clerk user: the Apple subject lookup needs it.
+            outcome = revoke_apple_for_account_deletion(user.clerk_user_id, apple_code)
+            logger.info(
+                'Account deletion Apple revocation outcome: %s',
+                outcome,
+                extra={'user_id': str(user.pk), 'apple_revocation': outcome},
+            )
             delete_clerk_user(user.clerk_user_id)
         result = anonymize_local_account(user, reason=reason, request=request)
         return Response({

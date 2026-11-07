@@ -9,10 +9,17 @@ before the Clerk user is removed.
 Best effort by design: a missing configuration or an Apple/Clerk outage is
 logged and never blocks the deletion itself.
 
+Native iOS sign-in (Clerk ``oauth_token_apple``) sends Clerk only Apple's
+identity token, so Clerk holds no Apple access or refresh token for those users
+and the Clerk-token path below has nothing to revoke. For them the app asks
+Apple for a fresh authorization code at deletion time; the backend exchanges it
+at ``/auth/token`` (client ID = the app's bundle ID), checks the returned
+subject is this user's Apple account in Clerk, and revokes the refresh token.
+
 Configuration (the same Apple key Clerk's Apple connection uses):
   APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (the .p8 contents),
-  APPLE_CLIENT_ID (the Services ID, or bundle ID for native sign-in, that
-  issued the tokens).
+  APPLE_CLIENT_ID (the Services ID that issued web/OAuth tokens), and
+  APPLE_NATIVE_CLIENT_ID (the iOS bundle ID; defaults to com.connectlaundry.app).
 """
 import logging
 import time
@@ -25,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 APPLE_REVOKE_URL = 'https://appleid.apple.com/auth/revoke'
 APPLE_AUDIENCE = 'https://appleid.apple.com'
+APPLE_TOKEN_URL = 'https://appleid.apple.com/auth/token'
+APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys'
+MAX_AUTHORIZATION_CODE_LENGTH = 1024
 
 
 def _apple_config():
@@ -33,6 +43,23 @@ def _apple_config():
         'key_id': getattr(settings, 'APPLE_KEY_ID', ''),
         'private_key': getattr(settings, 'APPLE_PRIVATE_KEY', '').replace('\\n', '\n'),
         'client_id': getattr(settings, 'APPLE_CLIENT_ID', ''),
+    }
+    return config if all(config.values()) else None
+
+
+def _native_config():
+    config = _apple_config_base()
+    if config is None:
+        return None
+    client_id = getattr(settings, 'APPLE_NATIVE_CLIENT_ID', '') or 'com.connectlaundry.app'
+    return {**config, 'client_id': client_id}
+
+
+def _apple_config_base():
+    config = {
+        'team_id': getattr(settings, 'APPLE_TEAM_ID', ''),
+        'key_id': getattr(settings, 'APPLE_KEY_ID', ''),
+        'private_key': getattr(settings, 'APPLE_PRIVATE_KEY', '').replace('\\n', '\n'),
     }
     return config if all(config.values()) else None
 
@@ -119,3 +146,107 @@ def revoke_apple_sign_in(clerk_user_id: str) -> bool:
             type(exc).__name__,
         )
         return False
+
+
+def _apple_subjects_from_clerk(clerk_user_id: str) -> set[str]:
+    """Apple user identifiers (``sub``) linked to this Clerk user."""
+    base_url = getattr(settings, 'CLERK_API_BASE_URL', 'https://api.clerk.com').rstrip('/')
+    timeout = getattr(settings, 'CLERK_API_TIMEOUT_SECONDS', 5)
+    response = requests.get(
+        f"{base_url}/v1/users/{clerk_user_id}",
+        headers={'Authorization': f'Bearer {settings.CLERK_SECRET_KEY}'},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    accounts = (response.json() or {}).get('external_accounts') or []
+    return {
+        str(account.get('provider_user_id'))
+        for account in accounts
+        if isinstance(account, dict)
+        and account.get('provider') in ('oauth_apple', 'apple')
+        and account.get('provider_user_id')
+    }
+
+
+def _verified_apple_subject(id_token: str, client_id: str) -> str:
+    signing_key = jwt.PyJWKClient(APPLE_KEYS_URL).get_signing_key_from_jwt(id_token)
+    claims = jwt.decode(
+        id_token,
+        signing_key.key,
+        algorithms=['RS256'],
+        audience=client_id,
+        issuer=APPLE_AUDIENCE,
+    )
+    return str(claims.get('sub') or '')
+
+
+def revoke_apple_with_authorization_code(clerk_user_id: str, authorization_code: str) -> str:
+    """Exchange a fresh native authorization code and revoke the grant.
+
+    Returns an outcome label for logging; never raises.
+    """
+    if not authorization_code or len(authorization_code) > MAX_AUTHORIZATION_CODE_LENGTH:
+        return 'no_code'
+    if not clerk_user_id or not getattr(settings, 'CLERK_SECRET_KEY', ''):
+        return 'no_clerk_user'
+    config = _native_config()
+    if config is None:
+        return 'not_configured'
+    try:
+        subjects = _apple_subjects_from_clerk(clerk_user_id)
+        if not subjects:
+            return 'not_apple_user'
+        client_secret = _client_secret(config)
+        exchange = requests.post(
+            APPLE_TOKEN_URL,
+            data={
+                'client_id': config['client_id'],
+                'client_secret': client_secret,
+                'code': authorization_code,
+                'grant_type': 'authorization_code',
+            },
+            timeout=10,
+        )
+        if exchange.status_code != 200:
+            logger.warning('Apple authorization code exchange returned HTTP %s', exchange.status_code)
+            return 'exchange_failed'
+        tokens = exchange.json()
+        subject = _verified_apple_subject(tokens.get('id_token') or '', config['client_id'])
+        if subject not in subjects:
+            return 'subject_mismatch'
+        token = tokens.get('refresh_token') or tokens.get('access_token')
+        hint = 'refresh_token' if tokens.get('refresh_token') else 'access_token'
+        if not token:
+            return 'exchange_failed'
+        revoke = requests.post(
+            APPLE_REVOKE_URL,
+            data={
+                'client_id': config['client_id'],
+                'client_secret': client_secret,
+                'token': token,
+                'token_type_hint': hint,
+            },
+            timeout=10,
+        )
+        if revoke.status_code == 200:
+            return 'revoked'
+        logger.warning('Apple sign-in revocation returned HTTP %s', revoke.status_code)
+        return 'revoke_failed'
+    except (requests.RequestException, ValueError, KeyError, jwt.PyJWTError) as exc:
+        logger.warning(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+            'Apple sign-in revocation with authorization code failed: %s',
+            type(exc).__name__,
+        )
+        return 'error'
+
+
+def revoke_apple_for_account_deletion(clerk_user_id: str, authorization_code: str | None) -> str:
+    """Best-effort Apple revocation for a deleting account. Returns an outcome label."""
+    outcome = 'no_code'
+    if authorization_code:
+        outcome = revoke_apple_with_authorization_code(clerk_user_id, authorization_code)
+        if outcome == 'revoked':
+            return outcome
+    if revoke_apple_sign_in(clerk_user_id):
+        return 'revoked_via_clerk_token'
+    return outcome
