@@ -467,6 +467,8 @@ APPLE_TEAM_ID = os.getenv('APPLE_TEAM_ID', '')
 APPLE_KEY_ID = os.getenv('APPLE_KEY_ID', '')
 APPLE_PRIVATE_KEY = os.getenv('APPLE_PRIVATE_KEY', '')
 APPLE_CLIENT_ID = os.getenv('APPLE_CLIENT_ID', '')
+# Native iOS authorization codes are issued to the app's bundle ID.
+APPLE_NATIVE_CLIENT_ID = os.getenv('APPLE_NATIVE_CLIENT_ID', 'com.connectlaundry.app')
 CLERK_DASHBOARD_USER_URL_TEMPLATE = os.getenv(
     'CLERK_DASHBOARD_USER_URL_TEMPLATE',
     'https://dashboard.clerk.com/users/{clerk_user_id}',
