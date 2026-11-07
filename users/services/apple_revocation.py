@@ -250,3 +250,40 @@ def revoke_apple_for_account_deletion(clerk_user_id: str, authorization_code: st
     if revoke_apple_sign_in(clerk_user_id):
         return 'revoked_via_clerk_token'
     return outcome
+
+
+def check_native_revocation_config() -> str:
+    """Prove Apple accepts the configured key and client ID, without a real user.
+
+    Apple checks an authorization code before the client, and ``/auth/revoke``
+    answers 200 even for a bad client secret, so neither proves anything. The
+    ``client_credentials`` grant authenticates the client itself: Apple returns
+    an access token only for a valid team / key / private key / client ID, and
+    ``invalid_client`` otherwise (verified against Apple, 2026-11-07).
+    Returns a label; never logs or returns secrets or tokens.
+    """
+    config = _native_config()
+    if config is None:
+        return 'not_configured'
+    try:
+        response = requests.post(
+            APPLE_TOKEN_URL,
+            data={
+                'client_id': config['client_id'],
+                'client_secret': _client_secret(config),
+                'grant_type': 'client_credentials',
+                'scope': 'user.migration',
+            },
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return f'unreachable:{type(exc).__name__}'
+    except (ValueError, jwt.PyJWTError) as exc:
+        return f'invalid_private_key:{type(exc).__name__}'
+    try:
+        body = response.json() or {}
+    except ValueError:
+        body = {}
+    if response.status_code == 200 and body.get('access_token'):
+        return 'ok'
+    return f'apple_rejected:{response.status_code}:{body.get("error") or "unknown"}'

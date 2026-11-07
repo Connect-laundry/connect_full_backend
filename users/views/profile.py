@@ -130,6 +130,7 @@ class DeleteAccountView(APIView):
         reason = request.data.get('reason') or 'self_service_deletion'
         apple_code = request.data.get('apple_authorization_code')
         apple_code = apple_code if isinstance(apple_code, str) else None
+        apple_revocation = 'not_applicable'
         if user.clerk_user_id:
             # Revoke before deleting the Clerk user: the Apple subject lookup needs it.
             outcome = revoke_apple_for_account_deletion(user.clerk_user_id, apple_code)
@@ -138,6 +139,11 @@ class DeleteAccountView(APIView):
                 outcome,
                 extra={'user_id': str(user.pk), 'apple_revocation': outcome},
             )
+            # Lets the app show TN3194's manual "stop using Apple" steps when needed.
+            # Only the code-exchange path is verified: Apple answers /auth/revoke with
+            # 200 even for a bad client secret, so the Clerk-token path cannot prove
+            # revocation and the app still shows the manual steps for it.
+            apple_revocation = 'revoked' if outcome == 'revoked' else 'not_revoked'
             delete_clerk_user(user.clerk_user_id)
         result = anonymize_local_account(user, reason=reason, request=request)
         return Response({
@@ -146,6 +152,7 @@ class DeleteAccountView(APIView):
             "data": {
                 "deleted": True,
                 "deactivated_at": result.deactivated_at,
+                "apple_revocation": apple_revocation,
             }
         }, status=status.HTTP_200_OK)
 

@@ -243,3 +243,82 @@ def test_account_deletion_passes_the_apple_code_and_still_deletes(revoke, delete
     delete_clerk.assert_called_once_with('user_native')
     user.refresh_from_db()
     assert user.is_active is False and user.clerk_user_id is None
+
+
+# --- Configuration check and response status ------------------------------
+
+from users.services.apple_revocation import check_native_revocation_config  # noqa: E402
+
+
+@patch('users.services.apple_revocation.requests.post')
+def test_config_check_ok_only_when_apple_issues_a_client_token(post, apple_settings):
+    post.return_value = Mock(status_code=200, json=Mock(return_value={'access_token': 'x', 'token_type': 'Bearer'}))
+    assert check_native_revocation_config() == 'ok'
+    sent = post.call_args.kwargs['data']
+    assert sent['client_id'] == NATIVE_CLIENT_ID
+    assert sent['grant_type'] == 'client_credentials' and sent['scope'] == 'user.migration'
+
+
+@patch('users.services.apple_revocation.requests.post')
+def test_config_check_does_not_trust_invalid_grant(post, apple_settings):
+    # Apple answers invalid_grant before checking the client, so it proves nothing.
+    post.return_value = Mock(status_code=400, json=Mock(return_value={'error': 'invalid_grant'}))
+    assert check_native_revocation_config() == 'apple_rejected:400:invalid_grant'
+
+
+@patch('users.services.apple_revocation.requests.post')
+def test_config_check_reports_invalid_client(post, apple_settings):
+    post.return_value = Mock(status_code=400, json=Mock(return_value={'error': 'invalid_client'}))
+    assert check_native_revocation_config() == 'apple_rejected:400:invalid_client'
+
+
+def test_config_check_reports_missing_configuration(settings):
+    settings.APPLE_TEAM_ID = ''
+    assert check_native_revocation_config() == 'not_configured'
+
+
+def test_config_check_command_fails_loudly_when_not_ready(settings):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+    settings.APPLE_TEAM_ID = ''
+    with pytest.raises(CommandError):
+        call_command('check_apple_revocation_config')
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('outcome,expected', [
+    ('revoked', 'revoked'), ('revoked_via_clerk_token', 'not_revoked'),
+    ('exchange_failed', 'not_revoked'), ('no_code', 'not_revoked'),
+])
+@patch('users.views.profile.delete_clerk_user')
+@patch('users.views.profile.revoke_apple_for_account_deletion')
+def test_deletion_response_reports_apple_revocation_status(revoke, delete_clerk, outcome, expected):
+    from rest_framework.test import APIClient
+    from users.models import User
+
+    revoke.return_value = outcome
+    user = User.objects.create_user(
+        email=f'status-{outcome}@example.com', phone=f'23355597{abs(hash(outcome)) % 10000:04d}',
+        password='StrongPass123!')
+    user.clerk_user_id = f'user_{outcome}'
+    user.save(update_fields=['clerk_user_id'])
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.delete('/api/v1/auth/account/', {'reason': 'other'}, format='json')
+
+    assert response.status_code == 200
+    assert response.json()['data']['apple_revocation'] == expected
+
+
+@pytest.mark.django_db
+def test_password_only_account_reports_not_applicable():
+    from rest_framework.test import APIClient
+    from users.models import User
+
+    user = User.objects.create_user(email='pw-only@example.com', phone='233555970099', password='StrongPass123!')
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.delete('/api/v1/auth/account/', {'reason': 'other'}, format='json')
+    assert response.status_code == 200
+    assert response.json()['data']['apple_revocation'] == 'not_applicable'
